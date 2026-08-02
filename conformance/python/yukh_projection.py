@@ -352,7 +352,7 @@ class ReplayEngine:
             claim = self._claim_for(data, work)
             _require(claim.active, "INVALID_CLAIM_TRANSITION", "claim is not active")
             parent = data.get("parent_claim_event_id")
-            expected_parent = claim.event_id if kind in {"release", "handoff_offer"} else claim.last_lifecycle_event
+            expected_parent = claim.last_lifecycle_event
             if kind == "handoff_offer" and (parent != expected_parent or event.get("causation_id") != parent):
                 raise TranscriptError("invalid-handoff-offer", "handoff offer does not bind the active source claim")
             _require(parent == expected_parent and event.get("causation_id") == parent, "INVALID_REFERENCE", "claim lifecycle parent mismatch")
@@ -373,6 +373,7 @@ class ReplayEngine:
                 _require(all(isinstance(value, str) for value in (offer.handoff_id, offer.recipient_instance, offer.boundary_digest, offer.evidence_set_digest)), "INVALID_PAYLOAD", "invalid handoff offer")
                 claim.offers[event_id] = offer
                 self.offers_by_event[event_id] = offer
+                claim.last_lifecycle_event = event_id
             return
 
         if kind == "handoff_accept":

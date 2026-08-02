@@ -1,1 +1,1 @@
-{"javascript":{"final":false,"kind":"projection","reasons":["sequence-collision"]},"python":{"code":"INVALID_RECEIPT","kind":"error"}}
+{"javascript":{"code":"sequence-collision","kind":"error"},"python":{"code":"sequence-collision","kind":"error"}}

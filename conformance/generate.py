@@ -127,7 +127,7 @@ def main():
  if names != sorted(set(names)): raise SystemExit("manifest allow-list must be unique and sorted")
  files=[ROOT/name for name in names]
  missing=[str(path.relative_to(ROOT)) for path in files if not path.is_file()]
- candidates={*(p for p in OUT.rglob("*") if p.is_file() and p.name!="SHA256SUMS"), *ROOT.joinpath("schema").rglob("*.json"), *ROOT.joinpath("js").rglob("*.mjs"), *ROOT.joinpath("test").rglob("*.mjs"), ROOT/"package.json", ROOT/".gitignore", ROOT/"docs/rfc/0001-protocol-v0.1.md", ROOT/"docs/rfc/0002-mvp-security-boundary.md"}
+ candidates={*(p for p in OUT.rglob("*") if p.is_file() and p.name!="SHA256SUMS" and "__pycache__" not in p.parts and p.suffix != ".pyc"), *ROOT.joinpath("schema").rglob("*.json"), *ROOT.joinpath("js").rglob("*.mjs"), *ROOT.joinpath("test").rglob("*.mjs"), ROOT/"package.json", ROOT/".gitignore", ROOT/"docs/rfc/0001-protocol-v0.1.md", ROOT/"docs/rfc/0002-mvp-security-boundary.md"}
  unlisted=sorted(str(path.relative_to(ROOT)) for path in candidates-set(files))
  if missing or unlisted: raise SystemExit(f"manifest allow-list mismatch missing={missing} unlisted={unlisted}")
  (OUT/"SHA256SUMS").write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(ROOT)}\n" for p in files))

@@ -1,8 +1,9 @@
 # Protocol v0.1 core conformance corpus
 
-This directory qualifies the client-neutral wire contract from RFC-0001 Draft.
-It does not accept the RFC, implement a relay, authenticate identities, or prove
-the independent second runtime required by issue #4.
+This directory qualifies the client-neutral wire contract from RFC-0001 Draft
+with independent Python and JavaScript replay implementations. It does not
+accept the RFC, implement a relay, authenticate identities, or authorize an
+operated service.
 
 ## Contents
 

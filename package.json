@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test",
     "replay": "node js/bin/replay.mjs",
-    "canonical-vectors": "node conformance/canonical/js_adapter.mjs"
+    "canonical-vectors": "python3 conformance/cross-runtime/run.py"
   },
   "engines": {
     "node": ">=20"

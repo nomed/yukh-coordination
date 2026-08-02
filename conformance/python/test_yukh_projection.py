@@ -233,6 +233,8 @@ class ReplayTests(unittest.TestCase):
                 "boundary": "x", "boundary_digest": "sha-256:" + "3" * 64,
                 "evidence_set_digest": "sha-256:" + "4" * 64, "next_action": "x", "unresolved_risks": [],
             }, correlation=source["id"], causation=source["id"]))
+        offers[1]["data"]["parent_claim_event_id"] = offers[0]["id"]
+        offers[1]["causation_id"] = offers[0]["id"]
         projected = replay(transcript([record(source, 1), record(offers[0], 2), record(offers[1], 3)]))[0]
         self.assertEqual("handoff_offered", projected["state"])
         self.assertEqual([IDS[12], IDS[13]], projected["handoff_offer_ids"])

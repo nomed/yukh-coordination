@@ -62,11 +62,11 @@ conformance/cross-runtime/expected/evidence-verified.projection.canonical.json
 conformance/cross-runtime/expected/exact-duplicate.projection.canonical.json
 conformance/cross-runtime/expected/handoff-incomplete-lifecycle.projection.canonical.json
 conformance/cross-runtime/expected/index.json
-conformance/cross-runtime/expected/multi-offer.outcome.canonical.json
+conformance/cross-runtime/expected/multi-offer.projection.canonical.json
 conformance/cross-runtime/expected/sequence-collision.outcome.canonical.json
 conformance/cross-runtime/expected/sequence-gap.projection.canonical.json
-conformance/cross-runtime/expected/unverified-high-water.outcome.canonical.json
-conformance/cross-runtime/expected/unverified-receipt.outcome.canonical.json
+conformance/cross-runtime/expected/unverified-high-water.projection.canonical.json
+conformance/cross-runtime/expected/unverified-receipt.projection.canonical.json
 conformance/cross-runtime/generate.py
 conformance/cross-runtime/js_adapter.mjs
 conformance/cross-runtime/python_adapter.py

@@ -126,7 +126,7 @@
     },
     {
       "event": {
-        "causation_id": "01989f0e-56b7-7001-815e-a7748f7f0003",
+        "causation_id": "01989f0e-56b7-7001-815e-a7748f7f0006",
         "channel": "https://coord.example/channels/cross-runtime",
         "correlation_id": "01989f0e-56b7-7001-815e-a7748f7f0003",
         "data": {
@@ -137,7 +137,7 @@
           "generation": "0",
           "handoff_id": "01989f0e-56b7-7001-815e-a7748f7f000d",
           "next_action": "continue",
-          "parent_claim_event_id": "01989f0e-56b7-7001-815e-a7748f7f0003",
+          "parent_claim_event_id": "01989f0e-56b7-7001-815e-a7748f7f0006",
           "to_participant_instance_id": "01989f0e-56b7-7001-815e-a7748f7f000a",
           "unresolved_risks": []
         },
@@ -166,7 +166,7 @@
         "channel_metadata_digest": "sha-256:1111111111111111111111111111111111111111111111111111111111111111",
         "channel_uri": "https://coord.example/channels/cross-runtime",
         "cursor": "cursor-3",
-        "event_digest": "sha-256:72ef66d0cbcc8581fb61f1d43788c74f0db1613a82c46357f2b5e32de5e6a83b",
+        "event_digest": "sha-256:e39246404c946d2c5ff05b22bef997675e5c023e13c086ed8b7649bd9c209b96",
         "event_id": "01989f0e-56b7-7001-815e-a7748f7f000c",
         "key_id": "key-1",
         "participant_id": "session:a",

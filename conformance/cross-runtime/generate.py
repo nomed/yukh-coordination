@@ -35,7 +35,7 @@ def main():
   "claim":transcript([record(a,1)]),
   "conflict-release":transcript([record(a,1),record(b,2,IDS["instance_b"]),record(release,3,IDS["instance_b"])]),
   "handoff-incomplete-lifecycle":transcript([record(a,1),record(offer,2),record(accept,3,IDS["instance_b"])],completeness="incomplete",lifecycle="redacted")}
- offer2=event("offer2","handoff_offer",{**offer["data"],"handoff_id":IDS["handoff2"]},cause=a["id"],corr=a["id"])
+ offer2=event("offer2","handoff_offer",{**offer["data"],"handoff_id":IDS["handoff2"],"parent_claim_event_id":offer["id"]},cause=offer["id"],corr=a["id"])
  cases["multi-offer"]=transcript([record(a,1),record(offer,2),record(offer2,3)])
  descriptor={"uri":"https://example.test/evidence/1","media_type":"application/json","digest":{"algorithm":"sha-256","value":"2"*64},"declared_size":"128"}
  descriptor_digest="sha-256:"+hashlib.sha256(b"yukh.evidence-descriptor.v0.1\0"+jcs(descriptor)).hexdigest()
@@ -59,21 +59,13 @@ def main():
  unverified=json.loads(json.dumps(record(a,1))); unverified["receipt_verified"]=False; cases["unverified-receipt"]=transcript([unverified])
  cases["sequence-gap"]={**transcript([record(a,1),record(offer,3)]),"high_water_sequence":3,"declared_completeness":"incomplete"}
  cases["unverified-high-water"]={**transcript([record(a,1)]),"high_water_receipt_verified":False}
- outcomes={
-  "multi-offer":{"python":{"kind":"error","code":"INVALID_REFERENCE"},"javascript":{"kind":"projection","final":True,"reasons":[]}},
-  "evidence-invalid-descriptor-digest":{"python":{"kind":"error","code":"INVALID_REFERENCE"},"javascript":{"kind":"projection","final":True,"reasons":[]}},
-  "evidence-invalid-uri":{"python":{"kind":"error","code":"INVALID_PAYLOAD"},"javascript":{"kind":"projection","final":True,"reasons":[]}},
-  "evidence-invalid-algorithm":{"python":{"kind":"error","code":"INVALID_PAYLOAD"},"javascript":{"kind":"projection","final":True,"reasons":[]}},
-  "evidence-invalid-expected-digest":{"python":{"kind":"error","code":"INVALID_PAYLOAD"},"javascript":{"kind":"projection","final":True,"reasons":[]}},
-  "event-id-collision":{"python":{"kind":"error","code":"ID_COLLISION"},"javascript":{"kind":"projection","final":False,"reasons":["event-id-collision","sequence-collision"]}},
-  "changed-duplicate-receipt":{"python":{"kind":"error","code":"INVALID_RECEIPT"},"javascript":{"kind":"projection","final":False,"reasons":["sequence-collision"]}},
-  "sequence-collision":{"python":{"kind":"error","code":"INVALID_RECEIPT"},"javascript":{"kind":"projection","final":False,"reasons":["sequence-collision"]}},
-  "cas-wrong-recipient":{"python":{"kind":"error","code":"INVALID_HANDOFF_PARTICIPANT"},"javascript":{"kind":"projection","final":False,"reasons":["handoff-precondition-failed"]}},
-  "cas-changed-boundary":{"python":{"kind":"error","code":"HANDOFF_PRECONDITION_FAILED"},"javascript":{"kind":"projection","final":False,"reasons":["handoff-precondition-failed"]}},
-  "cas-second-acceptance":{"python":{"kind":"error","code":"HANDOFF_PRECONDITION_FAILED"},"javascript":{"kind":"projection","final":False,"reasons":["handoff-precondition-failed"]}},
-  "unverified-receipt":{"python":{"kind":"projection","final":True,"reasons":[]},"javascript":{"kind":"projection","final":False,"reasons":["unverified-receipt"]}},
-  "unverified-high-water":{"python":{"kind":"projection","final":True,"reasons":[]},"javascript":{"kind":"projection","final":False,"reasons":["unverified-high-water"]}}
- }
+ outcomes={name:{"python":{"kind":"error","code":code},"javascript":{"kind":"error","code":code}} for name,code in {
+  "evidence-invalid-descriptor-digest":"evidence-binding-failed", "evidence-invalid-uri":"evidence-binding-failed",
+  "evidence-invalid-algorithm":"evidence-binding-failed", "evidence-invalid-expected-digest":"evidence-binding-failed",
+  "event-id-collision":"event-id-collision", "changed-duplicate-receipt":"receipt-mismatch",
+  "sequence-collision":"sequence-collision", "cas-wrong-recipient":"handoff-precondition-failed",
+  "cas-changed-boundary":"handoff-precondition-failed", "cas-second-acceptance":"handoff-precondition-failed",
+ }.items()}
  index=[]
  for name,value in cases.items():
   path=HERE/"cases"/f"{name}.json"; write(path,value); row={"name":name,"path":str(path.relative_to(ROOT)),"work_uri":WORK,"mode":"runtime-outcomes" if name in outcomes else "projection-equal"}

@@ -21,11 +21,11 @@
     "output": "conformance/cross-runtime/expected/handoff-incomplete-lifecycle.projection.canonical.json"
   },
   {
-    "bytes": 116,
-    "digest": "sha-256:40c88c56cdb296227e4bdc8e13ee2302859ca6c019ed8c520e46f7ab5e9adf10",
-    "mode": "runtime-outcomes",
+    "bytes": 415,
+    "digest": "sha-256:1f2dec1a818000a8fcdb23a99f5165aa7e244b0374388e05c977a091640575ea",
+    "mode": "projection-equal",
     "name": "multi-offer",
-    "output": "conformance/cross-runtime/expected/multi-offer.outcome.canonical.json"
+    "output": "conformance/cross-runtime/expected/multi-offer.projection.canonical.json"
   },
   {
     "bytes": 294,
@@ -63,29 +63,29 @@
     "output": "conformance/cross-runtime/expected/evidence-inconclusive.projection.canonical.json"
   },
   {
-    "bytes": 116,
-    "digest": "sha-256:40c88c56cdb296227e4bdc8e13ee2302859ca6c019ed8c520e46f7ab5e9adf10",
+    "bytes": 124,
+    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-descriptor-digest",
     "output": "conformance/cross-runtime/expected/evidence-invalid-descriptor-digest.outcome.canonical.json"
   },
   {
-    "bytes": 114,
-    "digest": "sha-256:04873f0eecc663ebf1f34bd702e347c8311f37ca1330f53d0a491d45044008d3",
+    "bytes": 124,
+    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-uri",
     "output": "conformance/cross-runtime/expected/evidence-invalid-uri.outcome.canonical.json"
   },
   {
-    "bytes": 114,
-    "digest": "sha-256:04873f0eecc663ebf1f34bd702e347c8311f37ca1330f53d0a491d45044008d3",
+    "bytes": 124,
+    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-algorithm",
     "output": "conformance/cross-runtime/expected/evidence-invalid-algorithm.outcome.canonical.json"
   },
   {
-    "bytes": 114,
-    "digest": "sha-256:04873f0eecc663ebf1f34bd702e347c8311f37ca1330f53d0a491d45044008d3",
+    "bytes": 124,
+    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-expected-digest",
     "output": "conformance/cross-runtime/expected/evidence-invalid-expected-digest.outcome.canonical.json"
@@ -98,53 +98,53 @@
     "output": "conformance/cross-runtime/expected/exact-duplicate.projection.canonical.json"
   },
   {
-    "bytes": 153,
-    "digest": "sha-256:ba43a44ac4528c9ae0e46069ce2dbeee77a5ad9a418048010e863eb948fb4d75",
+    "bytes": 114,
+    "digest": "sha-256:c054612e37718e945eef3571194e09c620327ab56bbb57010a8cfaed3c5ceba7",
     "mode": "runtime-outcomes",
     "name": "event-id-collision",
     "output": "conformance/cross-runtime/expected/event-id-collision.outcome.canonical.json"
   },
   {
-    "bytes": 135,
-    "digest": "sha-256:c39d4eab91cb49c466b1f4beba6857dceae48e1e708289234390b5f45327ccf8",
+    "bytes": 110,
+    "digest": "sha-256:daba93934c8bd29967a9c588d1f0ddd02f06e98c18ad8c1a6b2b88a3d6a6a7cb",
     "mode": "runtime-outcomes",
     "name": "changed-duplicate-receipt",
     "output": "conformance/cross-runtime/expected/changed-duplicate-receipt.outcome.canonical.json"
   },
   {
-    "bytes": 135,
-    "digest": "sha-256:c39d4eab91cb49c466b1f4beba6857dceae48e1e708289234390b5f45327ccf8",
+    "bytes": 114,
+    "digest": "sha-256:5e249a66cbe65e7eb65cd203db19f56bdf5494cedb38747a32ffdb691c633bca",
     "mode": "runtime-outcomes",
     "name": "sequence-collision",
     "output": "conformance/cross-runtime/expected/sequence-collision.outcome.canonical.json"
   },
   {
-    "bytes": 156,
-    "digest": "sha-256:bfb80d267f63a1dc8a898aaadab897f64df94bf2086be2aa8aee5fc73a03663e",
+    "bytes": 132,
+    "digest": "sha-256:667826303097544d48b01cf17a72aec86d528f72652a394e19f10803c981bdb1",
     "mode": "runtime-outcomes",
     "name": "cas-wrong-recipient",
     "output": "conformance/cross-runtime/expected/cas-wrong-recipient.outcome.canonical.json"
   },
   {
-    "bytes": 156,
-    "digest": "sha-256:9d3bd3ca8c75f62152cf00ee99f2f9fccf9d8547dc29d35796072ba4adcf8a99",
+    "bytes": 132,
+    "digest": "sha-256:667826303097544d48b01cf17a72aec86d528f72652a394e19f10803c981bdb1",
     "mode": "runtime-outcomes",
     "name": "cas-changed-boundary",
     "output": "conformance/cross-runtime/expected/cas-changed-boundary.outcome.canonical.json"
   },
   {
-    "bytes": 156,
-    "digest": "sha-256:9d3bd3ca8c75f62152cf00ee99f2f9fccf9d8547dc29d35796072ba4adcf8a99",
+    "bytes": 132,
+    "digest": "sha-256:667826303097544d48b01cf17a72aec86d528f72652a394e19f10803c981bdb1",
     "mode": "runtime-outcomes",
     "name": "cas-second-acceptance",
     "output": "conformance/cross-runtime/expected/cas-second-acceptance.outcome.canonical.json"
   },
   {
-    "bytes": 141,
-    "digest": "sha-256:1a26275c4d994b96fe33a403a06575910ba883a625b562d5f2cdc96ce42fc87a",
-    "mode": "runtime-outcomes",
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
     "name": "unverified-receipt",
-    "output": "conformance/cross-runtime/expected/unverified-receipt.outcome.canonical.json"
+    "output": "conformance/cross-runtime/expected/unverified-receipt.projection.canonical.json"
   },
   {
     "bytes": 495,
@@ -154,10 +154,10 @@
     "output": "conformance/cross-runtime/expected/sequence-gap.projection.canonical.json"
   },
   {
-    "bytes": 144,
-    "digest": "sha-256:30ff041ce0078dfc94ef925b4817f95ed43d8af90d8dbb1d8df29d6cd7bf2935",
-    "mode": "runtime-outcomes",
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
     "name": "unverified-high-water",
-    "output": "conformance/cross-runtime/expected/unverified-high-water.outcome.canonical.json"
+    "output": "conformance/cross-runtime/expected/unverified-high-water.projection.canonical.json"
   }
 ]

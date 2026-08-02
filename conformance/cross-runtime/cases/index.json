@@ -18,18 +18,7 @@
     "work_uri": "https://example.test/issues/42"
   },
   {
-    "expected": {
-      "javascript": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
-      },
-      "python": {
-        "code": "INVALID_REFERENCE",
-        "kind": "error"
-      }
-    },
-    "mode": "runtime-outcomes",
+    "mode": "projection-equal",
     "name": "multi-offer",
     "path": "conformance/cross-runtime/cases/multi-offer.json",
     "work_uri": "https://example.test/issues/42"
@@ -67,12 +56,11 @@
   {
     "expected": {
       "javascript": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
+        "code": "evidence-binding-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_REFERENCE",
+        "code": "evidence-binding-failed",
         "kind": "error"
       }
     },
@@ -84,12 +72,11 @@
   {
     "expected": {
       "javascript": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
+        "code": "evidence-binding-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_PAYLOAD",
+        "code": "evidence-binding-failed",
         "kind": "error"
       }
     },
@@ -101,12 +88,11 @@
   {
     "expected": {
       "javascript": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
+        "code": "evidence-binding-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_PAYLOAD",
+        "code": "evidence-binding-failed",
         "kind": "error"
       }
     },
@@ -118,12 +104,11 @@
   {
     "expected": {
       "javascript": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
+        "code": "evidence-binding-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_PAYLOAD",
+        "code": "evidence-binding-failed",
         "kind": "error"
       }
     },
@@ -141,15 +126,11 @@
   {
     "expected": {
       "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "event-id-collision",
-          "sequence-collision"
-        ]
+        "code": "event-id-collision",
+        "kind": "error"
       },
       "python": {
-        "code": "ID_COLLISION",
+        "code": "event-id-collision",
         "kind": "error"
       }
     },
@@ -161,14 +142,11 @@
   {
     "expected": {
       "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "sequence-collision"
-        ]
+        "code": "receipt-mismatch",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_RECEIPT",
+        "code": "receipt-mismatch",
         "kind": "error"
       }
     },
@@ -180,14 +158,11 @@
   {
     "expected": {
       "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "sequence-collision"
-        ]
+        "code": "sequence-collision",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_RECEIPT",
+        "code": "sequence-collision",
         "kind": "error"
       }
     },
@@ -199,14 +174,11 @@
   {
     "expected": {
       "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "handoff-precondition-failed"
-        ]
+        "code": "handoff-precondition-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "INVALID_HANDOFF_PARTICIPANT",
+        "code": "handoff-precondition-failed",
         "kind": "error"
       }
     },
@@ -218,14 +190,11 @@
   {
     "expected": {
       "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "handoff-precondition-failed"
-        ]
+        "code": "handoff-precondition-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "HANDOFF_PRECONDITION_FAILED",
+        "code": "handoff-precondition-failed",
         "kind": "error"
       }
     },
@@ -237,14 +206,11 @@
   {
     "expected": {
       "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "handoff-precondition-failed"
-        ]
+        "code": "handoff-precondition-failed",
+        "kind": "error"
       },
       "python": {
-        "code": "HANDOFF_PRECONDITION_FAILED",
+        "code": "handoff-precondition-failed",
         "kind": "error"
       }
     },
@@ -254,21 +220,7 @@
     "work_uri": "https://example.test/issues/42"
   },
   {
-    "expected": {
-      "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "unverified-receipt"
-        ]
-      },
-      "python": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
-      }
-    },
-    "mode": "runtime-outcomes",
+    "mode": "projection-equal",
     "name": "unverified-receipt",
     "path": "conformance/cross-runtime/cases/unverified-receipt.json",
     "work_uri": "https://example.test/issues/42"
@@ -280,21 +232,7 @@
     "work_uri": "https://example.test/issues/42"
   },
   {
-    "expected": {
-      "javascript": {
-        "final": false,
-        "kind": "projection",
-        "reasons": [
-          "unverified-high-water"
-        ]
-      },
-      "python": {
-        "final": true,
-        "kind": "projection",
-        "reasons": []
-      }
-    },
-    "mode": "runtime-outcomes",
+    "mode": "projection-equal",
     "name": "unverified-high-water",
     "path": "conformance/cross-runtime/cases/unverified-high-water.json",
     "work_uri": "https://example.test/issues/42"

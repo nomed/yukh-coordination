@@ -1,1 +1,1 @@
-{"javascript":{"final":false,"kind":"projection","reasons":["handoff-precondition-failed"]},"python":{"code":"HANDOFF_PRECONDITION_FAILED","kind":"error"}}
+{"javascript":{"code":"handoff-precondition-failed","kind":"error"},"python":{"code":"handoff-precondition-failed","kind":"error"}}

@@ -35,8 +35,11 @@ def main():
     try: py_summary={"kind":"error","code":json.loads(py.stderr)["code"]}
     except Exception: failures.append(f"{case['name']}: unreadable Python error"); continue
    else: py_summary={"kind":"projection","final":json.loads(py.stdout)["final"],"reasons":[]}
-   if js.returncode: failures.append(f"{case['name']}: JavaScript adapter failed: {js.stderr.decode()}"); continue
-   wrapper=json.loads(js.stdout); js_summary={"kind":"projection","final":wrapper["projection"]["final"],"reasons":wrapper["conformance"]["reasons"]}
+   if js.returncode:
+    try: js_summary={"kind":"error","code":json.loads(js.stderr)["code"]}
+    except Exception: failures.append(f"{case['name']}: unreadable JavaScript error"); continue
+   else:
+    wrapper=json.loads(js.stdout); js_summary={"kind":"projection","final":wrapper["projection"]["final"],"reasons":wrapper["conformance"]["reasons"]}
    summary={"python":py_summary,"javascript":js_summary}
    if summary!=case["expected"]: failures.append(f"{case['name']}: outcome mismatch expected={case['expected']} actual={summary}"); continue
    output=HERE/"expected"/f"{case['name']}.outcome.canonical.json"; payload=canonical(summary)

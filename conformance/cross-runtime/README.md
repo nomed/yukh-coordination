@@ -17,14 +17,9 @@ python3 conformance/cross-runtime/run.py --update  # accountable fixture update
 python3 conformance/cross-runtime/run.py
 ```
 
-The seven canonical/domain vectors and all cases expected to converge compare
-raw bytes. Admission/transition cases with deliberately different engine APIs
-use per-runtime expected outcomes. These make gaps visible rather than silently
-normalizing them. At this revision, Python rejects a second current handoff
-offer because it advances its lifecycle parent while JavaScript accepts the
-normative multi-offer projection; Python also lacks the JavaScript verifier
-status inputs; JavaScript currently does not enforce evidence descriptor
-bindings; and JavaScript reports several invalid transitions as incomplete
-projection reasons where Python returns a typed error. These gaps are committed
-as 13 explicit per-runtime outcome specifications, alongside 10 byte-identical
-projection cases and seven byte-identical canonical/domain vectors.
+The seven canonical/domain vectors and all valid replay cases compare raw
+bytes. Admission/transition failures use the same closed error codes in both
+runtime families. The committed gate covers 13 byte-identical projections and
+10 identical typed rejection outcomes, including multiple chained offers,
+evidence bindings, duplicate/collision behavior, CAS failures, verifier status,
+sequence gaps, and inactive transcript lifecycle.

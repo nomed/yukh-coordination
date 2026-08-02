@@ -94,7 +94,7 @@ export function replay(rawInput, workUri) {
   if (records.some(({ receipt }) => receipt.sequence > input.high_water_sequence)) { incomplete = true; reasons.add("record-after-high-water"); }
 
   const claims = new Map(); const usedClaims = new Set(); const offersByEvent = new Map(); const acceptedWithoutSuccessor = new Map();
-  const conflictTrigger = new Map(); let history = false;
+  const conflictTrigger = new Map(); let claimHistory = false;
   const active = () => [...claims.values()].filter((claim) => claim.active);
   const updateConflict = (sequence) => { if (active().length > 1 && !conflictTrigger.has(workUri)) conflictTrigger.set(workUri, sequence); else if (active().length <= 1) conflictTrigger.delete(workUri); };
 
@@ -102,7 +102,6 @@ export function replay(rawInput, workUri) {
     const { event, receipt } = record; const data = event.data ?? {};
     if (receipt.sequence > input.high_water_sequence) continue;
     if (event.work?.uri !== workUri) continue;
-    history = true;
     if (CHILD_TYPES.has(event.type)) {
       const parent = byEventId.get(event.causation_id);
       requireValue(parent && parent.receipt.sequence < receipt.sequence, "UNRESOLVED_CAUSATION", "missing or forward causation");
@@ -112,6 +111,7 @@ export function replay(rawInput, workUri) {
     if (ROOT_TYPES.has(event.type)) requireValue(event.correlation_id === event.id, "INVALID_REFERENCE", "root correlation mismatch");
 
     if (event.type === "claim") {
+      claimHistory = true;
       const key = keyOf(data); requireValue(!usedClaims.has(key), "INVALID_CLAIM_TRANSITION", "claim generation reused");
       if (data.predecessor_handoff_event) {
         requireValue(acceptedWithoutSuccessor.has(data.predecessor_handoff_event) && event.causation_id === data.predecessor_handoff_event, "INVALID_CLAIM_TRANSITION", "invalid predecessor handoff");
@@ -159,7 +159,7 @@ export function replay(rawInput, workUri) {
   }
 
   const contenders = active().sort((a, b) => lexical(a.claimId, b.claimId));
-  let state = !history ? "unclaimed" : contenders.length === 0 ? "released" : contenders.length > 1 ? "conflicting" : "claimed";
+  let state = !claimHistory ? "unclaimed" : contenders.length === 0 ? "released" : contenders.length > 1 ? "conflicting" : "claimed";
   let handoffIds = [];
   if (contenders.length === 1) {
     handoffIds = [...contenders[0].offers.values()].map((offer) => offer.event.data.handoff_id).sort(lexical);
