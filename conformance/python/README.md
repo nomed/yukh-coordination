@@ -27,10 +27,12 @@ JSON uses this wrapper:
   },
   "transcript_epoch": 0,
   "completeness": "complete",
+  "origin_sequence": 1,
   "lifecycle": "active",
   "high_water_sequence": 2,
+  "high_water_receipt_verified": true,
   "records": [
-    {"event": {}, "receipt": {}}
+    {"event": {}, "receipt": {}, "receipt_verified": true}
   ]
 }
 ```
@@ -38,10 +40,23 @@ JSON uses this wrapper:
 For JSONL, the first nonempty line is `{"transcript": <wrapper without
 records>}` and every following line is one event/receipt record.
 
-The transcript producer is responsible for setting `completeness` to
-`incomplete` when receipt signature or external transcript verification fails.
-The engine independently downgrades it when sequences are not exactly
-contiguous from origin through the declared high-water mark.
+The adapter consumes the same `receipt_verified` and
+`high_water_receipt_verified` evidence as the independent JavaScript runtime.
+The engine derives completeness from deterministic reasons rather than trusting
+the declared label. Forensic reasons are sorted and closed:
+
+- `unverified-receipt`;
+- `unverified-high-water`;
+- `sequence-gap`;
+- `record-after-high-water`;
+- `non-active-lifecycle`.
+
+Admission-impossible observations fail with an exact `TranscriptError` code:
+`event-id-collision`, `receipt-mismatch`, `sequence-collision`,
+`invalid-handoff-offer`, `handoff-precondition-failed`, or
+`evidence-binding-failed`. An exact duplicate with identical canonical event
+bytes and receipt is idempotent and adds no reason. Input record order is
+advisory; replay uses receipt sequence.
 
 ## CLI and tests
 
