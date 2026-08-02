@@ -1,0 +1,346 @@
+[
+  {
+    "path": "conformance/fixtures/positive/event-join.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-presence.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-leave.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-claim.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-progress.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-question.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-answer.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-review_request.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-verdict.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-handoff_offer.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-handoff_accept.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-release.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-evidence_verification.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/negative/event-join-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-presence-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-leave-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-claim-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-progress-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-question-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-answer-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-review_request-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-verdict-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-handoff_offer-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-handoff_accept-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-release-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-evidence_verification-payload.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/root-correlation.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/child-causation.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/presence-expiry.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/number-extension.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/work-on-join.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/missing-work.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/bad-time.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/bad-id.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/verification-reason.json",
+    "reason": "SEMANTIC_OR_SCHEMA",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-14-properties.json",
+    "reason": "INVALID_ENVELOPE",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/positive/channel.json",
+    "schema": "schema/channel-metadata-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/receipt.json",
+    "schema": "schema/receipt-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/evidence.json",
+    "schema": "schema/evidence-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/projection.json",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-claim-successor.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/negative/event-claim-successor-missing-causation.json",
+    "reason": "INVALID_ENVELOPE",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/event-claim-root-with-causation.json",
+    "reason": "INVALID_ENVELOPE",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/positive/event-evidence-verification-mismatch.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-evidence-verification-unavailable.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-evidence-verification-unauthorized.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/event-evidence-verification-inconclusive.json",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/negative/verification-verified-without-observed.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/verification-unavailable-without-reason.json",
+    "reason": "INVALID_PAYLOAD",
+    "schema": "schema/envelope-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/positive/problem-access-denied.json",
+    "schema": "schema/problem-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/problem-resource-limit.json",
+    "schema": "schema/problem-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/negative/problem-access-denied-detail.json",
+    "reason": "ACCESS_DENIED_SHAPE",
+    "schema": "schema/problem-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/problem-resource-wrong-status.json",
+    "reason": "RESOURCE_LIMIT_SHAPE",
+    "schema": "schema/problem-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/positive/projection-unclaimed.json",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/projection-released.json",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/projection-handoff_offered.json",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/positive/projection-conflicting.json",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": true
+  },
+  {
+    "path": "conformance/fixtures/negative/projection-high-water-mismatch.json",
+    "reason": "SEMANTIC",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/projection-handoff-without-offer.json",
+    "reason": "INVALID_PROJECTION",
+    "schema": "schema/projection-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/receipt-duplicate-outcome.json",
+    "reason": "INVALID_RECEIPT",
+    "schema": "schema/receipt-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/evidence-missing-size.json",
+    "reason": "INVALID_EVIDENCE",
+    "schema": "schema/evidence-0.1.schema.json",
+    "valid": false
+  },
+  {
+    "path": "conformance/fixtures/negative/channel-extra-property.json",
+    "reason": "INVALID_CHANNEL",
+    "schema": "schema/channel-metadata-0.1.schema.json",
+    "valid": false
+  }
+]

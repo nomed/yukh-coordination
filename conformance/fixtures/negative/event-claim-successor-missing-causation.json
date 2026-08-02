@@ -1,0 +1,27 @@
+{
+  "channel": "https://coord.example/channels/project-release",
+  "correlation_id": "01989f0e-56b7-7e01-915e-a7748f7f620e",
+  "data": {
+    "boundary": "Café, é, 😀 — core fixture corpus",
+    "claim_id": "01989f0e-56b7-7e01-915e-a7748f7f6218",
+    "expected_active_claims": [],
+    "generation": "1",
+    "predecessor_handoff_event": "01989f0e-56b7-7e01-915e-a7748f7f620a",
+    "scope": "implementation"
+  },
+  "evidence": [],
+  "extensions": {},
+  "id": "01989f0e-56b7-7e01-915e-a7748f7f620e",
+  "participant": {
+    "display": "fixture",
+    "id": "session:fixture",
+    "kind": "session"
+  },
+  "source": "urn:yukh:source:fixture",
+  "specversion": "0.1",
+  "time": "2026-08-02T16:00:00.000Z",
+  "type": "claim",
+  "work": {
+    "uri": "https://github.com/nomed/yukh-coordination/issues/4"
+  }
+}

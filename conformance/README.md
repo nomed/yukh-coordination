@@ -1,0 +1,47 @@
+# Protocol v0.1 core conformance corpus
+
+This directory qualifies the client-neutral wire contract from RFC-0001 Draft
+with independent Python and JavaScript replay implementations. It does not
+accept the RFC, implement a relay, authenticate identities, or authorize an
+operated service.
+
+## Contents
+
+- `fixtures/positive`: one valid event for every foundation signal plus closed
+  evidence, channel metadata, receipt, and projection examples;
+- `fixtures/negative`: a missing-required-field case for every signal and
+  cross-envelope/semantic failures;
+- `canonical`: JCS inputs, exact bytes, SHA-256 digests, and applicable frozen
+  domain digests for event, channel metadata, evidence descriptor/set, receipt,
+  receipt signature preimage, and diagnostics;
+- `SHA256SUMS`: immutable byte manifest for all corpus and runner inputs;
+- `validate.py`: standard-library schema subset, reference resolver, semantic
+  checks, JCS canonicalizer, fixture runner, and manifest verifier;
+- `generate.py`: deterministic corpus regeneration tool.
+- `standards-schema.py`: independent pinned `jsonschema` Draft 2020-12 gate;
+- `signatures`: fixed RFC 8032-derived receipt signature and OpenSSL verifier.
+
+## Repeatable validation
+
+```bash
+python3 conformance/generate.py
+python3 conformance/validate.py --check-manifest
+python3 conformance/standards-schema.py
+python3 conformance/signatures/verify.py
+python3 conformance/cross-runtime/run.py
+git diff --exit-code
+```
+
+The generator intentionally rewrites only generated fixtures, canonical vectors,
+their indexes, and `SHA256SUMS`. A clean diff after regeneration proves the
+checked-in corpus is reproducible.
+
+The validator uses no third-party package. Its schema engine implements the
+Draft 2020-12 keywords used by this repository; it is not presented as a general
+JSON Schema implementation. Independent validation is now supplied by the
+installed standards-conforming `jsonschema` 4.10.3 runtime, pinned in
+`standards-requirements.txt`.
+
+The independent Python and JavaScript replay engines are joined by the
+[`cross-runtime`](cross-runtime/README.md) gate. Common transcripts and committed
+outputs prove byte-identical canonical work projections across both runtimes.

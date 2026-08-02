@@ -1,0 +1,124 @@
+{
+  "declared_completeness": "complete",
+  "high_water_receipt_verified": true,
+  "high_water_sequence": 1,
+  "lifecycle": "active",
+  "metadata": {
+    "channel_id": "channel:cross-runtime",
+    "channel_uri": "https://coord.example/channels/cross-runtime",
+    "tenant_id": "tenant:example"
+  },
+  "origin_sequence": 1,
+  "records": [
+    {
+      "event": {
+        "channel": "https://coord.example/channels/cross-runtime",
+        "correlation_id": "01989f0e-56b7-7001-815e-a7748f7f0003",
+        "data": {
+          "boundary": "A",
+          "claim_id": "01989f0e-56b7-7001-815e-a7748f7f0001",
+          "expected_active_claims": [],
+          "generation": "0",
+          "scope": "implementation"
+        },
+        "evidence": [],
+        "extensions": {},
+        "id": "01989f0e-56b7-7001-815e-a7748f7f0003",
+        "participant": {
+          "id": "session:a",
+          "kind": "session"
+        },
+        "source": "urn:yukh:cross-runtime",
+        "specversion": "0.1",
+        "time": "2026-08-02T16:00:00.000Z",
+        "type": "claim",
+        "work": {
+          "uri": "https://example.test/issues/42"
+        }
+      },
+      "receipt": {
+        "accepted_at": "2026-08-02T16:00:00.000Z",
+        "acl_decision_receipt_id": "decision-1",
+        "acl_policy_digest": "sha-256:2222222222222222222222222222222222222222222222222222222222222222",
+        "acl_policy_version": "acl-v1",
+        "append_outcome": "appended",
+        "channel_id": "channel:cross-runtime",
+        "channel_metadata_digest": "sha-256:1111111111111111111111111111111111111111111111111111111111111111",
+        "channel_uri": "https://coord.example/channels/cross-runtime",
+        "cursor": "cursor-1",
+        "event_digest": "sha-256:285768bdd80ac3c887931f37f39f33fac93824d9874172c710c73f4039fb8d2d",
+        "event_id": "01989f0e-56b7-7001-815e-a7748f7f0003",
+        "key_id": "key-1",
+        "participant_id": "session:a",
+        "participant_instance_id": "01989f0e-56b7-7001-815e-a7748f7f0009",
+        "principal_id": "principal:fixture",
+        "receipt_id": "01989f0e-56b7-7001-915e-a7748f7f0101",
+        "receipt_version": "0.1",
+        "sequence": 1,
+        "session_epoch": 1,
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "signature_algorithm": "ed25519",
+        "specversion": "0.1",
+        "tenant_id": "tenant:example",
+        "transcript_epoch": 0
+      },
+      "receipt_verified": true
+    },
+    {
+      "event": {
+        "channel": "https://coord.example/channels/cross-runtime",
+        "correlation_id": "01989f0e-56b7-7001-815e-a7748f7f0004",
+        "data": {
+          "boundary": "B",
+          "claim_id": "01989f0e-56b7-7001-815e-a7748f7f0002",
+          "expected_active_claims": [],
+          "generation": "0",
+          "scope": "review"
+        },
+        "evidence": [],
+        "extensions": {},
+        "id": "01989f0e-56b7-7001-815e-a7748f7f0004",
+        "participant": {
+          "id": "session:b",
+          "kind": "session"
+        },
+        "source": "urn:yukh:cross-runtime",
+        "specversion": "0.1",
+        "time": "2026-08-02T16:00:00.000Z",
+        "type": "claim",
+        "work": {
+          "uri": "https://example.test/issues/42"
+        }
+      },
+      "receipt": {
+        "accepted_at": "2026-08-02T16:00:00.000Z",
+        "acl_decision_receipt_id": "decision-1",
+        "acl_policy_digest": "sha-256:2222222222222222222222222222222222222222222222222222222222222222",
+        "acl_policy_version": "acl-v1",
+        "append_outcome": "appended",
+        "channel_id": "channel:cross-runtime",
+        "channel_metadata_digest": "sha-256:1111111111111111111111111111111111111111111111111111111111111111",
+        "channel_uri": "https://coord.example/channels/cross-runtime",
+        "cursor": "cursor-1",
+        "event_digest": "sha-256:63124a8059526d6657537417c6dbfc6e4722b9c901694b9ccc75e58bd33c1f4d",
+        "event_id": "01989f0e-56b7-7001-815e-a7748f7f0004",
+        "key_id": "key-1",
+        "participant_id": "session:b",
+        "participant_instance_id": "01989f0e-56b7-7001-815e-a7748f7f000a",
+        "principal_id": "principal:fixture",
+        "receipt_id": "01989f0e-56b7-7001-915e-a7748f7f0101",
+        "receipt_version": "0.1",
+        "sequence": 1,
+        "session_epoch": 1,
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "signature_algorithm": "ed25519",
+        "specversion": "0.1",
+        "tenant_id": "tenant:example",
+        "transcript_epoch": 0
+      },
+      "receipt_verified": true
+    }
+  ],
+  "specversion": "0.1",
+  "transcript_epoch": 0
+}

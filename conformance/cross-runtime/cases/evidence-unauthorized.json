@@ -1,0 +1,141 @@
+{
+  "declared_completeness": "complete",
+  "high_water_receipt_verified": true,
+  "high_water_sequence": 2,
+  "lifecycle": "active",
+  "metadata": {
+    "channel_id": "channel:cross-runtime",
+    "channel_uri": "https://coord.example/channels/cross-runtime",
+    "tenant_id": "tenant:example"
+  },
+  "origin_sequence": 1,
+  "records": [
+    {
+      "event": {
+        "channel": "https://coord.example/channels/cross-runtime",
+        "correlation_id": "01989f0e-56b7-7001-815e-a7748f7f000f",
+        "data": {
+          "criteria": [
+            "digest"
+          ],
+          "evidence_set_digest": "sha-256:4444444444444444444444444444444444444444444444444444444444444444",
+          "independence_required": true,
+          "subject": "Evidence"
+        },
+        "evidence": [
+          {
+            "declared_size": "128",
+            "digest": {
+              "algorithm": "sha-256",
+              "value": "2222222222222222222222222222222222222222222222222222222222222222"
+            },
+            "media_type": "application/json",
+            "uri": "https://example.test/evidence/1"
+          }
+        ],
+        "extensions": {},
+        "id": "01989f0e-56b7-7001-815e-a7748f7f000f",
+        "participant": {
+          "id": "session:a",
+          "kind": "session"
+        },
+        "source": "urn:yukh:cross-runtime",
+        "specversion": "0.1",
+        "time": "2026-08-02T16:00:00.000Z",
+        "type": "review_request",
+        "work": {
+          "uri": "https://example.test/issues/42"
+        }
+      },
+      "receipt": {
+        "accepted_at": "2026-08-02T16:00:00.000Z",
+        "acl_decision_receipt_id": "decision-1",
+        "acl_policy_digest": "sha-256:2222222222222222222222222222222222222222222222222222222222222222",
+        "acl_policy_version": "acl-v1",
+        "append_outcome": "appended",
+        "channel_id": "channel:cross-runtime",
+        "channel_metadata_digest": "sha-256:1111111111111111111111111111111111111111111111111111111111111111",
+        "channel_uri": "https://coord.example/channels/cross-runtime",
+        "cursor": "cursor-1",
+        "event_digest": "sha-256:9411e8704c3242ad1a458af000ad7a8933412f441b2e897265cef00c2e9cef3f",
+        "event_id": "01989f0e-56b7-7001-815e-a7748f7f000f",
+        "key_id": "key-1",
+        "participant_id": "session:a",
+        "participant_instance_id": "01989f0e-56b7-7001-815e-a7748f7f0009",
+        "principal_id": "principal:fixture",
+        "receipt_id": "01989f0e-56b7-7001-915e-a7748f7f0101",
+        "receipt_version": "0.1",
+        "sequence": 1,
+        "session_epoch": 1,
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "signature_algorithm": "ed25519",
+        "specversion": "0.1",
+        "tenant_id": "tenant:example",
+        "transcript_epoch": 0
+      },
+      "receipt_verified": true
+    },
+    {
+      "event": {
+        "causation_id": "01989f0e-56b7-7001-815e-a7748f7f000f",
+        "channel": "https://coord.example/channels/cross-runtime",
+        "correlation_id": "01989f0e-56b7-7001-815e-a7748f7f000f",
+        "data": {
+          "algorithm": "sha-256",
+          "descriptor_digest": "sha-256:e91937cfded37561e69498b3840939002f2c5bd724675e7a6bca68507cad4988",
+          "expected_digest": "sha-256:2222222222222222222222222222222222222222222222222222222222222222",
+          "method": "GET",
+          "outcome": "unauthorized",
+          "reason": "unauthorized",
+          "referenced_event_id": "01989f0e-56b7-7001-815e-a7748f7f000f",
+          "uri": "https://example.test/evidence/1",
+          "verified_at": "2026-08-02T16:00:00.000Z",
+          "verifier_policy_version": "v1"
+        },
+        "evidence": [],
+        "extensions": {},
+        "id": "01989f0e-56b7-7001-815e-a7748f7f0010",
+        "participant": {
+          "id": "session:a",
+          "kind": "session"
+        },
+        "source": "urn:yukh:cross-runtime",
+        "specversion": "0.1",
+        "time": "2026-08-02T16:00:00.000Z",
+        "type": "evidence_verification",
+        "work": {
+          "uri": "https://example.test/issues/42"
+        }
+      },
+      "receipt": {
+        "accepted_at": "2026-08-02T16:00:00.000Z",
+        "acl_decision_receipt_id": "decision-2",
+        "acl_policy_digest": "sha-256:2222222222222222222222222222222222222222222222222222222222222222",
+        "acl_policy_version": "acl-v1",
+        "append_outcome": "appended",
+        "channel_id": "channel:cross-runtime",
+        "channel_metadata_digest": "sha-256:1111111111111111111111111111111111111111111111111111111111111111",
+        "channel_uri": "https://coord.example/channels/cross-runtime",
+        "cursor": "cursor-2",
+        "event_digest": "sha-256:8f3caae9de04151333e826d183803ff16d96fe4a302df88b0b717c7012877025",
+        "event_id": "01989f0e-56b7-7001-815e-a7748f7f0010",
+        "key_id": "key-1",
+        "participant_id": "session:a",
+        "participant_instance_id": "01989f0e-56b7-7001-815e-a7748f7f0009",
+        "principal_id": "principal:fixture",
+        "receipt_id": "01989f0e-56b7-7001-915e-a7748f7f0102",
+        "receipt_version": "0.1",
+        "sequence": 2,
+        "session_epoch": 1,
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "signature_algorithm": "ed25519",
+        "specversion": "0.1",
+        "tenant_id": "tenant:example",
+        "transcript_epoch": 0
+      },
+      "receipt_verified": true
+    }
+  ],
+  "specversion": "0.1",
+  "transcript_epoch": 0
+}

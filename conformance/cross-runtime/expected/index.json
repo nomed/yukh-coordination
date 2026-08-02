@@ -1,0 +1,191 @@
+[
+  {
+    "bytes": 330,
+    "digest": "sha-256:fab0c6a550b28694e5f30bf9575cce426e6437ae62975fe9d7145d4491d20a59",
+    "mode": "projection-equal",
+    "name": "claim",
+    "output": "conformance/cross-runtime/expected/claim.projection.canonical.json"
+  },
+  {
+    "bytes": 330,
+    "digest": "sha-256:4de315ac0a8840e95fdec13e4b3594dd7d227b0c459d687302632f1d0a72c284",
+    "mode": "projection-equal",
+    "name": "conflict-release",
+    "output": "conformance/cross-runtime/expected/conflict-release.projection.canonical.json"
+  },
+  {
+    "bytes": 792,
+    "digest": "sha-256:edecd5487b0b27e11d694c8f2df38e4583bc59a547eb3cb738981cbe120d7225",
+    "mode": "projection-equal",
+    "name": "handoff-incomplete-lifecycle",
+    "output": "conformance/cross-runtime/expected/handoff-incomplete-lifecycle.projection.canonical.json"
+  },
+  {
+    "bytes": 415,
+    "digest": "sha-256:1f2dec1a818000a8fcdb23a99f5165aa7e244b0374388e05c977a091640575ea",
+    "mode": "projection-equal",
+    "name": "multi-offer",
+    "output": "conformance/cross-runtime/expected/multi-offer.projection.canonical.json"
+  },
+  {
+    "bytes": 294,
+    "digest": "sha-256:96f8a5211b9c1ba98f10967ca3f6319b1824f905687aa1a2a7b019988019642f",
+    "mode": "projection-equal",
+    "name": "evidence-verified",
+    "output": "conformance/cross-runtime/expected/evidence-verified.projection.canonical.json"
+  },
+  {
+    "bytes": 294,
+    "digest": "sha-256:96f8a5211b9c1ba98f10967ca3f6319b1824f905687aa1a2a7b019988019642f",
+    "mode": "projection-equal",
+    "name": "evidence-mismatch",
+    "output": "conformance/cross-runtime/expected/evidence-mismatch.projection.canonical.json"
+  },
+  {
+    "bytes": 294,
+    "digest": "sha-256:96f8a5211b9c1ba98f10967ca3f6319b1824f905687aa1a2a7b019988019642f",
+    "mode": "projection-equal",
+    "name": "evidence-unavailable",
+    "output": "conformance/cross-runtime/expected/evidence-unavailable.projection.canonical.json"
+  },
+  {
+    "bytes": 294,
+    "digest": "sha-256:96f8a5211b9c1ba98f10967ca3f6319b1824f905687aa1a2a7b019988019642f",
+    "mode": "projection-equal",
+    "name": "evidence-unauthorized",
+    "output": "conformance/cross-runtime/expected/evidence-unauthorized.projection.canonical.json"
+  },
+  {
+    "bytes": 294,
+    "digest": "sha-256:96f8a5211b9c1ba98f10967ca3f6319b1824f905687aa1a2a7b019988019642f",
+    "mode": "projection-equal",
+    "name": "evidence-inconclusive",
+    "output": "conformance/cross-runtime/expected/evidence-inconclusive.projection.canonical.json"
+  },
+  {
+    "bytes": 112,
+    "digest": "sha-256:b50e3050d8dcad67a478a2a2767572fc5c63b64c3679e439caab3ff1e7d9e6c0",
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-descriptor-digest",
+    "output": "conformance/cross-runtime/expected/evidence-invalid-descriptor-digest.outcome.canonical.json"
+  },
+  {
+    "bytes": 108,
+    "digest": "sha-256:5871138db4e08f17c2812ec7b44d713d8266aa1cb7db3ee443deeca25ab6c003",
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-uri",
+    "output": "conformance/cross-runtime/expected/evidence-invalid-uri.outcome.canonical.json"
+  },
+  {
+    "bytes": 108,
+    "digest": "sha-256:5871138db4e08f17c2812ec7b44d713d8266aa1cb7db3ee443deeca25ab6c003",
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-algorithm",
+    "output": "conformance/cross-runtime/expected/evidence-invalid-algorithm.outcome.canonical.json"
+  },
+  {
+    "bytes": 108,
+    "digest": "sha-256:5871138db4e08f17c2812ec7b44d713d8266aa1cb7db3ee443deeca25ab6c003",
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-expected-digest",
+    "output": "conformance/cross-runtime/expected/evidence-invalid-expected-digest.outcome.canonical.json"
+  },
+  {
+    "bytes": 330,
+    "digest": "sha-256:fab0c6a550b28694e5f30bf9575cce426e6437ae62975fe9d7145d4491d20a59",
+    "mode": "projection-equal",
+    "name": "exact-duplicate",
+    "output": "conformance/cross-runtime/expected/exact-duplicate.projection.canonical.json"
+  },
+  {
+    "bytes": 102,
+    "digest": "sha-256:86c7d486495a815595652b0ab6237465285d3a1567298c8f97a491344641e01d",
+    "mode": "runtime-outcomes",
+    "name": "event-id-collision",
+    "output": "conformance/cross-runtime/expected/event-id-collision.outcome.canonical.json"
+  },
+  {
+    "bytes": 108,
+    "digest": "sha-256:813544c6b81a5ade8f49a25fb499d8c4300a268ffbe7a7d1d6b548db91e58e27",
+    "mode": "runtime-outcomes",
+    "name": "changed-duplicate-receipt",
+    "output": "conformance/cross-runtime/expected/changed-duplicate-receipt.outcome.canonical.json"
+  },
+  {
+    "bytes": 108,
+    "digest": "sha-256:813544c6b81a5ade8f49a25fb499d8c4300a268ffbe7a7d1d6b548db91e58e27",
+    "mode": "runtime-outcomes",
+    "name": "sequence-collision",
+    "output": "conformance/cross-runtime/expected/sequence-collision.outcome.canonical.json"
+  },
+  {
+    "bytes": 132,
+    "digest": "sha-256:e8088ce36b568058c94a2db74643c765dde126e073a723b5c524cbbc7ccde65e",
+    "mode": "runtime-outcomes",
+    "name": "cas-wrong-recipient",
+    "output": "conformance/cross-runtime/expected/cas-wrong-recipient.outcome.canonical.json"
+  },
+  {
+    "bytes": 132,
+    "digest": "sha-256:e8088ce36b568058c94a2db74643c765dde126e073a723b5c524cbbc7ccde65e",
+    "mode": "runtime-outcomes",
+    "name": "cas-changed-boundary",
+    "output": "conformance/cross-runtime/expected/cas-changed-boundary.outcome.canonical.json"
+  },
+  {
+    "bytes": 132,
+    "digest": "sha-256:e8088ce36b568058c94a2db74643c765dde126e073a723b5c524cbbc7ccde65e",
+    "mode": "runtime-outcomes",
+    "name": "cas-second-acceptance",
+    "output": "conformance/cross-runtime/expected/cas-second-acceptance.outcome.canonical.json"
+  },
+  {
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
+    "name": "unverified-receipt",
+    "output": "conformance/cross-runtime/expected/unverified-receipt.projection.canonical.json"
+  },
+  {
+    "bytes": 495,
+    "digest": "sha-256:23b104d57969104139ad203209fb8b5925afe65c9465d26c0749e12ea252565b",
+    "mode": "projection-equal",
+    "name": "sequence-gap",
+    "output": "conformance/cross-runtime/expected/sequence-gap.projection.canonical.json"
+  },
+  {
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
+    "name": "unverified-high-water",
+    "output": "conformance/cross-runtime/expected/unverified-high-water.projection.canonical.json"
+  },
+  {
+    "bytes": 567,
+    "digest": "sha-256:2f7b5b17fd4dde234080b84b1d29e974c14a070a8e0b2d1894450fa6881bc6e9",
+    "mode": "projection-equal",
+    "name": "lifecycle-deleted",
+    "output": "conformance/cross-runtime/expected/lifecycle-deleted.projection.canonical.json"
+  },
+  {
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
+    "name": "missing-origin",
+    "output": "conformance/cross-runtime/expected/missing-origin.projection.canonical.json"
+  },
+  {
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
+    "name": "record-after-high-water",
+    "output": "conformance/cross-runtime/expected/record-after-high-water.projection.canonical.json"
+  },
+  {
+    "bytes": 112,
+    "digest": "sha-256:b50e3050d8dcad67a478a2a2767572fc5c63b64c3679e439caab3ff1e7d9e6c0",
+    "mode": "runtime-outcomes",
+    "name": "evidence-ambiguous-descriptor",
+    "output": "conformance/cross-runtime/expected/evidence-ambiguous-descriptor.outcome.canonical.json"
+  }
+]

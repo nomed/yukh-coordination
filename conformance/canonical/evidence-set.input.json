@@ -1,0 +1,12 @@
+[
+  {
+    "declared_size": "128",
+    "digest": {
+      "algorithm": "sha-256",
+      "value": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "media_type": "application/json",
+    "revision": "rev-1",
+    "uri": "https://example.test/evidence/1"
+  }
+]

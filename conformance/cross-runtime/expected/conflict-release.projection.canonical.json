@@ -1,0 +1,1 @@
+{"as_of_sequence":3,"channel_id":"channel:cross-runtime","completeness":"complete","contenders":["01989f0e-56b7-7001-815e-a7748f7f0001"],"diagnostics":[],"diagnostics_high_water_sequence":3,"final":true,"handoff_offer_ids":[],"lifecycle":"active","specversion":"0.1","state":"claimed","work_uri":"https://example.test/issues/42"}

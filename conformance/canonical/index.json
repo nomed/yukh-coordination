@@ -1,0 +1,52 @@
+[
+  {
+    "canonical": "conformance/canonical/event.canonical.json",
+    "digest": "sha-256:45ba4fd2e4031ce4fc9f850c2736f2a883159b4ea73aa3e3d89c4e3951045f34",
+    "input": "conformance/canonical/event.input.json",
+    "name": "event"
+  },
+  {
+    "canonical": "conformance/canonical/channel.canonical.json",
+    "digest": "sha-256:f71125534795a3d5e522a6cb1c6d30c9caceb0ba8804380f0be1f116044fcb3a",
+    "domain_digest": "sha-256:fd9fa0de55bd9790cb91d48fa9ef5b3a006c0ead1a18d83a2faa1677fa71cb1b",
+    "domain_prefix": "yukh.channel-metadata.v0.1\u0000",
+    "input": "conformance/canonical/channel.input.json",
+    "name": "channel"
+  },
+  {
+    "canonical": "conformance/canonical/evidence-descriptor.canonical.json",
+    "digest": "sha-256:c971c98d06e68b3f2d44da99dc773ebacbfe05f8ab66d111cead649ac0b5f641",
+    "domain_digest": "sha-256:d9771ec0ed313a781cd00860995a9f8d7b0294296389b504be6ed30e08db141e",
+    "domain_prefix": "yukh.evidence-descriptor.v0.1\u0000",
+    "input": "conformance/canonical/evidence-descriptor.input.json",
+    "name": "evidence-descriptor"
+  },
+  {
+    "canonical": "conformance/canonical/evidence-set.canonical.json",
+    "digest": "sha-256:441057582545f9e52ef5c038f62b5c36bcad486b3d992912d6e15fb243dc2b29",
+    "domain_digest": "sha-256:b51dafc27f2f1a203b5d5cc3012bfa91a795c279e67ae16850d7515a54ca96be",
+    "domain_prefix": "yukh.evidence-set.v0.1\u0000",
+    "input": "conformance/canonical/evidence-set.input.json",
+    "name": "evidence-set"
+  },
+  {
+    "canonical": "conformance/canonical/receipt.canonical.json",
+    "digest": "sha-256:e26ec93b55b7438dcbed6bb780f4e84077e6fbcb0733d951f9cba8a7d5e2360f",
+    "input": "conformance/canonical/receipt.input.json",
+    "name": "receipt"
+  },
+  {
+    "canonical": "conformance/canonical/receipt-signature-preimage.canonical.json",
+    "digest": "sha-256:2bc94556a3fbff8a7c313d0e277fa02c5ea94c36d84bd1ff1f0172f166a23cdd",
+    "domain_digest": "sha-256:2b5196d9e99530c68999e1fcc3fd776019ac46d10e3758f62398addef08ab447",
+    "domain_prefix": "yukh-coordination-receipt-v0.1\u0000",
+    "input": "conformance/canonical/receipt-signature-preimage.input.json",
+    "name": "receipt-signature-preimage"
+  },
+  {
+    "canonical": "conformance/canonical/diagnostics.canonical.json",
+    "digest": "sha-256:6c3443bff447e221866b390fb1117f7355cccc18d3ebc37cb8decfa9ba471a23",
+    "input": "conformance/canonical/diagnostics.input.json",
+    "name": "diagnostics"
+  }
+]

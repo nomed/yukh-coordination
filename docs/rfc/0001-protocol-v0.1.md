@@ -360,7 +360,7 @@ Removing fields, changing requiredness, canonicalization, projection semantics, 
 
 Errors use `application/problem+json` and a stable code. The initial codes include:
 
-`INVALID_ENVELOPE`, `UNSUPPORTED_VERSION`, `INVALID_EVENT_TYPE`, `INVALID_PAYLOAD`, `INVALID_REFERENCE`, `CROSS_CHANNEL_REFERENCE`, `UNRESOLVED_CAUSATION`, `CAUSAL_CYCLE`, `ID_COLLISION`, `INVALID_CLAIM_TRANSITION`, `INVALID_HANDOFF_PARTICIPANT`, `HANDOFF_PRECONDITION_FAILED`, `ALREADY_ACCEPTED_HANDOFF`, `EVIDENCE_INTEGRITY_REQUIRED`, `RESOURCE_LIMIT`, `ACCESS_DENIED`, and `TEMPORARILY_UNAVAILABLE`. `CLAIM_CONFLICT` is a projection diagnostic, never a claim-append rejection Problem.
+`INVALID_ENVELOPE`, `UNSUPPORTED_VERSION`, `INVALID_EVENT_TYPE`, `INVALID_PAYLOAD`, `INVALID_REFERENCE`, `CROSS_CHANNEL_REFERENCE`, `UNRESOLVED_CAUSATION`, `CAUSAL_CYCLE`, `ID_COLLISION`, `INVALID_RECEIPT`, `INVALID_CLAIM_TRANSITION`, `INVALID_HANDOFF_PARTICIPANT`, `HANDOFF_PRECONDITION_FAILED`, `ALREADY_ACCEPTED_HANDOFF`, `EVIDENCE_INTEGRITY_REQUIRED`, `RESOURCE_LIMIT`, `ACCESS_DENIED`, and `TEMPORARILY_UNAVAILABLE`. `INVALID_RECEIPT` covers a changed receipt for an otherwise byte-identical retry or reuse of a relay sequence by a different event. `CLAIM_CONFLICT` is a projection diagnostic, never a claim-append rejection Problem.
 
 Rejected events are not protocol events. Security-relevant rejection metadata belongs to a separate restricted audit log.
 

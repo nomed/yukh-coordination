@@ -1,0 +1,8 @@
+{
+  "code": "RESOURCE_LIMIT",
+  "retryable": false,
+  "status": 429,
+  "title": "Resource limit reached",
+  "trace_id": "trace",
+  "type": "https://yukh.dev/problems/resource-limit"
+}

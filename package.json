@@ -1,0 +1,14 @@
+{
+  "name": "@yukh/coordination-conformance-js",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "replay": "node js/bin/replay.mjs",
+    "canonical-vectors": "python3 conformance/cross-runtime/run.py"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
