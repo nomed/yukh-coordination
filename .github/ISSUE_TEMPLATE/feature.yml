@@ -1,0 +1,32 @@
+name: Protocol or product outcome
+description: Propose one bounded, evidence-backed outcome
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What observable capability or decision should exist?
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Boundary
+      description: What is explicitly in and out of scope?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Acceptance evidence
+      description: What exact evidence proves completion?
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Security, compatibility, and neutrality risks
+    validations:
+      required: true
