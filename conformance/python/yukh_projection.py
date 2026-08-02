@@ -27,11 +27,8 @@ CHILD_TYPES = WORK_TYPES - ROOT_TYPES
 LIFECYCLES = {"active", "redacted", "deleted"}
 COMPLETENESS = {"complete", "incomplete"}
 REASON_VOCABULARY = {
-    "event-id-collision", "receipt-mismatch", "sequence-collision",
-    "invalid-handoff-offer", "handoff-precondition-failed",
-    "evidence-binding-failed", "unverified-receipt",
-    "unverified-high-water", "sequence-gap", "record-after-high-water",
-    "non-active-lifecycle",
+    "unverified-receipt", "unverified-high-water", "sequence-gap",
+    "record-after-high-water", "non-active-lifecycle",
 }
 FORENSIC_REASONS = {
     "unverified-receipt", "unverified-high-water", "sequence-gap",
@@ -250,14 +247,14 @@ class ReplayEngine:
             prior = observed_events.get(event.get("id"))
             if prior is not None:
                 if prior[0] != event_bytes:
-                    raise TranscriptError("event-id-collision", "same event ID has different canonical bytes")
+                    raise TranscriptError("ID_COLLISION", "same event ID has different canonical bytes")
                 elif prior[1] != receipt_bytes:
-                    raise TranscriptError("receipt-mismatch", "same event has a changed receipt")
+                    raise TranscriptError("INVALID_RECEIPT", "same event has a changed receipt")
                 # An exact event+receipt duplicate is idempotent and carries no
                 # incompleteness reason or second replay observation.
                 continue
             if sequence in observed_sequences:
-                raise TranscriptError("sequence-collision", "sequence is reused by another event")
+                raise TranscriptError("INVALID_RECEIPT", "sequence is reused by another event")
             observed_events[event.get("id")] = (event_bytes, receipt_bytes)
             observed_sequences[sequence] = event.get("id")
             normalized.append((sequence, event_bytes, receipt_bytes, event, receipt))
@@ -267,6 +264,8 @@ class ReplayEngine:
             event_id = event.get("id")
             _require(isinstance(event_id, str), "INVALID_ENVELOPE", "event id required")
             self._validate_binding(event, receipt)
+            if sequence > self.high_water:
+                continue
             self.events[event_id] = (event_bytes, event, receipt)
             self.sequence_records[sequence] = event_id
             self._apply(event, receipt)
@@ -278,7 +277,7 @@ class ReplayEngine:
             self._reason("sequence-gap")
         if not self.high_water_receipt_verified:
             self._reason("unverified-high-water")
-        if self.sequence_records and max(self.sequence_records) > self.high_water:
+        if any(sequence > self.high_water for sequence in observed_sequences):
             self._reason("record-after-high-water")
         if self.lifecycle != "active":
             self._reason("non-active-lifecycle")
@@ -354,7 +353,7 @@ class ReplayEngine:
             parent = data.get("parent_claim_event_id")
             expected_parent = claim.last_lifecycle_event
             if kind == "handoff_offer" and (parent != expected_parent or event.get("causation_id") != parent):
-                raise TranscriptError("invalid-handoff-offer", "handoff offer does not bind the active source claim")
+                raise TranscriptError("HANDOFF_PRECONDITION_FAILED", "handoff offer does not bind the active source claim")
             _require(parent == expected_parent and event.get("causation_id") == parent, "INVALID_REFERENCE", "claim lifecycle parent mismatch")
             if kind == "progress":
                 claim.last_lifecycle_event = event_id
@@ -379,7 +378,6 @@ class ReplayEngine:
         if kind == "handoff_accept":
             offer_id = data.get("offer_event_id")
             offer = self.offers_by_event.get(offer_id)
-            offer = self.offers_by_event.get(offer_id)
             claim = self.claims.get(offer.claim_key) if offer is not None else None
             valid = (
                 offer is not None and claim is not None and claim.active
@@ -394,7 +392,7 @@ class ReplayEngine:
                 and data.get("evidence_set_digest") == offer.evidence_set_digest
             )
             if not valid:
-                raise TranscriptError("handoff-precondition-failed", "handoff acceptance CAS failed")
+                raise TranscriptError("HANDOFF_PRECONDITION_FAILED", "handoff acceptance CAS failed")
             offer.accepted_event_id = event_id
             for current in claim.offers.values():
                 if current is not offer:
@@ -417,22 +415,24 @@ class ReplayEngine:
             _, parent, _ = self.events[parent_id]
             if expected_type is not None:
                 _require(parent["type"] == expected_type, "INVALID_REFERENCE", "referenced event has wrong type")
-        if kind == "evidence_verification" and not self._validate_evidence_verification(data, parent):
-            raise TranscriptError("evidence-binding-failed", "evidence verification binding failed")
+        if kind == "evidence_verification":
+            evidence_error = self._validate_evidence_verification(data, parent)
+            if evidence_error is not None:
+                raise TranscriptError(evidence_error, "evidence verification binding failed")
 
         # Conversation, review, and evidence signals do not modify the closed
         # work-ownership projection.
 
-    def _validate_evidence_verification(self, data: dict[str, Any], parent: dict[str, Any]) -> bool:
+    def _validate_evidence_verification(self, data: dict[str, Any], parent: dict[str, Any]) -> str | None:
         outcome = data.get("outcome")
         if outcome not in {"verified", "mismatch", "unavailable", "unauthorized", "inconclusive"}:
-            return False
+            return "INVALID_PAYLOAD"
         if outcome in {"verified", "mismatch"}:
             if not (isinstance(data.get("observed_digest"), str) and "reason" not in data):
-                return False
+                return "INVALID_PAYLOAD"
         else:
             if not (isinstance(data.get("reason"), str) and "observed_digest" not in data):
-                return False
+                return "INVALID_PAYLOAD"
         matches = []
         for descriptor in parent.get("evidence", []):
             digest = "sha-256:" + hashlib.sha256(
@@ -441,14 +441,15 @@ class ReplayEngine:
             if digest == data.get("descriptor_digest"):
                 matches.append(descriptor)
         if len(matches) != 1:
-            return False
+            return "INVALID_REFERENCE"
         descriptor = matches[0]
         expected = "sha-256:" + descriptor.get("digest", {}).get("value", "")
-        return bool(
+        matches_payload = bool(
             data.get("uri") == descriptor.get("uri")
             and data.get("algorithm") == descriptor.get("digest", {}).get("algorithm")
             and data.get("expected_digest") == expected,
         )
+        return None if matches_payload else "INVALID_PAYLOAD"
 
     def _active(self, work: str) -> list[Claim]:
         return [claim for claim in self.claims.values() if claim.work_uri == work and claim.active]

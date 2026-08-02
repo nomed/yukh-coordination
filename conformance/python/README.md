@@ -51,12 +51,15 @@ the declared label. Forensic reasons are sorted and closed:
 - `record-after-high-water`;
 - `non-active-lifecycle`.
 
-Admission-impossible observations fail with an exact `TranscriptError` code:
-`event-id-collision`, `receipt-mismatch`, `sequence-collision`,
-`invalid-handoff-offer`, `handoff-precondition-failed`, or
-`evidence-binding-failed`. An exact duplicate with identical canonical event
-bytes and receipt is idempotent and adds no reason. Input record order is
-advisory; replay uses receipt sequence.
+Admission-impossible observations fail with the normative RFC/problem code:
+`ID_COLLISION` for one event ID with changed canonical bytes;
+`INVALID_RECEIPT` for a changed receipt or reused sequence;
+`HANDOFF_PRECONDITION_FAILED` for an invalid offer or failed acceptance CAS;
+`INVALID_REFERENCE` for a missing or ambiguous evidence descriptor; and
+`INVALID_PAYLOAD` for an invalid evidence outcome or unequal bound fields.
+Internal forensic labels do not replace these public codes. An exact duplicate
+with identical canonical event bytes and receipt is idempotent and adds no
+reason. Input record order is advisory; replay uses receipt sequence.
 
 ## CLI and tests
 

@@ -112,9 +112,10 @@ def claim(index: int, claim_id: str, expected: list[str] | None = None, predeces
 class ReplayTests(unittest.TestCase):
     def test_forensic_reasons_are_sorted_and_make_projection_incomplete(self) -> None:
         value = claim(0, IDS[10])
-        item = record(value, 2)
+        after = claim(1, IDS[11])
+        item = record(after, 2)
         item["receipt_verified"] = False
-        document = transcript([item], high_water=1, lifecycle="redacted")
+        document = transcript([record(value, 1), item], high_water=1, lifecycle="redacted")
         document["origin_sequence"] = 2
         document["high_water_receipt_verified"] = False
         engine = ReplayEngine(document)
@@ -142,12 +143,12 @@ class ReplayTests(unittest.TestCase):
         changed_receipt["receipt"]["cursor"] = "changed"
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(first, 1), changed_receipt]))
-        self.assertEqual("receipt-mismatch", caught.exception.code)
+        self.assertEqual("INVALID_RECEIPT", caught.exception.code)
 
         second = claim(1, IDS[11])
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(first, 1), record(second, 1)]))
-        self.assertEqual("sequence-collision", caught.exception.code)
+        self.assertEqual("INVALID_RECEIPT", caught.exception.code)
 
     def test_claim_duplicate_conflict_and_release(self) -> None:
         a = claim(0, IDS[10])
@@ -205,7 +206,7 @@ class ReplayTests(unittest.TestCase):
         changed["data"]["boundary"] = "changed"
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(first, 1), record(changed, 1)]))
-        self.assertEqual("event-id-collision", caught.exception.code)
+        self.assertEqual("ID_COLLISION", caught.exception.code)
 
     def test_wrong_handoff_recipient_is_rejected(self) -> None:
         source = claim(0, IDS[10])
@@ -221,7 +222,7 @@ class ReplayTests(unittest.TestCase):
         }, correlation=source["id"], causation=offer["id"])
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(source, 1), record(offer, 2), record(accept, 3)]))
-        self.assertEqual("handoff-precondition-failed", caught.exception.code)
+        self.assertEqual("HANDOFF_PRECONDITION_FAILED", caught.exception.code)
 
     def test_multiple_offers_project_and_competing_acceptance_fails(self) -> None:
         source = claim(0, IDS[10])
@@ -253,7 +254,7 @@ class ReplayTests(unittest.TestCase):
                 record(source, 1), record(offers[0], 2), record(offers[1], 3),
                 record(accepted, 4, instance=IDS[31]), record(competing, 5, instance=IDS[32]),
             ]))
-        self.assertEqual("handoff-precondition-failed", caught.exception.code)
+        self.assertEqual("HANDOFF_PRECONDITION_FAILED", caught.exception.code)
 
     def test_invalid_handoff_offer_has_exact_admission_code(self) -> None:
         source = claim(0, IDS[10])
@@ -265,7 +266,7 @@ class ReplayTests(unittest.TestCase):
         }, correlation=source["id"], causation=source["id"])
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(source, 1), record(invalid, 2)]))
-        self.assertEqual("invalid-handoff-offer", caught.exception.code)
+        self.assertEqual("HANDOFF_PRECONDITION_FAILED", caught.exception.code)
 
     def test_evidence_binding_outcomes_and_failure_code(self) -> None:
         descriptor = {
@@ -298,7 +299,34 @@ class ReplayTests(unittest.TestCase):
         invalid_record = record(invalid, 2)
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(root, 1), invalid_record]))
-        self.assertEqual("evidence-binding-failed", caught.exception.code)
+        self.assertEqual("INVALID_PAYLOAD", caught.exception.code)
+
+        ambiguous_root = json.loads(json.dumps(root))
+        ambiguous_root["evidence"] = [descriptor, json.loads(json.dumps(descriptor))]
+        ambiguous_verification = event(
+            1, "evidence_verification", verification_data,
+            correlation=ambiguous_root["id"], causation=ambiguous_root["id"],
+        )
+        with self.assertRaises(TranscriptError) as caught:
+            replay(transcript([record(ambiguous_root, 1), record(ambiguous_verification, 2)]))
+        self.assertEqual("INVALID_REFERENCE", caught.exception.code)
+
+    def test_origin_after_high_water_and_deleted_lifecycle_are_non_final(self) -> None:
+        first = claim(0, IDS[10])
+        after_high_water = claim(1, IDS[11])
+        document = transcript([record(first, 1), record(after_high_water, 2)], high_water=1, lifecycle="deleted")
+        document["origin_sequence"] = 2
+        engine = ReplayEngine(document)
+        projected = engine.run()[0]
+        self.assertEqual("claimed", projected["state"])
+        self.assertEqual([IDS[10]], projected["contenders"])
+        self.assertEqual("deleted", projected["lifecycle"])
+        self.assertEqual("incomplete", projected["completeness"])
+        self.assertFalse(projected["final"])
+        self.assertEqual(
+            ["non-active-lifecycle", "record-after-high-water", "sequence-gap"],
+            engine.conformance()["reasons"],
+        )
 
     def test_jsonl_and_cli_emit_canonical_json(self) -> None:
         value = claim(0, IDS[10])
