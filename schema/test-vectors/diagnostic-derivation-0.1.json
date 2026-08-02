@@ -1,0 +1,30 @@
+{
+  "transcript_id": {
+    "namespace": "44a2ca56-05fd-5e2c-aba3-ef07363b75ae",
+    "name_utf8": "tenant:example\u0000https://coord.example/channels/project-release\u00000",
+    "expected": "9b00766d-15a7-52a8-b8db-1815edb755dd"
+  },
+  "projection": {
+    "as_of_sequence": 8,
+    "diagnostics_high_water_sequence": 8
+  },
+  "claim_conflict": {
+    "trigger_sequence": 4,
+    "contender_event_ids": [
+      "01989f0e-56b7-7e01-915e-a7748f7f6280",
+      "01989f0e-56b7-7e01-915e-a7748f7f6281"
+    ],
+    "expected_primary_id": "01989f0e-56b7-7e01-915e-a7748f7f6280",
+    "expected_sequence": 4
+  },
+  "handoff_accepted_unclaimed": {
+    "acceptance_event_id": "01989f0e-56b7-7e01-915e-a7748f7f6281",
+    "acceptance_sequence": 7,
+    "expected_primary_id": "01989f0e-56b7-7e01-915e-a7748f7f6281",
+    "expected_sequence": 7
+  },
+  "incomplete_transcript": {
+    "expected_primary_id": "9b00766d-15a7-52a8-b8db-1815edb755dd",
+    "expected_sequence": 8
+  }
+}
