@@ -1,6 +1,6 @@
 # RFC-0002: MVP security boundary
 
-- Status: Draft
+- Status: Accepted
 - Governing issue: #3
 - Date: 2026-08-02
 - Scope: repository-only protocol and reference-relay design boundary
@@ -11,7 +11,7 @@ This RFC freezes the minimum security decisions required to design the Yukh Coor
 
 It is governed by [ADR-0001](../adr/0001-protocol-not-control-plane.md), aligns with [RFC-0001](0001-protocol-v0.1.md) from governing issue #2, and is supported by the detailed [MVP threat model](../security/threat-model.md). RFC-0001 remains responsible for the protocol envelope, canonical event representation, signal schemas, and compatibility contract; this RFC constrains their security semantics. The RFC-0001 link resolves when the issue #2 record is integrated; this branch does not duplicate or redefine that record.
 
-This Draft does **not** authorize implementation, a production identity provider, relay operation, deployment, public admission, or production use.
+Acceptance of this repository-only security boundary does **not** authorize implementation, a production identity provider, relay operation, deployment, public admission, or production use.
 
 ## Context
 
@@ -114,6 +114,9 @@ Production IdP lifecycle, SCIM, workload/delegated identity, federation, offline
 
 ## Status and consequences
 
-This RFC remains Draft until accountable review accepts it together with the threat model and its alignment with RFC-0001. While Draft, it is a design constraint and review target, not a public compatibility or security claim.
-
-Acceptance would freeze only the repository-owned MVP security boundary. It would not authorize issue #5 implementation, select a deployment topology, accept qualification evidence, provision credentials, publish a service, or approve production use.
+The project owner accepted this RFC together with the threat model and its
+alignment with accepted RFC-0001 after completion of issue #4. Acceptance
+freezes only the repository-owned MVP security boundary. It does not authorize
+issue #5 implementation, select a deployment topology, accept operational
+qualification evidence, provision credentials, publish a service, or approve
+production use.
