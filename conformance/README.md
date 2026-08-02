@@ -33,4 +33,8 @@ checked-in corpus is reproducible.
 The validator uses no third-party package. Its schema engine implements the
 Draft 2020-12 keywords used by this repository; it is not presented as a general
 JSON Schema implementation. Issue #4 still requires validation by a conforming
-independent JSON Schema implementation and a second language/runtime.
+independent JSON Schema implementation.
+
+The independent Python and JavaScript replay engines are joined by the
+[`cross-runtime`](cross-runtime/README.md) gate. Common transcripts and committed
+outputs prove byte-identical canonical work projections across both runtimes.

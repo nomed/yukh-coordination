@@ -1,0 +1,17 @@
+[
+  {
+    "name": "claim",
+    "path": "conformance/cross-runtime/cases/claim.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "name": "conflict-release",
+    "path": "conformance/cross-runtime/cases/conflict-release.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "name": "handoff-incomplete-lifecycle",
+    "path": "conformance/cross-runtime/cases/handoff-incomplete-lifecycle.json",
+    "work_uri": "https://example.test/issues/42"
+  }
+]

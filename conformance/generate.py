@@ -122,7 +122,7 @@ def main():
    row["domain_prefix"]=domains[name]; row["domain_digest"]="sha-256:"+hashlib.sha256(domains[name].encode()+canonical).hexdigest()
   vectors.append(row)
  write(CAN/"index.json",vectors)
- files=sorted({*(p for p in OUT.rglob("*") if p.is_file() and p.name!="SHA256SUMS"), *ROOT.joinpath("schema").rglob("*.json"), ROOT/"docs/rfc/0001-protocol-v0.1.md", ROOT/"docs/rfc/0002-mvp-security-boundary.md"})
+ files=sorted({*(p for p in OUT.rglob("*") if p.is_file() and p.name!="SHA256SUMS"), *ROOT.joinpath("schema").rglob("*.json"), *ROOT.joinpath("js").rglob("*.mjs"), *ROOT.joinpath("test").rglob("*.mjs"), ROOT/"package.json", ROOT/"docs/rfc/0001-protocol-v0.1.md", ROOT/"docs/rfc/0002-mvp-security-boundary.md"})
  (OUT/"SHA256SUMS").write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(ROOT)}\n" for p in files))
 
 if __name__=="__main__": main()

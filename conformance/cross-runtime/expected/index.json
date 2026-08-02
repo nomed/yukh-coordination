@@ -1,0 +1,20 @@
+[
+  {
+    "bytes": 330,
+    "digest": "sha-256:fab0c6a550b28694e5f30bf9575cce426e6437ae62975fe9d7145d4491d20a59",
+    "name": "claim",
+    "projection": "conformance/cross-runtime/expected/claim.projection.canonical.json"
+  },
+  {
+    "bytes": 330,
+    "digest": "sha-256:4de315ac0a8840e95fdec13e4b3594dd7d227b0c459d687302632f1d0a72c284",
+    "name": "conflict-release",
+    "projection": "conformance/cross-runtime/expected/conflict-release.projection.canonical.json"
+  },
+  {
+    "bytes": 792,
+    "digest": "sha-256:edecd5487b0b27e11d694c8f2df38e4583bc59a547eb3cb738981cbe120d7225",
+    "name": "handoff-incomplete-lifecycle",
+    "projection": "conformance/cross-runtime/expected/handoff-incomplete-lifecycle.projection.canonical.json"
+  }
+]
