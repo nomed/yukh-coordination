@@ -97,7 +97,7 @@ test("late acceptance is rejected as an impossible admitted event", () => {
   const release = event(ids.release, "release", { claim_id: ids.claimA, generation: "0", parent_claim_event_id: ids.offer, outcome: "withdrawn" }, "session:a", ids.offer);
   const acceptData = { handoff_id: ids.handoff, offer_event_id: ids.offer, source_claim_event_id: ids.eventA, claim_id: ids.claimA, generation: "0", boundary_digest: offerData.boundary_digest, evidence_set_digest: offerData.evidence_set_digest };
   const accept = event(ids.accept, "handoff_accept", acceptData, "session:b", ids.offer);
-  assert.throws(() => replay(transcript([record(claimA(), 1), record(offer, 2), record(release, 3), record(accept, 4, ids.instanceB)]), WORK), (error) => error instanceof TranscriptError && error.code === "handoff-precondition-failed");
+  assert.throws(() => replay(transcript([record(claimA(), 1), record(offer, 2), record(release, 3), record(accept, 4, ids.instanceB)]), WORK), (error) => error instanceof TranscriptError && error.code === "HANDOFF_PRECONDITION_FAILED");
 });
 
 test("a second acceptance cannot overwrite the first", () => {
@@ -106,7 +106,7 @@ test("a second acceptance cannot overwrite the first", () => {
   const acceptData = { handoff_id: ids.handoff, offer_event_id: ids.offer, source_claim_event_id: ids.eventA, claim_id: ids.claimA, generation: "0", boundary_digest: offerData.boundary_digest, evidence_set_digest: offerData.evidence_set_digest };
   const accept = event(ids.accept, "handoff_accept", acceptData, "session:b", ids.offer);
   const acceptAgain = event(ids.acceptAgain, "handoff_accept", acceptData, "session:b", ids.offer);
-  assert.throws(() => replay(transcript([record(claimA(), 1), record(offer, 2), record(accept, 3, ids.instanceB), record(acceptAgain, 4, ids.instanceB)]), WORK), (error) => error.code === "handoff-precondition-failed");
+  assert.throws(() => replay(transcript([record(claimA(), 1), record(offer, 2), record(accept, 3, ids.instanceB), record(acceptAgain, 4, ids.instanceB)]), WORK), (error) => error.code === "HANDOFF_PRECONDITION_FAILED");
 });
 
 test("offers chain from the last lifecycle event and either current offer may be accepted", () => {
@@ -135,17 +135,27 @@ test("evidence verification binds one descriptor and enforces outcome shape", ()
   const verification = event(ids.verify, "evidence_verification", data, "service:verifier", ids.eventA);
   assert.equal(replay(transcript([record(parent, 1), record(verification, 2)]), WORK).projection.final, true);
   verification.data.uri = "https://evidence.example/wrong";
-  assert.throws(() => replay(transcript([record(parent, 1), record(verification, 2)]), WORK), (error) => error.code === "evidence-binding-failed");
+  assert.throws(() => replay(transcript([record(parent, 1), record(verification, 2)]), WORK), (error) => error.code === "INVALID_PAYLOAD");
+});
+
+test("zero or ambiguous evidence descriptor binding is INVALID_REFERENCE", () => {
+  const descriptor = { uri: "https://evidence.example/run/1", media_type: "application/json", digest: { algorithm: "sha-256", value: "a".repeat(64) }, declared_size: "12" };
+  const data = { referenced_event_id: ids.eventA, descriptor_digest: domainDigest("yukh.evidence-descriptor.v0.1\0", descriptor), uri: descriptor.uri, algorithm: "sha-256", expected_digest: `sha-256:${"a".repeat(64)}`, observed_digest: `sha-256:${"a".repeat(64)}`, outcome: "verified", method: "fixture", verified_at: "2026-08-02T16:00:01.000Z", verifier_policy_version: "v1" };
+  const verification = event(ids.verify, "evidence_verification", data, "service:verifier", ids.eventA);
+  const absent = claimA();
+  assert.throws(() => replay(transcript([record(absent, 1), record(verification, 2)]), WORK), (error) => error.code === "INVALID_REFERENCE");
+  const ambiguous = claimA(); ambiguous.evidence = [descriptor, structuredClone(descriptor)];
+  assert.throws(() => replay(transcript([record(ambiguous, 1), record(verification, 2)]), WORK), (error) => error.code === "INVALID_REFERENCE");
 });
 
 test("admission collisions are distinct from forensic incompleteness", () => {
   const original = record(claimA(), 1);
   const changedEvent = structuredClone(original); changedEvent.event.data.boundary = "changed"; changedEvent.receipt.event_digest = `sha-256:${createHash("sha256").update(canonicalize(changedEvent.event)).digest("hex")}`;
-  assert.throws(() => replay(transcript([original, changedEvent], { high_water_sequence: 1 }), WORK), (error) => error.code === "event-id-collision");
+  assert.throws(() => replay(transcript([original, changedEvent], { high_water_sequence: 1 }), WORK), (error) => error.code === "ID_COLLISION");
   const changedReceipt = structuredClone(original); changedReceipt.receipt.participant_instance_id = ids.instanceB;
-  assert.throws(() => replay(transcript([original, changedReceipt], { high_water_sequence: 1 }), WORK), (error) => error.code === "receipt-mismatch");
+  assert.throws(() => replay(transcript([original, changedReceipt], { high_water_sequence: 1 }), WORK), (error) => error.code === "INVALID_RECEIPT");
   const other = record(claimB(), 1, ids.instanceB);
-  assert.throws(() => replay(transcript([original, other], { high_water_sequence: 1 }), WORK), (error) => error.code === "sequence-collision");
+  assert.throws(() => replay(transcript([original, other], { high_water_sequence: 1 }), WORK), (error) => error.code === "INVALID_RECEIPT");
   original.receipt_verified = false;
   const forensic = replay(transcript([original]), WORK);
   assert.deepEqual(forensic.conformance.reasons, ["unverified-receipt"]);
@@ -164,6 +174,14 @@ test("forensic high-water outcomes use the frozen reason vocabulary", () => {
   assert.deepEqual(result.conformance.reasons, ["record-after-high-water", "unverified-high-water"]);
   assert.equal(result.projection.state, "claimed");
   assert.equal(result.projection.final, false);
+});
+
+test("non-origin and deleted exports are incomplete with both diagnostics", () => {
+  const result = replay(transcript([record(claimA(), 1)], { origin_sequence: 2, lifecycle: "deleted" }), WORK);
+  assert.equal(result.projection.completeness, "incomplete");
+  assert.equal(result.projection.lifecycle, "deleted");
+  assert.equal(result.projection.final, false);
+  assert.deepEqual(result.projection.diagnostics.map((item) => item.code), ["INCOMPLETE_TRANSCRIPT", "NON_ACTIVE_TRANSCRIPT"]);
 });
 
 test("CLI accepts JSONL and emits canonical output", async () => {

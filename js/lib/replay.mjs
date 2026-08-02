@@ -77,11 +77,11 @@ export function replay(rawInput, workUri) {
   for (const record of normalized) {
     const priorEvent = byEventId.get(record.event.id);
     if (priorEvent) {
-      requireValue(priorEvent.eventBytes === record.eventBytes, "event-id-collision", `event id collision: ${record.event.id}`);
-      requireValue(priorEvent.receiptBytes === record.receiptBytes && priorEvent.receipt_verified === record.receipt_verified, "receipt-mismatch", "exact duplicate event has changed receipt or verification result");
+      requireValue(priorEvent.eventBytes === record.eventBytes, "ID_COLLISION", `event id collision: ${record.event.id}`);
+      requireValue(priorEvent.receiptBytes === record.receiptBytes && priorEvent.receipt_verified === record.receipt_verified, "INVALID_RECEIPT", "exact duplicate event has changed receipt or verification result");
       continue;
     }
-    requireValue(!bySequence.has(record.receipt.sequence), "sequence-collision", `sequence reused: ${record.receipt.sequence}`);
+    requireValue(!bySequence.has(record.receipt.sequence), "INVALID_RECEIPT", `sequence reused: ${record.receipt.sequence}`);
     validateRecordBinding(input, record.event, record.receipt);
     byEventId.set(record.event.id, record); bySequence.set(record.receipt.sequence, record); records.push(record);
   }
@@ -122,9 +122,8 @@ export function replay(rawInput, workUri) {
       usedClaims.add(key); updateConflict(receipt.sequence);
     } else if (["progress", "release", "handoff_offer"].includes(event.type)) {
       const claim = claims.get(keyOf(data));
-      const transitionCode = event.type === "handoff_offer" ? "invalid-handoff-offer" : "INVALID_CLAIM_TRANSITION";
-      requireValue(claim && claim.active, transitionCode, "unknown or inactive claim");
-      requireValue(data.parent_claim_event_id === claim.lastLifecycleEvent && event.causation_id === claim.lastLifecycleEvent, transitionCode, "claim lifecycle parent mismatch");
+      requireValue(claim && claim.active, "INVALID_CLAIM_TRANSITION", "unknown or inactive claim");
+      requireValue(data.parent_claim_event_id === claim.lastLifecycleEvent && event.causation_id === claim.lastLifecycleEvent, "INVALID_REFERENCE", "claim lifecycle parent mismatch");
       if (event.type === "progress") claim.lastLifecycleEvent = event.id;
       if (event.type === "release") { claim.active = false; claim.lastLifecycleEvent = event.id; claim.offers.clear(); updateConflict(receipt.sequence); }
       if (event.type === "handoff_offer") {
@@ -133,11 +132,11 @@ export function replay(rawInput, workUri) {
         claim.offers.set(event.id, offer); offersByEvent.set(event.id, offer); claim.lastLifecycleEvent = event.id;
       }
     } else if (event.type === "handoff_accept") {
-      const offer = offersByEvent.get(data.offer_event_id); requireValue(offer, "handoff-precondition-failed", "unknown handoff offer");
+      const offer = offersByEvent.get(data.offer_event_id); requireValue(offer, "HANDOFF_PRECONDITION_FAILED", "unknown handoff offer");
       const offerData = offer.event.data; const claim = offer.claim;
-      requireValue(claim.active && !offer.accepted && claim.offers.has(data.offer_event_id), "handoff-precondition-failed", "handoff is not current");
-      requireValue(receipt.participant_instance_id === offerData.to_participant_instance_id, "handoff-precondition-failed", "wrong handoff recipient");
-      requireValue(data.handoff_id === offerData.handoff_id && data.claim_id === claim.claimId && data.generation === claim.generation && data.source_claim_event_id === claim.eventId && data.boundary_digest === offerData.boundary_digest && data.evidence_set_digest === offerData.evidence_set_digest, "handoff-precondition-failed", "handoff binding changed");
+      requireValue(claim.active && !offer.accepted && claim.offers.has(data.offer_event_id), "HANDOFF_PRECONDITION_FAILED", "handoff is not current");
+      requireValue(receipt.participant_instance_id === offerData.to_participant_instance_id, "HANDOFF_PRECONDITION_FAILED", "wrong handoff recipient");
+      requireValue(data.handoff_id === offerData.handoff_id && data.claim_id === claim.claimId && data.generation === claim.generation && data.source_claim_event_id === claim.eventId && data.boundary_digest === offerData.boundary_digest && data.evidence_set_digest === offerData.evidence_set_digest, "HANDOFF_PRECONDITION_FAILED", "handoff binding changed");
       offer.accepted = true; claim.offers.clear(); claim.lastLifecycleEvent = event.id;
       acceptedWithoutSuccessor.set(event.id, { claimId: claim.claimId, sequence: receipt.sequence });
     } else if (["answer", "verdict", "evidence_verification"].includes(event.type)) {
@@ -147,13 +146,13 @@ export function replay(rawInput, workUri) {
       if (event.type === "answer") requireValue(parent.event.type === "question", "INVALID_REFERENCE", "answer parent is not question");
       if (event.type === "verdict") requireValue(parent.event.type === "review_request", "INVALID_REFERENCE", "verdict parent is not review request");
       if (event.type === "evidence_verification") {
-        requireValue(["verified", "mismatch", "unavailable", "unauthorized", "inconclusive"].includes(data.outcome), "evidence-binding-failed", "invalid evidence outcome");
-        if (["verified", "mismatch"].includes(data.outcome)) requireValue(typeof data.observed_digest === "string" && data.reason === undefined, "evidence-binding-failed", "observed digest required and reason forbidden");
-        else requireValue(typeof data.reason === "string" && data.observed_digest === undefined, "evidence-binding-failed", "reason required and observed digest forbidden");
+        requireValue(["verified", "mismatch", "unavailable", "unauthorized", "inconclusive"].includes(data.outcome), "INVALID_PAYLOAD", "invalid evidence outcome");
+        if (["verified", "mismatch"].includes(data.outcome)) requireValue(typeof data.observed_digest === "string" && data.reason === undefined, "INVALID_PAYLOAD", "observed digest required and reason forbidden");
+        else requireValue(typeof data.reason === "string" && data.observed_digest === undefined, "INVALID_PAYLOAD", "reason required and observed digest forbidden");
         const matches = (parent.event.evidence ?? []).filter((descriptor) => descriptorDigest(descriptor) === data.descriptor_digest);
-        requireValue(matches.length === 1, "evidence-binding-failed", "descriptor binding missing or ambiguous");
+        requireValue(matches.length === 1, "INVALID_REFERENCE", "descriptor binding missing or ambiguous");
         const descriptor = matches[0];
-        requireValue(data.uri === descriptor.uri && data.algorithm === descriptor.digest?.algorithm && data.expected_digest === `sha-256:${descriptor.digest?.value ?? ""}`, "evidence-binding-failed", "descriptor fields differ");
+        requireValue(data.uri === descriptor.uri && data.algorithm === descriptor.digest?.algorithm && data.expected_digest === `sha-256:${descriptor.digest?.value ?? ""}`, "INVALID_PAYLOAD", "descriptor fields differ");
       }
     }
   }
