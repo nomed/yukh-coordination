@@ -24,5 +24,12 @@ Projection `handoff_offer_ids` and diagnostics are sorted derived current state;
 diagnostic codes are unique aggregates and resolved entries disappear. Rejected
 events and presence history belong outside the work projection. The 32-offer
 per-claim bound is another neutral pre-append resource check.
+Semantic validation requires `diagnostics_high_water_sequence ==
+as_of_sequence`, each per-code `primary_id`/`sequence` derivation, independently
+sorted contender claim/event arrays, and the fixed-namespace UUIDv5 transcript
+identifier. UUIDv5 is derived metadata, never an event ID.
+
+`test-vectors/diagnostic-derivation-0.1.json` freezes the initial byte-exact
+UUIDv5, high-water, conflict-trigger, and handoff-acceptance derivation vectors.
 
 Issue #4 owns positive/negative fixtures and independent qualification evidence.

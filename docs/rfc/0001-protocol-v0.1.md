@@ -277,9 +277,27 @@ are admitted per claim; a 33rd is rejected before append with public
 `RESOURCE_LIMIT` and restricted internal reason `ACTIVE_HANDOFF_OFFER_LIMIT`.
 This is a neutral resource bound, not offer or ownership selection.
 
-A conflict produces exactly one aggregate `CLAIM_CONFLICT`
-diagnostic containing every sorted contender ID; `primary_id` is the first
-contender. Diagnostics contain no free detail and are stably ordered by channel
+A conflict produces exactly one aggregate `CLAIM_CONFLICT` diagnostic containing
+every contender claim ID and its corresponding claim event ID, each array
+independently sorted ascending. `primary_id` is the lexically smallest lowercase
+contender event UUID. Its diagnostic `sequence` is the sequence of the event
+that first changes the active set from one to two claims and remains unchanged
+while that conflict stays current. If the conflict resolves, any later new
+conflict derives a new trigger and sequence.
+
+For `HANDOFF_ACCEPTED_UNCLAIMED`, `primary_id` equals the acceptance event ID and
+`sequence` equals that event's channel sequence. For `INCOMPLETE_TRANSCRIPT` and
+`NON_ACTIVE_TRANSCRIPT`, `primary_id` is the canonical `transcript_id` and
+`sequence` equals `diagnostics_high_water_sequence`.
+
+`transcript_id` is a derived non-event identifier, so its UUIDv5 form does not
+relax the UUIDv7-only event-ID rule. It is UUIDv5 using fixed namespace
+`44a2ca56-05fd-5e2c-aba3-ef07363b75ae` and the canonical UTF-8 name bytes:
+`tenant_id || U+0000 || channel_uri || U+0000 || canonical unsigned decimal
+transcript_epoch`. Inputs are the exact receipt/channel strings with no Unicode
+or URI normalization. Output is lowercase canonical hyphenated UUID.
+
+Diagnostics contain no free detail and are stably ordered by channel
 sequence ascending, code ascending, then `primary_id` ascending, all by Unicode
 code-point order. For non-conflict diagnostics `primary_id` is the required
 event ID, claim ID, or transcript identifier defined by its schema case.
@@ -287,7 +305,9 @@ Implementations MUST emit byte-equivalent projections and diagnostic order for
 the same complete transcript.
 
 `projection.diagnostics` contains only current derived work-projection
-diagnostics at `diagnostics_high_water_sequence`; it is not historical rejection,
+diagnostics. `diagnostics_high_water_sequence` MUST equal `as_of_sequence`; this
+cross-field equality is enforced by semantic conformance validation because
+JSON Schema 2020-12 cannot compare sibling values. It is not historical rejection,
 security, audit, or presence history. There is at most one aggregate entry per
 closed diagnostic code. Superseded or resolved entries disappear
 deterministically. Rejected events and presence events never create work

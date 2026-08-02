@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yukh.dev/coordination/schema/projection-0.1.schema.json",
   "title": "Deterministic work projection 0.1",
+  "$comment": "Semantic validator MUST reject unless diagnostics_high_water_sequence equals as_of_sequence and arrays/diagnostics obey RFC-0001 derivation and ordering rules.",
   "type": "object",
   "additionalProperties": false,
   "maxProperties": 12,
