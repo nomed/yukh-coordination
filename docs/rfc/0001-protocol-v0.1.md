@@ -27,11 +27,18 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are interpre
 
 The protocol records attributed coordination statements. It does not grant execution authority, elect an owner, accept work, infer reviewer independence, or mark project state complete.
 
-A `claim` is an observable claim assertion. A `handoff_accept` is an attributed acceptance statement. Any authoritative ownership projection MUST reference an external policy decision or receipt and identify that policy.
+A `claim` is an observable assertion and a `handoff_accept` is an attributed
+acceptance statement. The core has no authoritative ownership state. External
+decisions may be attached as evidence; only out-of-protocol adapters may
+interpret them under adopter policy.
 
 ## Event and receipt
 
-The immutable client event is separate from the relay receipt. Relay metadata MUST NOT be inserted into or rewrite accepted event bytes.
+The immutable client event is separate from the relay receipt. Relay metadata
+MUST NOT be inserted into or rewrite accepted event bytes. The JCS canonical
+bytes are the sole normative accepted representation. Raw transport bytes are
+discarded by default; optional ingress telemetry is nonnormative and MUST NOT
+participate in transcripts, digests, replay, or idempotency.
 
 Every event contains:
 
@@ -75,6 +82,8 @@ The relay receipt contains at least:
   "sequence": 42,
   "accepted_at": "2026-08-02T16:00:00.123Z",
   "event_digest": "sha-256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "channel_metadata_digest": "sha-256:1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "policy_version": "acl-v3",
   "key_id": "relay-key-2026-08",
   "signature_algorithm": "ed25519",
   "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -83,14 +92,18 @@ The relay receipt contains at least:
 
 `tenant_id`, `channel_id`, `principal_id`, `cursor`, `sequence`, and `accepted_at` are relay-derived. Clients MUST NOT choose them through the event body.
 
-The relay also issues `participant_instance_id` and `session_epoch` so a reused
-participant label cannot impersonate an earlier process. One authenticated
-tenant maps an exact channel URI to one immutable `channel_id`; rebinding is
-forbidden and migration creates a new mapping.
+The relay authenticates the principal, establishes an authorized tenant, and
+issues `participant_instance_id` plus `session_epoch` before publication so a
+reused participant label cannot impersonate an earlier process. Receipt
+`participant_id` MUST equal `event.participant.id`; the receipt binds it to the
+issued instance/epoch. `source` remains asserted, advisory, and non-authorizing.
+One tenant maps the exact canonical event channel URI to one immutable
+`channel_id`; rebinding is forbidden and migration creates a new mapping.
 
 Receipts are at most 16,384 UTF-8 bytes and contain `key_id`,
 `signature_algorithm: "ed25519"`, and a base64url-no-padding signature. The
-signature covers JCS of the receipt with `signature` omitted, domain-separated
+receipt also binds `channel_metadata_digest`, `policy_version`, and the admitted
+high-water `sequence`. The signature covers JCS of the receipt with `signature` omitted, domain-separated
 by `yukh-coordination-receipt-v0.1` followed by a NUL byte. The signing key MUST
 remain outside the event database and its recovery domain. A receipt authenticates
 relay admission and binding, not work authorization or evidence truth.
@@ -114,10 +127,15 @@ Presence is advisory and ephemeral. Durable `join`, `presence`, and `leave` even
 
 A claim payload contains a stable `claim_id`, decimal-string generation,
 bounded `scope`, bounded `boundary`, optional immutable `governance_ref`, and an
-exact sorted `expected_active_claims` set. Append is compare-and-set against that
-relay projection. A stale set is rejected; CAS does not elect an authority.
+exact sorted `expected_active_claims` set. That set is an advisory observation,
+never a precondition. Every schema-valid, authenticated, channel-authorized
+claim assertion MUST append. A mismatch emits conflict diagnostics but MUST NOT
+reject, serialize, upgrade, or select a claim.
 
-Concurrent active claims over the same exact work identity MUST project `conflicting` with every contender. Arrival order, event time, UUID order, presence, or relay sequence MUST NOT select a winner. Resolution requires a referenced external authority decision or an explicit later protocol assertion that does not misrepresent itself as authoritative.
+Concurrent active claims over the same exact work identity MUST project
+`conflicting` with every contender. Arrival order, event time, UUID order,
+presence, relay sequence, receipts, and external evidence MUST NOT select or
+upgrade a winner in the core protocol.
 
 Projection states are at least `unclaimed`, `claimed`, `conflicting`, `handoff_offered`, and `released`. `claimed` means one observable active assertion, not accepted authority.
 
@@ -145,11 +163,18 @@ A handoff offer binds:
 - evidence-set digest;
 - unresolved risks and next action.
 
-Acceptance MUST reference the exact offer and match its authenticated recipient. An acceptance after the source claim is released, superseded, or changed is invalid. Competing acceptances project conflict and never elect a recipient. Handoff remains an observable proposed transfer unless an external authority receipt is referenced.
+Acceptance MUST reference the exact offer and match its authenticated recipient.
+An acceptance after the source claim is released, superseded, changed, or after
+another acceptance fails transactional CAS with
+`HANDOFF_PRECONDITION_FAILED` and is not appended. Handoff remains an attributed
+coordination statement; neither a protocol nor external-evidence field upgrades
+it into authoritative ownership.
 
 ## Evidence
 
-Evidence contains `uri`, `media_type`, and at least one of an immutable provider revision or a SHA-256 digest over exact representation bytes. v0.1 supports SHA-256 only.
+Evidence contains `uri`, `media_type`, and a mandatory SHA-256 digest over exact
+representation bytes. `revision` is optional advisory provider location
+metadata and never substitutes for the digest. v0.1 supports SHA-256 only.
 
 A digest proves content identity, not truth, freshness, provenance, CI status, reviewer independence, or authorization. The core relay MUST NOT fetch arbitrary evidence URIs. Verification is performed by a separately authorized client/verifier and reported as new evidence.
 
@@ -158,7 +183,28 @@ reports `verified`, `mismatch`, `unavailable`, or `inconclusive`, plus verifier,
 method, and verification time. It is an attributed observation and never
 rewrites the descriptor or grants authority.
 
+Protocol-derived digests use lowercase `sha-256:<64 lowercase hex>` and these
+exact domain-separated inputs:
+
+- `descriptor_digest = SHA256(UTF8("yukh.evidence-descriptor.v0.1\0") || JCS(descriptor))`;
+- `evidence_set_digest = SHA256(UTF8("yukh.evidence-set.v0.1\0") || JCS(ordered array of complete descriptors))`;
+- `boundary_digest = SHA256(UTF8("yukh.handoff-boundary.v0.1\0") || JCS({work_uri,claim_id,claim_generation,boundary,next_action,unresolved_risks}))`.
+
+The array order and object member names above are normative; sets MUST NOT be
+sorted or reduced implicitly.
+
 Credentials, secret query parameters, private prompts, inline evidence bodies, and unrestricted logs are forbidden.
+
+## Correlation and family references
+
+For each root `claim`, `question`, or `review_request`, `correlation_id` MUST
+equal that root event's `id`. Child events inherit that exact correlation ID.
+`answer.question_event_id`, `verdict.review_event_id`, claim lifecycle parent
+fields, handoff offer parent claim event, handoff acceptance offer event, and
+evidence verification referenced event MUST identify the exact accepted parent;
+`causation_id` MUST equal the immediate parent field. A successor claim starts a
+new claim correlation (`correlation_id == id`) while causally referencing its
+accepted handoff through `predecessor_handoff_event`.
 
 ## Ordering, delivery, and replay
 
@@ -205,15 +251,28 @@ Removing fields, changing requiredness, canonicalization, projection semantics, 
 
 Errors use `application/problem+json` and a stable code. The initial codes include:
 
-`INVALID_ENVELOPE`, `UNSUPPORTED_VERSION`, `INVALID_EVENT_TYPE`, `INVALID_PAYLOAD`, `INVALID_REFERENCE`, `CROSS_CHANNEL_REFERENCE`, `UNRESOLVED_CAUSATION`, `CAUSAL_CYCLE`, `ID_COLLISION`, `CLAIM_CONFLICT`, `INVALID_CLAIM_TRANSITION`, `INVALID_HANDOFF_PARTICIPANT`, `ALREADY_ACCEPTED_HANDOFF`, `EVIDENCE_INTEGRITY_REQUIRED`, `ACCESS_DENIED`, and `TEMPORARILY_UNAVAILABLE`.
+`INVALID_ENVELOPE`, `UNSUPPORTED_VERSION`, `INVALID_EVENT_TYPE`, `INVALID_PAYLOAD`, `INVALID_REFERENCE`, `CROSS_CHANNEL_REFERENCE`, `UNRESOLVED_CAUSATION`, `CAUSAL_CYCLE`, `ID_COLLISION`, `INVALID_CLAIM_TRANSITION`, `INVALID_HANDOFF_PARTICIPANT`, `HANDOFF_PRECONDITION_FAILED`, `ALREADY_ACCEPTED_HANDOFF`, `EVIDENCE_INTEGRITY_REQUIRED`, `ACCESS_DENIED`, and `TEMPORARILY_UNAVAILABLE`. `CLAIM_CONFLICT` is a projection diagnostic, never a claim-append rejection Problem.
 
 Rejected events are not protocol events. Security-relevant rejection metadata belongs to a separate restricted audit log.
 
 Problem documents are at most 16,384 UTF-8 bytes. Unauthorized callers receive
-one non-enumerating `ACCESS_DENIED` shape that does not reveal tenant, channel,
-participant, event, claim, or evidence existence. `detail`, `event_id`, and
-internal diagnostics are absent unless disclosure is authorized. A bounded
-opaque `trace_id` supports restricted audit correlation.
+the exact non-enumerating shape fixed by `problem-0.1.schema.json`: type
+`https://yukh.dev/problems/access-denied`, title `Access denied`, status `403`,
+code `ACCESS_DENIED`, and `retryable: false`. It forbids detail, event, and
+internal fields. Processing precedence is authenticate, establish tenant, then
+authorize. No later validation or lookup result is disclosed before successful
+authorization. A bounded opaque `trace_id` supports restricted audit correlation.
+
+## Immutable channel metadata
+
+Before the first event, the relay persists closed channel metadata binding the
+tenant ID, exact channel URI, immutable internal channel ID, ACL policy version,
+retention policy digest and epoch, and creation time. There is no default
+retention. Metadata updates create a new policy/retention epoch and digest;
+identity fields never change. Every signed receipt binds the applicable metadata
+digest and policy version together with the admitted high-water sequence.
+`channel_metadata_digest` is lowercase SHA-256 over
+`UTF8("yukh.channel-metadata.v0.1\0") || JCS(channel_metadata)`.
 
 ## Transcript completeness and retention
 
@@ -237,14 +296,14 @@ The adversarial transcript MUST cover spoofed participant data, concurrent claim
 
 Two independent implementations from different runtime families MUST produce byte-identical canonical bytes, derived state, and diagnostics.
 
-## Handoff CAS and successor ownership
+## Handoff CAS and successor claim
 
-`handoff_accept` is compare-and-set over the exact offer event, source claim
+`handoff_accept` is the only core transactional compare-and-set. It covers the exact offer event, source claim
 generation, authenticated intended `participant_instance_id`, and unchanged
 active source claim. Changed or released state is rejected. Acceptance closes
 the offer but neither transfers nor creates ownership. The recipient publishes
 a separate `claim` with a new claim ID/generation and
-`predecessor_handoff_event`; normal claim CAS and external policy apply. The
+`predecessor_handoff_event`; ordinary claim append semantics apply. The
 intermediate projection is `handoff_accepted_unclaimed`.
 
 ## Remaining qualification evidence

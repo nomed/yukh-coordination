@@ -7,8 +7,10 @@ JSON Schema validates structure and character counts. A conforming decoder also
 MUST enforce the RFC's UTF-8 byte limits (64 KiB event, 16 KiB receipt/problem,
 2,048 bytes per URI), maximum nesting depth 16, duplicate-key rejection,
 well-formed UTF-8/no BOM/no unpaired surrogates, JCS canonicalization, semantic
-reference and CAS rules, and the absence of JSON numbers anywhere in client
-events. Receipts and Problem Details deliberately permit only their explicitly
-bounded safe-integer fields.
+reference rules, root `correlation_id == id`, child correlation inheritance,
+parent-field/`causation_id` equality, handoff-only transactional CAS, and the
+absence of JSON numbers anywhere in client events. Receipts and Problem Details
+deliberately permit only their explicitly bounded safe-integer fields. Claim
+assertions never use CAS and always append after schema/auth/channel checks.
 
 Issue #4 owns positive/negative fixtures and independent qualification evidence.

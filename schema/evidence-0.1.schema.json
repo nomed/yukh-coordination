@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "maxProperties": 5,
-  "required": ["uri", "media_type"],
+  "required": ["uri", "media_type", "digest"],
   "properties": {
     "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
     "media_type": { "type": "string", "minLength": 1, "maxLength": 128 },
@@ -19,6 +19,5 @@
     },
     "revision": { "type": "string", "minLength": 1, "maxLength": 256 },
     "description": { "type": "string", "maxLength": 4096 }
-  },
-  "anyOf": [{ "required": ["digest"] }, { "required": ["revision"] }]
+  }
 }

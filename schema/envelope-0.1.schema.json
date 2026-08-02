@@ -37,7 +37,8 @@
   },
   "allOf": [
     { "if": { "properties": { "type": { "enum": ["join", "presence", "leave"] } }, "required": ["type"] }, "then": { "not": { "anyOf": [{ "required": ["work"] }, { "required": ["correlation_id"] }, { "required": ["causation_id"] }] } } },
-    { "if": { "properties": { "type": { "enum": ["claim", "question", "review_request"] } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id"], "not": { "required": ["causation_id"] } } },
+    { "if": { "properties": { "type": { "enum": ["question", "review_request"] } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id"], "not": { "required": ["causation_id"] } } },
+    { "if": { "properties": { "type": { "const": "claim" }, "data": { "required": ["predecessor_handoff_event"] } }, "required": ["type", "data"] }, "then": { "required": ["work", "correlation_id", "causation_id"] }, "else": { "if": { "properties": { "type": { "const": "claim" } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id"], "not": { "required": ["causation_id"] } } } },
     { "if": { "properties": { "type": { "enum": ["progress", "answer", "verdict", "handoff_offer", "handoff_accept", "release", "evidence_verification"] } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id", "causation_id"] } },
     { "if": { "properties": { "type": { "const": "join" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/join-0.1.schema.json" } } } },
     { "if": { "properties": { "type": { "const": "presence" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/presence-0.1.schema.json" } } } },
