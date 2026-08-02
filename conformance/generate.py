@@ -6,8 +6,10 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 from validate import jcs
 
 ROOT=Path(__file__).resolve().parents[1]; OUT=ROOT/"conformance"; FIX=OUT/"fixtures"; CAN=OUT/"canonical"
