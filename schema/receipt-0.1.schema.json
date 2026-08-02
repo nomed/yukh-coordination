@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/receipt-0.1.schema.json",
+  "title": "Signed relay receipt 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 14,
+  "required": ["event_id", "tenant_id", "channel_id", "principal_id", "participant_id", "participant_instance_id", "session_epoch", "cursor", "sequence", "accepted_at", "event_digest", "key_id", "signature_algorithm", "signature"],
+  "properties": {
+    "event_id": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" },
+    "tenant_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "channel_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "principal_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "participant_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "participant_instance_id": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" },
+    "session_epoch": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "cursor": { "type": "string", "minLength": 1, "maxLength": 1024 },
+    "sequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "accepted_at": { "$ref": "envelope-0.1.schema.json#/$defs/timestamp" },
+    "event_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "key_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "signature_algorithm": { "const": "ed25519" },
+    "signature": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
+  }
+}

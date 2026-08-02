@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/problem-0.1.schema.json",
+  "title": "Yukh non-enumerating Problem Details 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 7,
+  "required": ["type", "title", "status", "code", "trace_id", "retryable"],
+  "properties": {
+    "type": { "type": "string", "format": "uri", "maxLength": 2048 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+    "code": { "enum": ["INVALID_ENVELOPE", "UNSUPPORTED_VERSION", "INVALID_EVENT_TYPE", "INVALID_PAYLOAD", "INVALID_REFERENCE", "CROSS_CHANNEL_REFERENCE", "UNRESOLVED_CAUSATION", "CAUSAL_CYCLE", "ID_COLLISION", "CLAIM_CONFLICT", "CLAIM_PRECONDITION_FAILED", "INVALID_CLAIM_TRANSITION", "INVALID_HANDOFF_PARTICIPANT", "HANDOFF_PRECONDITION_FAILED", "ALREADY_ACCEPTED_HANDOFF", "EVIDENCE_INTEGRITY_REQUIRED", "ACCESS_DENIED", "TEMPORARILY_UNAVAILABLE"] },
+    "detail": { "type": "string", "maxLength": 4096 },
+    "trace_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "retryable": { "type": "boolean" }
+  }
+}

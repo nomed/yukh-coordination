@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://yukh.dev/coordination/schema/payloads/leave-0.1.schema.json","type":"object","additionalProperties":false,"maxProperties":1,"properties":{"reason":{"type":"string","maxLength":4096}}}
