@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from pathlib import Path
 from yukh_projection import (
     ReplayEngine,
     TranscriptError,
+    canonical_bytes,
     canonical_json,
     event_digest,
     load_transcript,
@@ -74,7 +76,7 @@ def receipt(value: dict, sequence: int, *, instance: str = IDS[30]) -> dict:
 
 
 def record(value: dict, sequence: int, *, instance: str = IDS[30]) -> dict:
-    return {"event": value, "receipt": receipt(value, sequence, instance=instance)}
+    return {"event": value, "receipt": receipt(value, sequence, instance=instance), "receipt_verified": True}
 
 
 def transcript(records: list[dict], *, high_water: int | None = None, completeness: str = "complete", lifecycle: str = "active") -> dict:
@@ -87,7 +89,9 @@ def transcript(records: list[dict], *, high_water: int | None = None, completene
         "transcript_epoch": 0,
         "completeness": completeness,
         "lifecycle": lifecycle,
+        "origin_sequence": 1,
         "high_water_sequence": high_water if high_water is not None else max(item["receipt"]["sequence"] for item in records),
+        "high_water_receipt_verified": True,
         "records": records,
     }
 
@@ -106,6 +110,45 @@ def claim(index: int, claim_id: str, expected: list[str] | None = None, predeces
 
 
 class ReplayTests(unittest.TestCase):
+    def test_forensic_reasons_are_sorted_and_make_projection_incomplete(self) -> None:
+        value = claim(0, IDS[10])
+        item = record(value, 2)
+        item["receipt_verified"] = False
+        document = transcript([item], high_water=1, lifecycle="redacted")
+        document["origin_sequence"] = 2
+        document["high_water_receipt_verified"] = False
+        engine = ReplayEngine(document)
+        projected = engine.run()[0]
+        self.assertEqual(
+            ["non-active-lifecycle", "record-after-high-water", "sequence-gap", "unverified-high-water", "unverified-receipt"],
+            engine.conformance()["reasons"],
+        )
+        self.assertEqual("incomplete", projected["completeness"])
+        self.assertFalse(projected["final"])
+
+    def test_exact_duplicate_is_idempotent_and_reordering_is_neutral(self) -> None:
+        first = claim(0, IDS[10])
+        second = claim(1, IDS[11])
+        ordered = transcript([record(first, 1), record(second, 2)])
+        reordered = transcript([record(second, 2), record(first, 1), record(first, 1)])
+        ordered_engine = ReplayEngine(ordered)
+        reordered_engine = ReplayEngine(reordered)
+        self.assertEqual(ordered_engine.run(), reordered_engine.run())
+        self.assertEqual([], reordered_engine.conformance()["reasons"])
+
+    def test_receipt_and_sequence_collisions_have_exact_admission_codes(self) -> None:
+        first = claim(0, IDS[10])
+        changed_receipt = record(first, 1)
+        changed_receipt["receipt"]["cursor"] = "changed"
+        with self.assertRaises(TranscriptError) as caught:
+            replay(transcript([record(first, 1), changed_receipt]))
+        self.assertEqual("receipt-mismatch", caught.exception.code)
+
+        second = claim(1, IDS[11])
+        with self.assertRaises(TranscriptError) as caught:
+            replay(transcript([record(first, 1), record(second, 1)]))
+        self.assertEqual("sequence-collision", caught.exception.code)
+
     def test_claim_duplicate_conflict_and_release(self) -> None:
         a = claim(0, IDS[10])
         b = claim(1, IDS[11], [IDS[10]])
@@ -160,9 +203,9 @@ class ReplayTests(unittest.TestCase):
         first = claim(0, IDS[10])
         changed = json.loads(json.dumps(first))
         changed["data"]["boundary"] = "changed"
-        with self.assertRaisesRegex(TranscriptError, "collision") as caught:
+        with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(first, 1), record(changed, 1)]))
-        self.assertEqual("ID_COLLISION", caught.exception.code)
+        self.assertEqual("event-id-collision", caught.exception.code)
 
     def test_wrong_handoff_recipient_is_rejected(self) -> None:
         source = claim(0, IDS[10])
@@ -178,7 +221,82 @@ class ReplayTests(unittest.TestCase):
         }, correlation=source["id"], causation=offer["id"])
         with self.assertRaises(TranscriptError) as caught:
             replay(transcript([record(source, 1), record(offer, 2), record(accept, 3)]))
-        self.assertEqual("INVALID_HANDOFF_PARTICIPANT", caught.exception.code)
+        self.assertEqual("handoff-precondition-failed", caught.exception.code)
+
+    def test_multiple_offers_project_and_competing_acceptance_fails(self) -> None:
+        source = claim(0, IDS[10])
+        offers = []
+        for index, handoff_id, recipient in ((1, IDS[12], IDS[31]), (2, IDS[13], IDS[32])):
+            offers.append(event(index, "handoff_offer", {
+                "handoff_id": handoff_id, "claim_id": IDS[10], "generation": "0",
+                "parent_claim_event_id": source["id"], "to_participant_instance_id": recipient,
+                "boundary": "x", "boundary_digest": "sha-256:" + "3" * 64,
+                "evidence_set_digest": "sha-256:" + "4" * 64, "next_action": "x", "unresolved_risks": [],
+            }, correlation=source["id"], causation=source["id"]))
+        projected = replay(transcript([record(source, 1), record(offers[0], 2), record(offers[1], 3)]))[0]
+        self.assertEqual("handoff_offered", projected["state"])
+        self.assertEqual([IDS[12], IDS[13]], projected["handoff_offer_ids"])
+
+        def acceptance(index: int, offer_value: dict, handoff_id: str) -> dict:
+            return event(index, "handoff_accept", {
+                "handoff_id": handoff_id, "offer_event_id": offer_value["id"],
+                "source_claim_event_id": source["id"], "claim_id": IDS[10], "generation": "0",
+                "boundary_digest": "sha-256:" + "3" * 64, "evidence_set_digest": "sha-256:" + "4" * 64,
+            }, correlation=source["id"], causation=offer_value["id"])
+
+        accepted = acceptance(3, offers[0], IDS[12])
+        competing = acceptance(4, offers[1], IDS[13])
+        with self.assertRaises(TranscriptError) as caught:
+            replay(transcript([
+                record(source, 1), record(offers[0], 2), record(offers[1], 3),
+                record(accepted, 4, instance=IDS[31]), record(competing, 5, instance=IDS[32]),
+            ]))
+        self.assertEqual("handoff-precondition-failed", caught.exception.code)
+
+    def test_invalid_handoff_offer_has_exact_admission_code(self) -> None:
+        source = claim(0, IDS[10])
+        invalid = event(1, "handoff_offer", {
+            "handoff_id": IDS[12], "claim_id": IDS[10], "generation": "0",
+            "parent_claim_event_id": IDS[19], "to_participant_instance_id": IDS[31],
+            "boundary": "x", "boundary_digest": "sha-256:" + "3" * 64,
+            "evidence_set_digest": "sha-256:" + "4" * 64, "next_action": "x", "unresolved_risks": [],
+        }, correlation=source["id"], causation=source["id"])
+        with self.assertRaises(TranscriptError) as caught:
+            replay(transcript([record(source, 1), record(invalid, 2)]))
+        self.assertEqual("invalid-handoff-offer", caught.exception.code)
+
+    def test_evidence_binding_outcomes_and_failure_code(self) -> None:
+        descriptor = {
+            "uri": "https://example.test/evidence/1", "media_type": "application/json",
+            "digest": {"algorithm": "sha-256", "value": "2" * 64}, "declared_size": "1",
+        }
+        root = event(0, "question", {"question": "verify?"}, correlation=IDS[0])
+        root["evidence"] = [descriptor]
+        descriptor_digest = "sha-256:" + hashlib.sha256(
+            b"yukh.evidence-descriptor.v0.1\0" + canonical_bytes(descriptor)
+        ).hexdigest()
+        verification_data = {
+            "referenced_event_id": root["id"], "descriptor_digest": descriptor_digest,
+            "uri": descriptor["uri"], "algorithm": "sha-256", "expected_digest": "sha-256:" + "2" * 64,
+            "observed_digest": "sha-256:" + "2" * 64, "outcome": "verified", "method": "fixture",
+            "verified_at": "2026-08-02T16:00:00.000Z", "verifier_policy_version": "v1",
+        }
+        for outcome in ("verified", "mismatch", "unavailable", "unauthorized", "inconclusive"):
+            data = json.loads(json.dumps(verification_data))
+            data["outcome"] = outcome
+            if outcome in {"unavailable", "unauthorized", "inconclusive"}:
+                data.pop("observed_digest")
+                data["reason"] = "fixture outcome"
+            verification = event(1, "evidence_verification", data, correlation=root["id"], causation=root["id"])
+            self.assertEqual("complete", replay(transcript([record(root, 1), record(verification, 2)]))[0]["completeness"])
+
+        verification = event(1, "evidence_verification", verification_data, correlation=root["id"], causation=root["id"])
+        invalid = json.loads(json.dumps(verification))
+        invalid["data"]["expected_digest"] = "sha-256:" + "9" * 64
+        invalid_record = record(invalid, 2)
+        with self.assertRaises(TranscriptError) as caught:
+            replay(transcript([record(root, 1), invalid_record]))
+        self.assertEqual("evidence-binding-failed", caught.exception.code)
 
     def test_jsonl_and_cli_emit_canonical_json(self) -> None:
         value = claim(0, IDS[10])

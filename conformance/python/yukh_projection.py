@@ -26,6 +26,17 @@ ROOT_TYPES = {"claim", "question", "review_request"}
 CHILD_TYPES = WORK_TYPES - ROOT_TYPES
 LIFECYCLES = {"active", "redacted", "deleted"}
 COMPLETENESS = {"complete", "incomplete"}
+REASON_VOCABULARY = {
+    "event-id-collision", "receipt-mismatch", "sequence-collision",
+    "invalid-handoff-offer", "handoff-precondition-failed",
+    "evidence-binding-failed", "unverified-receipt",
+    "unverified-high-water", "sequence-gap", "record-after-high-water",
+    "non-active-lifecycle",
+}
+FORENSIC_REASONS = {
+    "unverified-receipt", "unverified-high-water", "sequence-gap",
+    "record-after-high-water", "non-active-lifecycle",
+}
 
 
 class TranscriptError(ValueError):
@@ -184,7 +195,8 @@ class ReplayEngine:
     def __init__(self, transcript: dict[str, Any]):
         allowed = {
             "metadata", "transcript_epoch", "completeness", "lifecycle",
-            "high_water_sequence", "records",
+            "origin_sequence", "high_water_sequence",
+            "high_water_receipt_verified", "records",
         }
         _require(set(transcript) <= allowed, "INVALID_TRANSCRIPT", "unknown transcript field")
         self.metadata = _obj(transcript.get("metadata"), "metadata")
@@ -196,11 +208,14 @@ class ReplayEngine:
         self.epoch = transcript.get("transcript_epoch")
         self.declared_completeness = transcript.get("completeness")
         self.lifecycle = transcript.get("lifecycle")
+        self.origin_sequence = transcript.get("origin_sequence", 1)
         self.high_water = transcript.get("high_water_sequence")
+        self.high_water_receipt_verified = transcript.get("high_water_receipt_verified") is True
         self.records = transcript.get("records")
         _require(isinstance(self.epoch, int) and self.epoch >= 0, "INVALID_TRANSCRIPT", "invalid transcript_epoch")
         _require(self.declared_completeness in COMPLETENESS, "INVALID_TRANSCRIPT", "invalid completeness")
         _require(self.lifecycle in LIFECYCLES, "INVALID_TRANSCRIPT", "invalid lifecycle")
+        _require(isinstance(self.origin_sequence, int) and self.origin_sequence >= 1, "INVALID_TRANSCRIPT", "invalid origin_sequence")
         _require(isinstance(self.high_water, int) and self.high_water >= 1, "INVALID_TRANSCRIPT", "invalid high_water_sequence")
         _require(isinstance(self.records, list), "INVALID_TRANSCRIPT", "records must be an array")
         self.events: dict[str, tuple[bytes, dict[str, Any], dict[str, Any]]] = {}
@@ -211,31 +226,46 @@ class ReplayEngine:
         self.accepted_without_successor: dict[str, tuple[str, int]] = {}
         self.work_history: set[str] = set()
         self.conflict_trigger: dict[str, int] = {}
-        self.derived_incomplete = self.declared_completeness == "incomplete"
+        self.reasons: set[str] = set()
+
+    def _reason(self, reason: str) -> None:
+        _require(reason in FORENSIC_REASONS, "INVALID_TRANSCRIPT", f"invalid forensic reason: {reason}")
+        self.reasons.add(reason)
 
     def run(self) -> list[dict[str, Any]]:
-        normalized: list[tuple[int, bytes, dict[str, Any], dict[str, Any]]] = []
+        normalized: list[tuple[int, bytes, bytes, dict[str, Any], dict[str, Any]]] = []
+        observed_events: dict[str, tuple[bytes, bytes]] = {}
+        observed_sequences: dict[int, str] = {}
         for index, raw in enumerate(self.records):
             record = _obj(raw, f"records[{index}]")
-            _require(set(record) == {"event", "receipt"}, "INVALID_TRANSCRIPT", "record requires only event and receipt")
+            _require(set(record) in ({"event", "receipt"}, {"event", "receipt", "receipt_verified"}), "INVALID_TRANSCRIPT", "record requires event, receipt, and optional receipt_verified")
             event = _obj(record["event"], "event")
             receipt = _obj(record["receipt"], "receipt")
             sequence = receipt.get("sequence")
             _require(isinstance(sequence, int) and sequence >= 1, "INVALID_RECEIPT", "invalid sequence")
-            normalized.append((sequence, canonical_bytes(event), event, receipt))
+            event_bytes = canonical_bytes(event)
+            receipt_bytes = canonical_bytes(receipt)
+            if record.get("receipt_verified") is not True:
+                self._reason("unverified-receipt")
+            prior = observed_events.get(event.get("id"))
+            if prior is not None:
+                if prior[0] != event_bytes:
+                    raise TranscriptError("event-id-collision", "same event ID has different canonical bytes")
+                elif prior[1] != receipt_bytes:
+                    raise TranscriptError("receipt-mismatch", "same event has a changed receipt")
+                # An exact event+receipt duplicate is idempotent and carries no
+                # incompleteness reason or second replay observation.
+                continue
+            if sequence in observed_sequences:
+                raise TranscriptError("sequence-collision", "sequence is reused by another event")
+            observed_events[event.get("id")] = (event_bytes, receipt_bytes)
+            observed_sequences[sequence] = event.get("id")
+            normalized.append((sequence, event_bytes, receipt_bytes, event, receipt))
         normalized.sort(key=lambda item: (item[0], item[1]))
 
-        for sequence, event_bytes, event, receipt in normalized:
+        for sequence, event_bytes, _receipt_bytes, event, receipt in normalized:
             event_id = event.get("id")
             _require(isinstance(event_id, str), "INVALID_ENVELOPE", "event id required")
-            if event_id in self.events:
-                original_bytes, _, original_receipt = self.events[event_id]
-                if event_bytes != original_bytes:
-                    raise TranscriptError("ID_COLLISION", f"event id collision: {event_id}")
-                _require(canonical_bytes(receipt) == canonical_bytes(original_receipt), "INVALID_RECEIPT", "duplicate event has different receipt")
-                continue
-            if sequence in self.sequence_records:
-                raise TranscriptError("INVALID_RECEIPT", f"sequence reused by {event_id}")
             self._validate_binding(event, receipt)
             self.events[event_id] = (event_bytes, event, receipt)
             self.sequence_records[sequence] = event_id
@@ -243,9 +273,15 @@ class ReplayEngine:
 
         expected = set(range(1, self.high_water + 1))
         if set(self.sequence_records) != expected:
-            self.derived_incomplete = True
+            self._reason("sequence-gap")
+        if self.origin_sequence != 1:
+            self._reason("sequence-gap")
+        if not self.high_water_receipt_verified:
+            self._reason("unverified-high-water")
         if self.sequence_records and max(self.sequence_records) > self.high_water:
-            raise TranscriptError("INVALID_TRANSCRIPT", "sequence exceeds high water")
+            self._reason("record-after-high-water")
+        if self.lifecycle != "active":
+            self._reason("non-active-lifecycle")
         works = sorted(self.work_history)
         return [self._project(work) for work in works]
 
@@ -316,7 +352,10 @@ class ReplayEngine:
             claim = self._claim_for(data, work)
             _require(claim.active, "INVALID_CLAIM_TRANSITION", "claim is not active")
             parent = data.get("parent_claim_event_id")
-            _require(parent == claim.last_lifecycle_event and event.get("causation_id") == parent, "INVALID_REFERENCE", "claim lifecycle parent mismatch")
+            expected_parent = claim.event_id if kind in {"release", "handoff_offer"} else claim.last_lifecycle_event
+            if kind == "handoff_offer" and (parent != expected_parent or event.get("causation_id") != parent):
+                raise TranscriptError("invalid-handoff-offer", "handoff offer does not bind the active source claim")
+            _require(parent == expected_parent and event.get("causation_id") == parent, "INVALID_REFERENCE", "claim lifecycle parent mismatch")
             if kind == "progress":
                 claim.last_lifecycle_event = event_id
             elif kind == "release":
@@ -334,21 +373,31 @@ class ReplayEngine:
                 _require(all(isinstance(value, str) for value in (offer.handoff_id, offer.recipient_instance, offer.boundary_digest, offer.evidence_set_digest)), "INVALID_PAYLOAD", "invalid handoff offer")
                 claim.offers[event_id] = offer
                 self.offers_by_event[event_id] = offer
-                claim.last_lifecycle_event = event_id
             return
 
         if kind == "handoff_accept":
             offer_id = data.get("offer_event_id")
             offer = self.offers_by_event.get(offer_id)
-            _require(offer is not None, "INVALID_REFERENCE", "unknown handoff offer")
-            claim = self.claims[offer.claim_key]
-            _require(claim.active and offer.accepted_event_id is None, "HANDOFF_PRECONDITION_FAILED", "handoff is not current")
-            _require(offer_id in claim.offers, "HANDOFF_PRECONDITION_FAILED", "offer was closed")
-            _require(event.get("causation_id") == offer_id, "INVALID_REFERENCE", "handoff causation mismatch")
-            _require(receipt["participant_instance_id"] == offer.recipient_instance, "INVALID_HANDOFF_PARTICIPANT", "wrong handoff recipient")
-            _require(data.get("handoff_id") == offer.handoff_id and data.get("claim_id") == claim.claim_id and data.get("generation") == claim.generation, "HANDOFF_PRECONDITION_FAILED", "handoff identity changed")
-            _require(data.get("boundary_digest") == offer.boundary_digest and data.get("evidence_set_digest") == offer.evidence_set_digest, "HANDOFF_PRECONDITION_FAILED", "handoff boundary changed")
+            offer = self.offers_by_event.get(offer_id)
+            claim = self.claims.get(offer.claim_key) if offer is not None else None
+            valid = (
+                offer is not None and claim is not None and claim.active
+                and offer.accepted_event_id is None and offer_id in claim.offers
+                and event.get("causation_id") == offer_id
+                and receipt["participant_instance_id"] == offer.recipient_instance
+                and data.get("handoff_id") == offer.handoff_id
+                and data.get("source_claim_event_id") == claim.event_id
+                and data.get("claim_id") == claim.claim_id
+                and data.get("generation") == claim.generation
+                and data.get("boundary_digest") == offer.boundary_digest
+                and data.get("evidence_set_digest") == offer.evidence_set_digest
+            )
+            if not valid:
+                raise TranscriptError("handoff-precondition-failed", "handoff acceptance CAS failed")
             offer.accepted_event_id = event_id
+            for current in claim.offers.values():
+                if current is not offer:
+                    current.accepted_event_id = "superseded"
             claim.offers.clear()
             claim.last_lifecycle_event = event_id
             self.accepted_without_successor[event_id] = (claim.claim_id, sequence)
@@ -367,19 +416,22 @@ class ReplayEngine:
             _, parent, _ = self.events[parent_id]
             if expected_type is not None:
                 _require(parent["type"] == expected_type, "INVALID_REFERENCE", "referenced event has wrong type")
-        if kind == "evidence_verification":
-            self._validate_evidence_verification(data, parent)
+        if kind == "evidence_verification" and not self._validate_evidence_verification(data, parent):
+            raise TranscriptError("evidence-binding-failed", "evidence verification binding failed")
 
         # Conversation, review, and evidence signals do not modify the closed
         # work-ownership projection.
 
-    def _validate_evidence_verification(self, data: dict[str, Any], parent: dict[str, Any]) -> None:
+    def _validate_evidence_verification(self, data: dict[str, Any], parent: dict[str, Any]) -> bool:
         outcome = data.get("outcome")
-        _require(outcome in {"verified", "mismatch", "unavailable", "unauthorized", "inconclusive"}, "INVALID_PAYLOAD", "invalid evidence outcome")
+        if outcome not in {"verified", "mismatch", "unavailable", "unauthorized", "inconclusive"}:
+            return False
         if outcome in {"verified", "mismatch"}:
-            _require(isinstance(data.get("observed_digest"), str) and "reason" not in data, "INVALID_PAYLOAD", "observed digest required")
+            if not (isinstance(data.get("observed_digest"), str) and "reason" not in data):
+                return False
         else:
-            _require(isinstance(data.get("reason"), str) and "observed_digest" not in data, "INVALID_PAYLOAD", "reason required")
+            if not (isinstance(data.get("reason"), str) and "observed_digest" not in data):
+                return False
         matches = []
         for descriptor in parent.get("evidence", []):
             digest = "sha-256:" + hashlib.sha256(
@@ -387,14 +439,14 @@ class ReplayEngine:
             ).hexdigest()
             if digest == data.get("descriptor_digest"):
                 matches.append(descriptor)
-        _require(len(matches) == 1, "INVALID_REFERENCE", "evidence descriptor binding is missing or ambiguous")
+        if len(matches) != 1:
+            return False
         descriptor = matches[0]
         expected = "sha-256:" + descriptor.get("digest", {}).get("value", "")
-        _require(
+        return bool(
             data.get("uri") == descriptor.get("uri")
             and data.get("algorithm") == descriptor.get("digest", {}).get("algorithm")
             and data.get("expected_digest") == expected,
-            "INVALID_PAYLOAD", "evidence descriptor fields differ",
         )
 
     def _active(self, work: str) -> list[Claim]:
@@ -441,7 +493,7 @@ class ReplayEngine:
                     "claim_id": claim_id,
                 })
 
-        completeness = "incomplete" if self.derived_incomplete else "complete"
+        completeness = "incomplete" if self.reasons else "complete"
         tid = transcript_id(self.tenant_id, self.channel_uri, self.epoch)
         if completeness == "incomplete":
             diagnostics.append({"sequence": self.high_water, "code": "INCOMPLETE_TRANSCRIPT", "severity": "error", "primary_id": tid})
@@ -461,6 +513,12 @@ class ReplayEngine:
             "completeness": completeness,
             "lifecycle": self.lifecycle,
             "final": completeness == "complete" and self.lifecycle == "active",
+        }
+
+    def conformance(self) -> dict[str, Any]:
+        return {
+            "transcript_id": transcript_id(self.tenant_id, self.channel_uri, self.epoch),
+            "reasons": sorted(self.reasons),
         }
 
 
