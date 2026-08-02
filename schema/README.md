@@ -12,5 +12,10 @@ parent-field/`causation_id` equality, handoff-only transactional CAS, and the
 absence of JSON numbers anywhere in client events. Receipts and Problem Details
 deliberately permit only their explicitly bounded safe-integer fields. Claim
 assertions never use CAS and always append after schema/auth/channel checks.
+Semantic validation also enforces `presence.valid_until > observed_at`, sorted
+claim contenders/diagnostics, contiguous receipt sequence from 1, equality of
+receipt and channel-metadata ACL versions/digests, receipt participant binding,
+and conditional evidence-verification fields. Only JCS canonical accepted bytes
+are normative; raw ingress is discarded or nonnormative telemetry.
 
 Issue #4 owns positive/negative fixtures and independent qualification evidence.

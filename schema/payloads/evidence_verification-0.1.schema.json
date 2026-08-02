@@ -1,1 +1,26 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://yukh.dev/coordination/schema/payloads/evidence_verification-0.1.schema.json","type":"object","additionalProperties":false,"maxProperties":7,"required":["referenced_event_id","descriptor_digest","outcome","method","verified_at","verifier"],"properties":{"referenced_event_id":{"$ref":"../envelope-0.1.schema.json#/$defs/uuidv7"},"descriptor_digest":{"type":"string","pattern":"^sha-256:[0-9a-f]{64}$"},"outcome":{"enum":["verified","mismatch","unavailable","inconclusive"]},"method":{"type":"string","minLength":1,"maxLength":4096},"verified_at":{"$ref":"../envelope-0.1.schema.json#/$defs/timestamp"},"verifier":{"type":"string","minLength":1,"maxLength":256},"detail":{"type":"string","maxLength":4096}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/payloads/evidence_verification-0.1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 12,
+  "required": ["referenced_event_id", "descriptor_digest", "uri", "algorithm", "expected_digest", "outcome", "method", "verified_at", "verifier_policy_version"],
+  "properties": {
+    "referenced_event_id": { "$ref": "../envelope-0.1.schema.json#/$defs/uuidv7" },
+    "descriptor_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+    "algorithm": { "const": "sha-256" },
+    "expected_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "observed_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "outcome": { "enum": ["verified", "mismatch", "unavailable", "unauthorized", "inconclusive"] },
+    "method": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "verified_at": { "$ref": "../envelope-0.1.schema.json#/$defs/timestamp" },
+    "verifier_policy_version": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "verifier": { "type": "string", "maxLength": 256, "description": "Advisory label only; authenticated verifier identity comes from the receipt." },
+    "reason": { "type": "string", "minLength": 1, "maxLength": 4096 }
+  },
+  "allOf": [
+    { "if": { "properties": { "outcome": { "enum": ["verified", "mismatch"] } }, "required": ["outcome"] }, "then": { "required": ["observed_digest"], "not": { "required": ["reason"] } } },
+    { "if": { "properties": { "outcome": { "enum": ["unavailable", "unauthorized", "inconclusive"] } }, "required": ["outcome"] }, "then": { "required": ["reason"], "not": { "required": ["observed_digest"] } } }
+  ]
+}

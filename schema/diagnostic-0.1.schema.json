@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/diagnostic-0.1.schema.json",
+  "title": "Deterministic projection diagnostic 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 6,
+  "required": ["sequence", "code", "severity"],
+  "properties": {
+    "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "code": { "enum": ["CLAIM_CONFLICT", "EXPIRED_PRESENCE", "HANDOFF_ACCEPTED_UNCLAIMED", "INCOMPLETE_TRANSCRIPT", "NON_ACTIVE_TRANSCRIPT"] },
+    "severity": { "enum": ["info", "warning", "error"] },
+    "event_id": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" },
+    "claim_id": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" },
+    "detail": { "type": "string", "maxLength": 4096 }
+  }
+}

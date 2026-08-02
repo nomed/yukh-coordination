@@ -67,30 +67,39 @@ objects contain at most 64 properties; extensions contain at most 32 keys; JSON
 nesting depth is at most 16. Client events and extensions contain no JSON number
 at any depth. Numeric concepts in event payloads use bounded decimal strings.
 
-The relay receipt contains at least:
+The closed receipt contract is:
 
 ```json
 {
+  "specversion": "0.1",
+  "receipt_version": "0.1",
+  "receipt_id": "01989f0e-56b7-7e01-915e-a7748f7f6282",
   "event_id": "01989f0e-56b7-7e01-915e-a7748f7f6280",
   "tenant_id": "tenant:example",
   "channel_id": "channel:project-release",
+  "channel_uri": "https://coord.example/channels/project-release",
   "principal_id": "principal:alice",
   "participant_id": "session:wave-2",
   "participant_instance_id": "01989f0e-56b7-7e01-915e-a7748f7f6281",
   "session_epoch": 1,
   "cursor": "opaque-relay-cursor",
+  "transcript_epoch": 0,
   "sequence": 42,
   "accepted_at": "2026-08-02T16:00:00.123Z",
   "event_digest": "sha-256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "channel_metadata_digest": "sha-256:1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "policy_version": "acl-v3",
+  "acl_policy_version": "acl-v3",
+  "acl_policy_digest": "sha-256:2123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "acl_decision_receipt_id": "decision-7af2",
+  "append_outcome": "appended",
   "key_id": "relay-key-2026-08",
   "signature_algorithm": "ed25519",
   "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 }
 ```
 
-`tenant_id`, `channel_id`, `principal_id`, `cursor`, `sequence`, and `accepted_at` are relay-derived. Clients MUST NOT choose them through the event body.
+Every receipt field except the advisory copied `participant_id` is relay-derived
+or relay-bound; clients MUST NOT choose receipt values through the event body.
 
 The relay authenticates the principal, establishes an authorized tenant, and
 issues `participant_instance_id` plus `session_epoch` before publication so a
@@ -102,10 +111,16 @@ One tenant maps the exact canonical event channel URI to one immutable
 
 Receipts are at most 16,384 UTF-8 bytes and contain `key_id`,
 `signature_algorithm: "ed25519"`, and a base64url-no-padding signature. The
-receipt also binds `channel_metadata_digest`, `policy_version`, and the admitted
-high-water `sequence`. The signature covers JCS of the receipt with `signature` omitted, domain-separated
+receipt also binds `channel_metadata_digest`, `acl_policy_version`, its policy
+digest and decision receipt, and the admitted high-water `sequence`. Receipt
+`acl_policy_version` MUST equal channel metadata `acl_policy_version`. Sequence
+starts at 1 and is contiguous within `(tenant_id, channel_id,
+transcript_epoch)`. The signature covers JCS of the exact closed receipt schema
+with `signature` omitted, domain-separated
 by `yukh-coordination-receipt-v0.1` followed by a NUL byte. The signing key MUST
-remain outside the event database and its recovery domain. A receipt authenticates
+remain outside the event database and its recovery domain. The complete
+signature preimage and append record MUST be persisted atomically and be
+byte-identical to the later emitted receipt preimage. A receipt authenticates
 relay admission and binding, not work authorization or evidence truth.
 
 ## Signal families
@@ -121,13 +136,18 @@ The v0.1 core types are:
 
 ### Presence
 
-Presence is advisory and ephemeral. Durable `join`, `presence`, and `leave` events are historical observations; replay MUST NOT reconstruct current availability from an expired observation. Presence MUST NOT change a claim, ACL, or authority decision.
+Presence is advisory and ephemeral. A `presence` requires exact timestamps
+`observed_at` and `valid_until`; semantic validation requires
+`valid_until > observed_at`. Durable presence events are historical observations
+and projection MUST NOT treat one as current after `valid_until`. Presence MUST
+NOT change a claim, ACL, or authority decision.
 
 ### Claim assertions
 
 A claim payload contains a stable `claim_id`, decimal-string generation,
 bounded `scope`, bounded `boundary`, optional immutable `governance_ref`, and an
-exact sorted `expected_active_claims` set. That set is an advisory observation,
+`expected_active_claims`, sorted ascending by lowercase UUID lexical Unicode
+code-point order. That set is an advisory observation,
 never a precondition. Every schema-valid, authenticated, channel-authorized
 claim assertion MUST append. A mismatch emits conflict diagnostics but MUST NOT
 reject, serialize, upgrade, or select a claim.
@@ -137,7 +157,9 @@ Concurrent active claims over the same exact work identity MUST project
 presence, relay sequence, receipts, and external evidence MUST NOT select or
 upgrade a winner in the core protocol.
 
-Projection states are at least `unclaimed`, `claimed`, `conflicting`, `handoff_offered`, and `released`. `claimed` means one observable active assertion, not accepted authority.
+Projection states are exactly `unclaimed`, `claimed`, `conflicting`,
+`handoff_offered`, and `released`. `claimed` means one observable active
+assertion, not accepted authority.
 
 Release targets one claim ID and generation and causally references its last
 lifecycle event. Reuse of a `(claim_id, generation)` is forbidden. Leave,
@@ -174,16 +196,23 @@ it into authoritative ownership.
 
 Evidence contains `uri`, `media_type`, and a mandatory SHA-256 digest over exact
 representation bytes. `revision` is optional advisory provider location
-metadata and never substitutes for the digest. v0.1 supports SHA-256 only.
+metadata and never substitutes for the digest. `declared_size` is a mandatory
+bounded decimal string representing the expected byte count. v0.1 supports
+SHA-256 only.
 
 A digest proves content identity, not truth, freshness, provenance, CI status, reviewer independence, or authorization. The core relay MUST NOT fetch arbitrary evidence URIs. Verification is performed by a separately authorized client/verifier and reported as new evidence.
 
-`evidence_verification` references one exact evidence descriptor digest and
-reports `verified`, `mismatch`, `unavailable`, or `inconclusive`, plus verifier,
-method, and verification time. It is an attributed observation and never
-rewrites the descriptor or grants authority.
+`evidence_verification` binds the original descriptor through
+`descriptor_digest`, `uri`, `algorithm: sha-256`, and `expected_digest`. Its
+outcome is exactly `verified`, `mismatch`, `unavailable`, `unauthorized`, or
+`inconclusive`. `verified`/`mismatch` require `observed_digest` and forbid
+`reason`; the other outcomes require `reason` and forbid `observed_digest`.
+`verifier_policy_version` is required. Any `verifier` label is advisory; the
+authenticated verifier is the receipt principal/participant instance. The
+signal never rewrites the descriptor or grants authority.
 
-Protocol-derived digests use lowercase `sha-256:<64 lowercase hex>` and these
+Each formula below outputs the string `sha-256:<lowercase hex of the 32-byte
+SHA-256 result>`. Inputs are exactly:
 exact domain-separated inputs:
 
 - `descriptor_digest = SHA256(UTF8("yukh.evidence-descriptor.v0.1\0") || JCS(descriptor))`;
@@ -210,11 +239,19 @@ accepted handoff through `predecessor_handoff_event`.
 
 - Event time and UUID order are never authoritative ordering.
 - Causation defines a partial order.
-- The MVP relay assigns a monotonically increasing sequence per tenant/channel log.
+- The MVP relay assigns a contiguous sequence beginning at 1 per tenant/channel/transcript epoch.
 - No global or cross-relay order is promised.
 - A missing causal predecessor is rejected with `UNRESOLVED_CAUSATION`; it is never appended, deferred, or silently projected.
 - Replay from origin and replay across arbitrary page boundaries MUST produce the same derived state and diagnostics.
 - Pagination cursors are tenant/channel-scoped and opaque or integrity-protected.
+
+The closed work projection state is exactly `unclaimed`, `claimed`,
+`conflicting`, `handoff_offered`, or `released`. Contender claim IDs are sorted
+ascending by lowercase UUID lexical Unicode code-point order. Diagnostics use
+the closed diagnostic schema and are stably ordered by channel `sequence`, then
+`code`, then `event_id` (absent sorts before present), then `claim_id` (absent
+sorts before present). Implementations MUST emit byte-equivalent projection and
+diagnostic ordering for the same complete transcript.
 
 ## Idempotency and collisions
 
@@ -243,7 +280,11 @@ are detached to avoid self-reference.
 
 Wire media type is `application/yukh-coordination+json;version=0.1`. Version negotiation selects one exact mutually supported version; downgrade is never implicit.
 
-Stored events retain original bytes and version. Migrations create derived projections and never rewrite history. Reverse-DNS extension keys may be preserved but MUST NOT change core semantics.
+Stored events retain only the accepted JCS canonical bytes and version as the
+normative event representation. Raw ingress is discarded; optional nonnormative
+ingress telemetry is never transcript, replay, digest, or idempotency input.
+Migrations create derived projections and never rewrite canonical history.
+Reverse-DNS extension keys may be preserved but MUST NOT change core semantics.
 
 Removing fields, changing requiredness, canonicalization, projection semantics, rejection behavior, or authority meaning requires a major version.
 
@@ -266,7 +307,8 @@ authorization. A bounded opaque `trace_id` supports restricted audit correlation
 ## Immutable channel metadata
 
 Before the first event, the relay persists closed channel metadata binding the
-tenant ID, exact channel URI, immutable internal channel ID, ACL policy version,
+tenant ID, exact channel URI, immutable internal channel ID, ACL policy version
+and digest,
 retention policy digest and epoch, and creation time. There is no default
 retention. Metadata updates create a new policy/retention epoch and digest;
 identity fields never change. Every signed receipt binds the applicable metadata
@@ -276,17 +318,21 @@ digest and policy version together with the admitted high-water sequence.
 
 ## Transcript completeness and retention
 
-A transcript is `complete` only when replay starts at the log origin, ends at a
+A transcript has two independent dimensions: completeness is exactly `complete`
+or `incomplete`; lifecycle is exactly `active`, `redacted`, or `deleted`. A
+transcript is `complete` only when replay starts at the log origin, ends at a
 signed relay high-water receipt, has a contiguous verified sequence, validates
 all receipt signatures and event digests, and resolves all references. Any
 omission, unverifiable receipt, mismatch, missing predecessor, or unknown
-version makes it `incomplete`. Incomplete transcripts may be inspected but MUST
-NOT assert final claim, handoff, review, or presence projections.
+version makes it `incomplete`. Incomplete or non-`active` transcripts may be
+inspected but MUST NOT assert final claim, handoff, review, or presence
+projections.
 
 There is no default retention period. A relay MUST refuse channel creation
 until an accountable retention policy is supplied and bound into channel
-metadata. Redaction or deletion makes affected transcripts incomplete; it never
-silently rewrites accepted bytes or preserves a false completeness claim.
+metadata. Redaction sets lifecycle `redacted`; deletion sets it `deleted`; both
+also make affected transcripts `incomplete`. Neither silently rewrites accepted
+canonical bytes nor preserves a false completeness claim.
 
 ## Required conformance evidence
 
@@ -303,8 +349,10 @@ generation, authenticated intended `participant_instance_id`, and unchanged
 active source claim. Changed or released state is rejected. Acceptance closes
 the offer but neither transfers nor creates ownership. The recipient publishes
 a separate `claim` with a new claim ID/generation and
-`predecessor_handoff_event`; ordinary claim append semantics apply. The
-intermediate projection is `handoff_accepted_unclaimed`.
+`predecessor_handoff_event`; ordinary claim append semantics apply. Until then,
+the exact five-state work projection remains determined by the source claim
+lifecycle and emits `HANDOFF_ACCEPTED_UNCLAIMED` as a diagnostic; it does not
+invent a sixth state.
 
 ## Remaining qualification evidence
 
