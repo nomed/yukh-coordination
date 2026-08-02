@@ -16,15 +16,14 @@ if (!values.input || !values.work) {
       const lines = source.split(/\r?\n/u).filter((line) => line.trim());
       const entries = lines.map(parseJson);
       const header = entries.shift();
-      if (header?.kind !== "transcript") throw new Error("first JSONL record must be a transcript header");
-      delete header.kind;
-      input = { ...header, records: entries.map((entry) => entry.kind === "record" ? (delete entry.kind, entry) : entry) };
+      if (!header || Object.keys(header).length !== 1 || !header.transcript) throw new Error("first JSONL object must contain only transcript");
+      input = { ...header.transcript, records: entries };
     } else input = parseJson(source);
     const result = replay(input, values.work);
     process.stdout.write(`${values.pretty ? JSON.stringify(result, null, 2) : canonicalize(result)}\n`);
     if (!result.projection.final) process.exitCode = 1;
   } catch (error) {
-    console.error(error.message);
+    console.error(canonicalize({ code: error.code ?? "INVALID_TRANSCRIPT", message: error.message }));
     process.exitCode = 2;
   }
 }
