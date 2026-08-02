@@ -1,0 +1,39 @@
+{
+  "causation_id": "01989f0e-56b7-7e01-915e-a7748f7f6208",
+  "channel": "https://coord.example/channels/project-release",
+  "correlation_id": "01989f0e-56b7-7e01-915e-a7748f7f6208",
+  "data": {
+    "evidence_set_digest": "sha-256:1111111111111111111111111111111111111111111111111111111111111111",
+    "findings": [],
+    "outcome": "pass",
+    "review_event_id": "01989f0e-56b7-7e01-915e-a7748f7f6208",
+    "reviewer_independent": true,
+    "summary": "Conforms"
+  },
+  "evidence": [
+    {
+      "declared_size": "128",
+      "digest": {
+        "algorithm": "sha-256",
+        "value": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "media_type": "application/json",
+      "revision": "rev-1",
+      "uri": "https://example.test/evidence/1"
+    }
+  ],
+  "extensions": {},
+  "id": "01989f0e-56b7-7e01-915e-a7748f7f6209",
+  "participant": {
+    "display": "fixture",
+    "id": "session:fixture",
+    "kind": "session"
+  },
+  "source": "urn:yukh:source:fixture",
+  "specversion": "0.1",
+  "time": "2026-08-02T16:00:00.000Z",
+  "type": "verdict",
+  "work": {
+    "uri": "https://github.com/nomed/yukh-coordination/issues/4"
+  }
+}

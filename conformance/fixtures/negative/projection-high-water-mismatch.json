@@ -1,0 +1,16 @@
+{
+  "as_of_sequence": 1,
+  "channel_id": "channel:release",
+  "completeness": "complete",
+  "contenders": [
+    "01989f0e-56b7-7e01-915e-a7748f7f6215"
+  ],
+  "diagnostics": [],
+  "diagnostics_high_water_sequence": 2,
+  "final": true,
+  "handoff_offer_ids": [],
+  "lifecycle": "active",
+  "specversion": "0.1",
+  "state": "claimed",
+  "work_uri": "https://github.com/nomed/yukh-coordination/issues/4"
+}

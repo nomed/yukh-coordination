@@ -1,0 +1,1 @@
+[{"code":"CLAIM_CONFLICT","contender_event_ids":["01989f0e-56b7-7e01-915e-a7748f7f6204","01989f0e-56b7-7e01-915e-a7748f7f6205"],"contender_ids":["01989f0e-56b7-7e01-915e-a7748f7f6215","01989f0e-56b7-7e01-915e-a7748f7f6216"],"primary_id":"01989f0e-56b7-7e01-915e-a7748f7f6204","sequence":2,"severity":"warning"}]

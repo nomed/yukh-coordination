@@ -1,0 +1,19 @@
+{
+  "channel": "https://coord.example/channels/project-release",
+  "data": {
+    "observed_at": "2026-08-02T16:00:00.000Z",
+    "valid_until": "2026-08-02T16:05:00.000Z"
+  },
+  "evidence": [],
+  "extensions": {},
+  "id": "01989f0e-56b7-7e01-915e-a7748f7f6202",
+  "participant": {
+    "display": "fixture",
+    "id": "session:fixture",
+    "kind": "session"
+  },
+  "source": "urn:yukh:source:fixture",
+  "specversion": "0.1",
+  "time": "2026-08-02T16:00:00.000Z",
+  "type": "presence"
+}

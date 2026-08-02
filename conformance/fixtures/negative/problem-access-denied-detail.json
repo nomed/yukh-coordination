@@ -1,0 +1,9 @@
+{
+  "code": "ACCESS_DENIED",
+  "detail": "existence leak",
+  "retryable": false,
+  "status": 403,
+  "title": "Access denied",
+  "trace_id": "trace",
+  "type": "https://yukh.dev/problems/access-denied"
+}
