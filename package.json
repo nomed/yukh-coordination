@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "replay": "node js/bin/replay.mjs"
+    "replay": "node js/bin/replay.mjs",
+    "canonical-vectors": "node conformance/canonical/js_adapter.mjs"
   },
   "engines": {
     "node": ">=20"
