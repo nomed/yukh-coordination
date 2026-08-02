@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/channel-metadata-0.1.schema.json",
+  "title": "Immutable channel metadata 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 9,
+  "required": ["specversion", "tenant_id", "channel_uri", "channel_id", "acl_policy_version", "acl_policy_digest", "retention_policy_digest", "retention_epoch", "created_at"],
+  "properties": {
+    "specversion": { "const": "0.1" },
+    "tenant_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "channel_uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+    "channel_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "acl_policy_version": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "acl_policy_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "retention_policy_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "retention_epoch": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "created_at": { "$ref": "envelope-0.1.schema.json#/$defs/timestamp" }
+  }
+}

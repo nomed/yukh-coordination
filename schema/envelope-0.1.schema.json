@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/envelope-0.1.schema.json",
+  "title": "Yukh Coordination event envelope 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 12,
+  "required": ["specversion", "id", "type", "channel", "source", "participant", "time", "data", "evidence", "extensions"],
+  "properties": {
+    "specversion": { "const": "0.1" },
+    "id": { "$ref": "#/$defs/uuidv7" },
+    "type": { "enum": ["join", "presence", "leave", "claim", "progress", "question", "answer", "review_request", "verdict", "handoff_offer", "handoff_accept", "release", "evidence_verification"] },
+    "channel": { "type": "string", "format": "uri", "maxLength": 2048 },
+    "source": { "type": "string", "format": "uri", "maxLength": 2048 },
+    "participant": {
+      "type": "object", "additionalProperties": false, "maxProperties": 3,
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "kind": { "enum": ["person", "session", "agent", "service"] },
+        "display": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "work": {
+      "type": "object", "additionalProperties": false, "maxProperties": 1,
+      "required": ["uri"], "properties": { "uri": { "type": "string", "format": "uri", "maxLength": 2048 } }
+    },
+    "time": { "$ref": "#/$defs/timestamp" },
+    "correlation_id": { "$ref": "#/$defs/uuidv7" },
+    "causation_id": { "$ref": "#/$defs/uuidv7" },
+    "data": { "type": "object", "maxProperties": 64 },
+    "evidence": { "type": "array", "maxItems": 32, "items": { "$ref": "evidence-0.1.schema.json" } },
+    "extensions": {
+      "type": "object", "additionalProperties": { "type": "string", "maxLength": 4096 }, "maxProperties": 32,
+      "propertyNames": { "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$" }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "enum": ["join", "presence", "leave"] } }, "required": ["type"] }, "then": { "not": { "anyOf": [{ "required": ["work"] }, { "required": ["correlation_id"] }, { "required": ["causation_id"] }] } } },
+    { "if": { "properties": { "type": { "enum": ["question", "review_request"] } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id"], "not": { "required": ["causation_id"] } } },
+    { "if": { "properties": { "type": { "const": "claim" }, "data": { "required": ["predecessor_handoff_event"] } }, "required": ["type", "data"] }, "then": { "required": ["work", "correlation_id", "causation_id"] }, "else": { "if": { "properties": { "type": { "const": "claim" } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id"], "not": { "required": ["causation_id"] } } } },
+    { "if": { "properties": { "type": { "enum": ["progress", "answer", "verdict", "handoff_offer", "handoff_accept", "release", "evidence_verification"] } }, "required": ["type"] }, "then": { "required": ["work", "correlation_id", "causation_id"] } },
+    { "if": { "properties": { "type": { "const": "join" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/join-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "presence" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/presence-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "leave" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/leave-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "claim" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/claim-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "progress" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/progress-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "question" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/question-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "answer" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/answer-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "review_request" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/review_request-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "verdict" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/verdict-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "handoff_offer" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/handoff_offer-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "handoff_accept" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/handoff_accept-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "release" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/release-0.1.schema.json" } } } },
+    { "if": { "properties": { "type": { "const": "evidence_verification" } }, "required": ["type"] }, "then": { "properties": { "data": { "$ref": "payloads/evidence_verification-0.1.schema.json" } } } }
+  ],
+  "$defs": {
+    "uuidv7": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "timestamp": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$" },
+    "textArray": { "type": "array", "maxItems": 32, "items": { "type": "string", "maxLength": 4096 } }
+  }
+}

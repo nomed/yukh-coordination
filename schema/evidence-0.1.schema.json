@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/evidence-0.1.schema.json",
+  "title": "Yukh evidence descriptor 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 6,
+  "required": ["uri", "media_type", "digest", "declared_size"],
+  "properties": {
+    "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+    "media_type": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "digest": {
+      "type": "object", "additionalProperties": false, "maxProperties": 2,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": { "const": "sha-256" },
+        "value": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "revision": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "declared_size": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,15})$" },
+    "description": { "type": "string", "maxLength": 4096 }
+  }
+}
