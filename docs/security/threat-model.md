@@ -33,10 +33,13 @@ Loss of availability is preferable to ambiguous admission or acknowledgement.
 
 - human principal;
 - agent or session acting for a principal;
-- channel administrator;
-- relay operator;
+- accountable tenant administrator, who owns tenant policy and appoints channel administrators;
+- accountable channel administrator, who owns membership, retention, export, redaction, and deletion decisions for one channel;
+- security owner, who owns threat treatment, incident declaration, and residual-risk acceptance;
+- relay operator, who operates availability and recovery but cannot silently grant channel access;
+- relay security administrator, who manages authenticators and receipt keys under separated access;
 - external authority or governance system;
-- evidence host and independent verifier;
+- evidence host and independent evidence verifier, whose verification is a statement rather than relay authority;
 - unauthenticated attacker;
 - malicious or compromised admitted participant;
 - compromised relay or operator.
@@ -57,10 +60,13 @@ Loss of availability is preferable to ambiguous admission or acknowledgement.
 The system distinguishes:
 
 - `principal_id`: stable authenticated subject, derived by the relay;
-- `participant_id`: unique person/session/agent instance bound to that principal for a credential or connection lifetime;
+- `participant_instance_id`: relay-issued identifier for exactly one person/session/agent instance;
+- `session_epoch`: relay-issued monotonically distinct epoch that prevents reconnection or restored client state from reusing a prior instance binding;
 - `display`: mutable, non-unique advisory text.
 
-Client assertions MUST NOT establish authenticated identity. The relay rejects or overwrites asserted principal bindings and records authentication context in the receipt, never credentials. Delegation and session lineage are explicit; kind and display never imply trust.
+`participant_instance_id` and `session_epoch` are bound by the relay to the authenticated `principal_id`, tenant, authentication context, and creation time. They cannot be selected, reused, or transferred by a client. Reauthentication or reconnection creates a new instance/epoch unless the relay validates a narrowly scoped, integrity-protected resume capability. A restored client cannot resurrect an earlier epoch.
+
+Client assertions MUST NOT establish authenticated identity. The relay rejects asserted principal or participant bindings and records authentication context in the receipt, never credentials. Delegation and session lineage are explicit; kind and display never imply trust.
 
 The reference MVP supports TLS plus one configured authenticator behind a provider-neutral interface. Identity from event bodies, forwarded headers, display names, or presence is rejected for authorization.
 
@@ -68,13 +74,17 @@ The reference MVP supports TLS plus one configured authenticator behind a provid
 
 Admission is deny-by-default and separate from work authority. Channel creation and membership are administrative policy outside the protocol event log.
 
-Every create, publish, read, watch, replay, export, redact, and delete action is authorized against `(tenant, channel, principal, action)` before existence is disclosed or state changes. Claim, presence, review, verdict, and handoff events never alter ACLs.
+Every channel has one immutable registered canonical URI mapped to its internal channel ID and tenant. Registration rejects an existing URI mapped to a different identity; aliases and URI reassignment are excluded from the MVP. Work and channel URIs are canonicalized only by a frozen protocol rule, never by network dereference.
+
+Every create, publish, read, watch, replay, export, redact, and delete action is authorized against `(tenant, channel, principal, action)` before existence is disclosed or state changes. The accountable tenant or channel administrator changes a versioned ACL through the administrative control plane. Each decision produces an immutable ACL decision receipt containing policy version/digest, principal, action, resource, decision, decision time, and administrator/decision-engine identity. Claim, presence, review, verdict, and handoff events never alter ACLs.
 
 ### Tenant and channel isolation
 
 Tenant identity is relay-derived. Channels use immutable internal IDs bound to exactly one tenant. Storage and index keys begin with tenant ID; every query includes tenant and channel predicates. External names and cross-channel references cannot bypass scope.
 
 Denied access MUST NOT reveal whether a tenant, channel, event, participant, cursor, or evidence reference exists.
+
+The accountable isolation owner is the relay security administrator; the tenant administrator accepts tenant-specific residual risk. Authentication, admission policy, relay compute, event persistence, security audit, receipt signing, backup, and evidence verification are named failure domains. The signing key MUST be outside the event-database failure domain; evidence verification MUST be outside relay admission and write transactions. Shared compute or storage is logical isolation only and cannot be described as hardened production tenancy until negative cross-tenant tests, restore tests, credential separation, operator-access review, resource-exhaustion tests, and compromise/blast-radius evidence pass for the exact deployment topology.
 
 ### Validation, append, and replay
 
@@ -84,13 +94,17 @@ The relay assigns receive time and a monotonically increasing sequence within on
 
 Event append, authenticated binding, sequence assignment, idempotency record, event digest, and receipt commit atomically. No success receipt is returned before commit. Exact duplicate bytes are idempotent; same ID with different bytes is rejected and security-audited.
 
+The normative receipt payload is a canonical, domain-separated object containing protocol and receipt versions, tenant ID, internal channel ID, registered canonical channel URI, transcript epoch, server sequence, event ID, canonical event digest, authenticated principal ID, participant instance ID, session epoch, ACL policy version/digest and decision-receipt reference, receive time, append outcome, and signing key ID. Canonical byte serialization and signature algorithm require byte-exact fixtures before implementation acceptance.
+
+The append outcome is committed atomically with event state before a receipt is signed or acknowledged. A crash before commit yields no accepted event. A crash after commit but before acknowledgement may lose the response; retry of the same event ID and exact canonical bytes returns the same committed outcome and receipt identity, while changed bytes conflict. If commit state cannot be proven after recovery, the relay fails closed and reports an indeterminate non-success response; it never creates a replacement event or advances ownership from ambiguity.
+
 Replay cursors are tenant/channel scoped and opaque or integrity-protected. Page size, replay window, connection count, and processing time are bounded.
 
 ### Impersonation and handoff
 
 Display collisions are allowed but visibly disambiguated by principal and participant bindings. Reconnect cannot silently reuse an old participant identity.
 
-Handoff acceptance must be emitted by the exact authenticated recipient named by the offer and bind the source claim generation, channel, work identity, boundary digest, and evidence-set digest. Release, supersession, changed boundary, late acceptance, or competing acceptance yields a deterministic diagnostic and no authoritative transfer.
+Claims bind canonical channel URI, canonical work URI, claimant principal, participant instance/session epoch, and a claim generation. Handoff acceptance must be emitted by the exact authenticated recipient principal or explicitly named participant instance and bind the source claim generation, channel, work identity, boundary digest, and evidence-set digest. Release, supersession, changed boundary, late acceptance, wrong session epoch, or competing acceptance yields a deterministic diagnostic and no observable transfer. Handoff changes protocol-observable claim state only; external authority remains external.
 
 ### Evidence and SSRF
 
@@ -98,13 +112,19 @@ The core relay stores evidence URI, media type, digest/revision, declared size, 
 
 Verification occurs under a separate client/verifier policy. Digest mismatch, unavailable content, unauthorized retrieval, mutable content, and unknown algorithms remain explicitly unverified. A digest proves bytes, not truth or authorization.
 
+`evidence_verification` is a separately authenticated durable statement binding the verifier principal/participant, evidence URI, algorithm, expected digest, observed digest or unavailability reason, verification time, verifier policy/version, and result (`verified`, `mismatch`, `unavailable`, or `indeterminate`). It never rewrites the original evidence entry or automatically changes a claim, handoff, review, or verdict.
+
 Credential-bearing URLs, inline evidence bodies, private prompts, unrestricted logs, and secrets are prohibited.
 
 ### Privacy, retention, and redaction
 
 Channels are private by default and have no public directory. Event bodies prohibit credentials, secrets, private prompts, unrestricted logs, and personal or special-category data. Operational logs redact authorization material and exclude bodies by default.
 
-A finite tenant/channel retention period MUST be configured before accepting events. Accepted payloads are not silently edited.
+The caller and its accountable data owner are responsible for classifying content before submission and for applying organization-specific secret, privacy, legal, and residency policy. Relay validation and prohibited-field detection are defense in depth, not a claim that arbitrary text is free of secrets or personal data. A caller MUST omit or minimize prohibited data; rejection does not transfer data-controller responsibility to the relay. Evidence verifiers likewise apply caller-approved retrieval, credential, egress, and disclosure policy outside the relay.
+
+A finite channel retention policy MUST be explicitly configured and decision-receipted before accepting its first event. There is no implicit or inherited default. The policy freezes active retention, backup deletion window, permitted export, redaction/deletion authority, and minimal integrity metadata retained after payload removal.
+
+Each new channel history starts a monotonically distinct `transcript_epoch`. An export or replay reports its epoch and deterministic completeness state: `complete`, `incomplete` with explicit missing sequence boundaries/reason, `redacted` with marker references, or `deleted` with the surviving deletion receipt permitted by policy. Epochs cannot be joined silently, missing data cannot mean “never accepted,” and deleted identifiers cannot be reused to manufacture continuity. Accepted payloads are not silently edited.
 
 The MVP supports:
 
@@ -113,13 +133,13 @@ The MVP supports:
 - explicitly audited destructive transcript deletion;
 - selective redaction only through an append-only marker plus payload removal/restriction, preserving minimal integrity metadata.
 
-Backups and replicas publish a bounded deletion window. The project MUST NOT promise both permanent full payloads and erasure.
+Backups and replicas publish a bounded deletion window. The project MUST NOT promise both permanent full payloads and erasure. Retention expiry, selective redaction, whole-transcript deletion, epoch rollover, and recovery after backup restore each produce deterministic administrative/audit evidence.
 
 ### Receipts and signing
 
 Client signatures are excluded from the MVP unless offline/federated verification is promoted later.
 
-Authenticated transport and relay-attributed durable receipts are required. If the project claims transcripts are verifiable outside the relay, receipts are signed with a relay-owned asymmetric key stored outside the event database. Key ID, rotation overlap, revocation, public verification material, and compromise window are documented.
+Authenticated transport and relay-attributed durable receipts are required. Receipts use the canonical payload defined above and are signed with a relay-owned asymmetric key stored and operated outside the event database and its backup/restore failure domain. Key ID, algorithm, rotation overlap, revocation, public verification material, and compromise window are documented. Signing-key unavailability prevents acknowledgement; it does not roll back an already committed append, whose exact retry remains pending until the same committed outcome can be signed.
 
 A database-local HMAC or a key in the same compromise domain is insufficient for independent verification.
 
@@ -137,18 +157,20 @@ The protocol transcript is not the complete security audit log.
 
 ## STRIDE threat register
 
-| Threat | Example | Required mitigation | Residual risk / evidence |
-|---|---|---|---|
-| Spoofing | B declares A's participant/display | relay-derived principal binding; display never authorizes | negative fixture proves receipt binds B |
-| Tampering | same event ID with changed bytes | canonical digest; atomic idempotency collision rejection | collision appears only in restricted audit |
-| Repudiation | participant denies a handoff statement | durable attributed receipt; optional external receipt signature | compromised-relay window remains disclosed |
-| Information disclosure | cross-tenant channel guessing | authorize before lookup; tenant-prefixed storage/query | negative test reveals no existence oracle |
-| Denial of service | replay exhaustion or deep payload | quotas, bounds, pagination, timeouts, backpressure | load thresholds and rejection telemetry |
-| Elevation of privilege | claim or handoff modifies ACL/authority | protocol events never change access or work authority | external policy receipt required |
-| SSRF | evidence URI targets internal service | relay never fetches evidence | verifier has separate egress policy |
-| Replay | duplicate/late handoff acceptance | atomic event idempotency and claim-generation precondition | deterministic invalid-transition diagnostic |
-| Operator compromise | transcript or key manipulation | separated admin/signing access, audit and key rotation | post-compromise attribution explicitly suspect |
-| Privacy failure | permanent payload conflicts with erasure | finite retention, audited deletion/redaction, backup window | integrity metadata may remain by policy |
+Severity and likelihood are `low`, `medium`, `high`, or `critical`; treatment is `mitigate`, `avoid`, `transfer`, or `accept`. The named security owner owns this register. Only the tenant administrator may accept tenant-specific residual risk; only project governance may accept protocol-wide residual risk.
+
+| Threat | Severity | Likelihood | Treatment and owner | Residual risk / acceptor |
+|---|---|---|---|---|
+| B declares A's participant/display | high | high | mitigate: relay security administrator issues identity bindings | compromised authenticator; security owner and tenant administrator |
+| Same event ID with changed bytes | high | medium | mitigate: relay operator implements canonical digest and atomic collision rejection | canonicalizer defect; project governance |
+| Participant denies a handoff | high | medium | mitigate: relay security administrator owns signed attributed receipts | relay/key compromise window; security owner |
+| Cross-tenant channel guessing | critical | medium | avoid/mitigate: isolation owner enforces authorize-before-lookup and scoped storage | shared-infrastructure/operator compromise; tenant administrator after qualification |
+| Replay exhaustion or deep payload | high | high | mitigate: relay operator owns quotas, bounds, timeouts and backpressure | noisy-neighbor degradation; tenant administrator |
+| Claim or handoff elevates ACL/authority | critical | medium | avoid: protocol events cannot alter ACL or external authority | faulty adapter interpretation; project governance |
+| Evidence URI targets internal service | high | high | avoid: relay never fetches; evidence verifier owns separate egress policy | verifier compromise; verifier owner/tenant administrator |
+| Duplicate/late handoff acceptance | high | medium | mitigate: relay operator enforces idempotency, generation and epoch preconditions | external authority race; tenant administrator |
+| Operator manipulates transcript/key | critical | medium | mitigate: security owner separates admin/signing access, audit, and rotation | post-compromise attribution suspect; project governance |
+| Permanent payload conflicts with erasure | high | medium | avoid/mitigate: channel administrator freezes finite retention and audited deletion | minimal metadata/backups within declared window; tenant administrator/data owner |
 
 ## Fail-closed conditions
 
@@ -156,9 +178,15 @@ No durable acceptance and no success receipt are permitted when authentication, 
 
 Authentication or ACL provider timeout, signing-key unavailability, partial persistence, and ambiguous tenant/channel binding return non-enumerating temporary failures.
 
-## Required negative evidence
+All denial and temporary-failure responses use the same externally observable status family and bounded timing posture for unknown and unauthorized tenant, channel, event, participant, cursor, evidence, or ACL state. Detailed causes are restricted to the security audit and MUST NOT create an existence oracle.
 
-Issue #3 cannot close without executable cases for:
+## Normative design requirements and future evidence
+
+The identity bindings, immutable channel mapping, versioned ACL decision receipts, canonical signed receipt boundary, atomic crash/retry semantics, mandatory retention, transcript epoch states, isolation ownership, claim/handoff/evidence-verification bindings, non-enumerating errors, role accountability, and fail-closed rules above are normative design requirements for the MVP protocol boundary.
+
+They are not evidence that a relay, authenticator, database, signer, verifier, backup system, or deployment currently satisfies them. Issue #3 may accept the documented boundary while implementation and qualification evidence remains assigned to its governing implementation/conformance issues. No production-readiness statement follows from accepting this Draft.
+
+Before relay implementation can be accepted, executable evidence must cover:
 
 - spoofed participant/display and forged forwarded identity;
 - stolen, expired, revoked, or wrong-tenant credential;
@@ -171,6 +199,8 @@ Issue #3 cannot close without executable cases for:
 - secret/log injection, oversized/deep event, and replay exhaustion;
 - authentication, ACL, signing, and storage outage;
 - deletion/redaction request and compromised signing key.
+
+The exact implementation candidate must additionally publish its logical/physical isolation topology, component and configuration identities, failure-domain map, limits, restore procedure, transcript epoch behavior, signer separation, and test results. Shared-component tenancy remains unqualified until the isolation evidence named above is independently reviewed.
 
 ## Incident response minimum
 
@@ -201,5 +231,7 @@ Separate ADRs or an accepted security RFC must freeze:
 3. receipt canonicalization, signature promise, and key ownership;
 4. retention, redaction, deletion, and backup semantics;
 5. persistence/isolation topology and atomic acknowledgement boundary.
+
+Those records must also name the security owner, tenant/channel administrative authority, relay operator, relay security administrator, evidence verifier, and residual-risk acceptors. Acceptance of this Draft may freeze the repository-only design boundary; it does not satisfy future implementation evidence or authorize a relay deployment.
 
 Federation/offline replay requires a future decision and is excluded from the MVP.
