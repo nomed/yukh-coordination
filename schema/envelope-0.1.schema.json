@@ -4,7 +4,7 @@
   "title": "Yukh Coordination event envelope 0.1",
   "type": "object",
   "additionalProperties": false,
-  "maxProperties": 12,
+  "maxProperties": 13,
   "required": ["specversion", "id", "type", "channel", "source", "participant", "time", "data", "evidence", "extensions"],
   "properties": {
     "specversion": { "const": "0.1" },
