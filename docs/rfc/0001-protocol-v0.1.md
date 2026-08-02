@@ -1,6 +1,6 @@
 # RFC-0001: Yukh Coordination Protocol v0.1
 
-- Status: Draft
+- Status: Accepted
 - Governing issue: #2
 - Authors: Nomed with protocol-design review
 - Last updated: 2026-08-02
@@ -13,11 +13,11 @@ This RFC does not authorize relay or CLI implementation.
 
 ## Decision status and qualification boundary
 
-The project owner selected the v0.1 design decisions expressed below. They are
-approved inputs, not an accepted compatibility commitment. This RFC remains
-**Draft** until issue #4 supplies byte-exact fixtures, signed-receipt vectors,
-projection vectors, published digests, and two independent cross-runtime
-conformance results.
+The project owner accepted this RFC after issue #4 supplied byte-exact fixtures,
+signed-receipt vectors, projection vectors, published digests, and two
+independent cross-runtime conformance results through PR #10. The v0.1 contract
+is now binding within its repository-only qualification boundary. Acceptance
+does not authorize relay implementation, deployment, hosting, or production.
 
 ## Normative language
 
@@ -44,7 +44,7 @@ Every event contains:
 
 | Field | Rule |
 |---|---|
-| `specversion` | REQUIRED; exact `0.1` for this draft |
+| `specversion` | REQUIRED; exact `0.1` for this protocol version |
 | `id` | REQUIRED canonical lowercase UUIDv7; idempotency key within one immutable tenant/channel mapping |
 | `type` | REQUIRED closed v0.1 signal enum |
 | `channel` | REQUIRED absolute URI; exact string identity |
