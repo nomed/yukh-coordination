@@ -19,11 +19,11 @@ Participants in isolated sessions need attributable, replayable coordination wit
 
 The security boundary therefore distinguishes authenticated identity from presentation, administrative access from work authority, accepted bytes from evidence truth, and protocol design from deployment qualification.
 
-## Decision 1: identity, delegation, and authentication
+## Decision 1: identity and authentication
 
-The relay derives a stable `principal_id` from an authenticated subject. It issues a unique `participant_instance_id` and monotonically distinct `session_epoch`, bound to that principal, tenant, authentication context, and creation time. Clients cannot select, transfer, or resurrect those bindings. Reconnection creates a new instance/epoch unless the relay validates a narrowly scoped, integrity-protected resume capability.
+The relay derives a stable `principal_id` from an authenticated subject. During authenticated session bootstrap it issues and returns a unique `participant_instance_id` and monotonically distinct `session_epoch`, bound directly and exclusively to exactly one authenticated principal, tenant, authentication context, and creation time. Clients cannot select, transfer, or resurrect those bindings. Reconnection creates a new instance/epoch unless the relay validates a narrowly scoped, integrity-protected resume capability.
 
-`display`, participant kind, presence, and event-body identity are advisory and never authorize. Delegation and session lineage are explicit bindings; neither is inferred from names, ordering, or model/runtime type.
+Delegation is excluded from the MVP. A participant cannot act for, inherit authority from, or be receipt-attributed to another principal. Participant identity in an event, session lineage, `display`, participant kind, and presence are advisory labels and non-authorizing. Only the receipt binds `principal_id`, relay-issued `participant_instance_id`, and `session_epoch`. Workload identity, delegated agent credentials, and any delegation chain require a future RFC.
 
 The reference design uses TLS and one configured authenticator behind a provider-neutral abstraction. Credentials remain transport-only, are never persisted in events or receipts, and are redacted from operational and security logs. Authenticator or identity-binding uncertainty fails closed.
 
@@ -37,9 +37,11 @@ Every create, publish, read, watch, replay, export, redact, and delete operation
 
 Unknown and unauthorized resources return the same bounded, non-enumerating external failure posture. Detailed causes are restricted to the security audit.
 
+Public request processing uses one precedence: transport/framing limits and coarse abuse controls; authentication; tenant/channel authorization without existence disclosure; then protocol/schema and transition validation. Failure at authentication returns the common unauthenticated response; every later missing-or-denied resource returns the common non-enumerating admission response. Validation details are exposed only after admission and cannot reveal another scope.
+
 ## Decision 3: canonical signed receipts and key lifecycle
 
-Every durable append has a canonical, domain-separated receipt payload containing:
+Every durable append has a complete, immutable, canonical, domain-separated receipt preimage containing:
 
 - protocol and receipt versions;
 - tenant ID, internal channel ID, and registered canonical channel URI;
@@ -47,32 +49,34 @@ Every durable append has a canonical, domain-separated receipt payload containin
 - event ID and canonical event digest;
 - authenticated principal ID, participant instance ID, and session epoch;
 - ACL policy version/digest and decision-receipt reference;
-- receive time, append outcome, and signing key ID.
+- receive time, append outcome, receipt ID, selected signing key ID, and selected signature algorithm.
 
 RFC-0001 must freeze the exact byte serialization used by the event digest. RFC-0002 conformance fixtures must freeze the receipt bytes, signature input, signature algorithm, and verification outcomes across implementations.
 
-Receipts are signed with a relay-owned asymmetric key operated outside the event database and its backup/restore failure domain. The lifecycle publishes key IDs, algorithms, public verification material, activation and retirement windows, overlap, revocation, and compromise intervals. Database-local HMACs and keys restored with the event database do not provide independent receipt verification.
+The complete receipt preimage, including selected `key_id` and algorithm, is persisted atomically with the event append. It is never reconstructed from mutable policy or current key configuration. Rotation selects a new key only for new appends and cannot rewrite a committed preimage.
 
-Signing-key unavailability prevents a success acknowledgement. It does not erase an already committed append; exact retry returns the same committed outcome when it can be signed. Client signatures, federation, and offline ingestion are excluded from the MVP.
+Receipts are signed with a relay-owned asymmetric key operated outside the event database and its backup/restore failure domain. The lifecycle publishes key IDs, algorithms, public verification material, activation and retirement windows, overlap, revocation, compromise intervals, and a maximum ACK retry horizon. A selected private key remains available for a declared recovery window at least as long as that maximum horizon. Database-local HMACs and keys restored with the event database do not provide independent receipt verification.
+
+Signing may occur after database commit, but no success ACK is returned until the signature is durably attached to the persisted preimage/receipt ID. Temporary key unavailability leaves the append committed and an exact byte-identical retry pending against the same preimage. If the selected key becomes permanently unavailable before signing, the event remains committed, receives no success ACK, cannot be re-keyed or replaced, and is reported through a deterministic permanent-signing-failure state plus incident/audit evidence; replay/export marks the affected boundary incomplete.
+
+Verification distinguishes administrative retirement from revocation. A normally retired key remains valid for receipts within its declared validity window. Compromise revocation publishes the affected interval; receipts in that interval verify cryptographically but have an `indeterminate` trust result and cannot be presented as independently trusted. Other revocation reasons and their verification result are frozen by policy. Client signatures, federation, offline ingestion, workload identity, and delegation are excluded from the MVP.
 
 ## Decision 4: mandatory retention and transcript lifecycle
 
 A finite channel retention policy is explicitly configured and decision-receipted before the first accepted event. There is no implicit or inherited default. The policy freezes active retention, backup deletion window, export permissions, redaction/deletion authority, and the minimal integrity metadata retained after payload removal.
 
-Every new channel history begins a monotonically distinct `transcript_epoch`. Replay and export identify their epoch and exactly one deterministic completeness state:
+Every new channel history begins a monotonically distinct `transcript_epoch`. Replay and export identify their epoch and two independent deterministic dimensions:
 
-- `complete`;
-- `incomplete`, with missing sequence boundaries and reason;
-- `redacted`, with redaction-marker references;
-- `deleted`, with only the deletion receipt permitted by policy.
+- completeness: `complete` or `incomplete`, with missing sequence boundaries and reason;
+- lifecycle: `active`, `redacted` with marker references, or `deleted` with only the deletion receipt permitted by policy.
 
-Epochs cannot be silently joined. Missing data cannot mean “never accepted,” and removed identifiers cannot be reused to manufacture continuity. Accepted payloads are not silently edited. Selective redaction uses an append-only marker plus payload removal or restriction; whole-transcript deletion is explicit, destructive, and audited. Retention expiry, backup restore, redaction, deletion, and epoch rollover produce administrative and security-audit evidence.
+Epochs cannot be silently joined. Missing data cannot mean “never accepted,” and removed identifiers cannot be reused to manufacture continuity. A transcript whose completeness is `incomplete` or lifecycle is not `active` cannot assert a final claim/handoff/work projection. Accepted payloads are not silently edited. Selective redaction uses an append-only marker plus payload removal or restriction; whole-transcript deletion is explicit, destructive, and audited. Retention expiry, backup restore, redaction, deletion, and epoch rollover produce administrative and security-audit evidence.
 
 Callers and their accountable data owners remain responsible for classifying and minimizing secrets, personal data, regulated data, and private evidence before submission. Relay validation is defense in depth, not a transfer of data-controller responsibility.
 
 ## Decision 5: persistence, isolation, and acknowledgement
 
-Event bytes, authenticated identity binding, transcript epoch, server sequence, idempotency record, event digest, and append outcome commit atomically before acknowledgement. A crash before commit yields no accepted event. A crash after commit but before response may lose the ACK; retry with the same event ID and exact canonical bytes returns the same committed outcome and receipt identity. The same ID with different bytes conflicts. If commit state cannot be proven, the relay returns an indeterminate non-success response and cannot create a replacement event or advance observable ownership.
+Canonical event bytes, authenticated identity and ACL bindings, transcript epoch, server sequence, idempotency record, event digest, append outcome, receipt ID, and complete immutable unsigned receipt preimage commit atomically before acknowledgement. The selected key must be eligible and available before the transaction begins. The signer remains outside the event database. A crash before commit yields no accepted event. A crash after commit but before signing or response may lose the ACK; retry with the same event ID and exact canonical bytes addresses the same preimage and returns the same committed outcome and receipt identity after the signature is durably attached. The same ID with different bytes conflicts. If commit state cannot be proven, the relay returns an indeterminate non-success response and cannot create a replacement event or advance observable ownership.
 
 Authentication, admission policy, relay compute, event persistence, security audit, receipt signing, backup, and evidence verification are explicit failure domains. The relay security administrator owns logical isolation; the tenant administrator accepts tenant-specific residual risk. Signing is outside the event-database failure domain, and evidence verification is outside relay admission/write transactions.
 
@@ -80,9 +84,9 @@ All storage and queries are scoped by relay-derived tenant and immutable channel
 
 ## Claim, handoff, and evidence alignment
 
-A claim binds canonical channel URI, canonical work URI, claimant principal, participant instance/session epoch, and claim generation. A handoff acceptance binds the intended authenticated recipient, source claim generation, work and channel identity, boundary digest, and evidence-set digest. Release, supersession, changed boundary, late or competing acceptance, and wrong session epoch produce deterministic invalid-transition diagnostics and no observable transfer.
+A claim binds canonical channel URI, canonical work URI, claimant principal, participant instance/session epoch, and claim generation. In the MVP a handoff recipient is exactly one `participant_instance_id`; principal-wide or delegated recipients are invalid. Acceptance binds that authenticated recipient instance/session epoch, source claim generation, work and channel identity, boundary digest, and evidence-set digest. Release, supersession, changed boundary, late or competing acceptance, and wrong session epoch produce deterministic invalid-transition diagnostics and no observable transfer.
 
-`evidence_verification` is an independently authenticated durable statement. It binds verifier identity, evidence URI, algorithm, expected and observed digest or unavailability reason, verification time, verifier-policy version, and result. It neither rewrites the evidence declaration nor automatically changes a claim, review, verdict, or handoff. Evidence bytes and verdicts remain statements, not relay-granted truth or authority.
+`evidence_verification` is an independently authenticated durable statement. The receipt supplies the authenticated verifier principal/instance/epoch; the payload binds evidence URI, algorithm, expected and observed digest or reason, verification time, verifier policy/version, and exactly one result: `verified`, `mismatch`, `unavailable`, `unauthorized`, or `inconclusive`. It neither rewrites the evidence declaration nor automatically changes a claim, review, verdict, or handoff. Evidence bytes and verdicts remain statements, not relay-granted truth or authority.
 
 ## Accountability
 
