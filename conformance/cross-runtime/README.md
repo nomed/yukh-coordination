@@ -1,9 +1,10 @@
 # Cross-runtime projection gate
 
-The three common transcripts cover a single claim, conflict followed by an
-explicit release, and an accepted handoff in an incomplete/redacted transcript.
-They are adapted without semantic rewriting to the independent Python and
-JavaScript replay CLIs.
+Common transcripts cover claim, conflict/release, handoff and incomplete
+lifecycle, multiple offers, all evidence-verification outcomes, exact duplicate,
+ID/receipt/sequence collisions, CAS failures, receipt/high-water verification,
+and sequence gaps. They are adapted without semantic rewriting to the
+independent Python and JavaScript replay CLIs.
 
 `run.py` compares the raw canonical projection stdout byte for byte. It then
 checks the committed canonical projection and SHA-256 digest. Wrapper metadata
@@ -16,5 +17,14 @@ python3 conformance/cross-runtime/run.py --update  # accountable fixture update
 python3 conformance/cross-runtime/run.py
 ```
 
-Any semantic divergence fails the gate. The runner does not normalize fields,
-ordering, diagnostics, state, lifecycle, or canonical bytes.
+The seven canonical/domain vectors and all cases expected to converge compare
+raw bytes. Admission/transition cases with deliberately different engine APIs
+use per-runtime expected outcomes. These make gaps visible rather than silently
+normalizing them. At this revision, Python rejects a second current handoff
+offer because it advances its lifecycle parent while JavaScript accepts the
+normative multi-offer projection; Python also lacks the JavaScript verifier
+status inputs; JavaScript currently does not enforce evidence descriptor
+bindings; and JavaScript reports several invalid transitions as incomplete
+projection reasons where Python returns a typed error. These gaps are committed
+as 13 explicit per-runtime outcome specifications, alongside 10 byte-identical
+projection cases and seven byte-identical canonical/domain vectors.

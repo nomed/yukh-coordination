@@ -1,17 +1,302 @@
 [
   {
+    "mode": "projection-equal",
     "name": "claim",
     "path": "conformance/cross-runtime/cases/claim.json",
     "work_uri": "https://example.test/issues/42"
   },
   {
+    "mode": "projection-equal",
     "name": "conflict-release",
     "path": "conformance/cross-runtime/cases/conflict-release.json",
     "work_uri": "https://example.test/issues/42"
   },
   {
+    "mode": "projection-equal",
     "name": "handoff-incomplete-lifecycle",
     "path": "conformance/cross-runtime/cases/handoff-incomplete-lifecycle.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      },
+      "python": {
+        "code": "INVALID_REFERENCE",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "multi-offer",
+    "path": "conformance/cross-runtime/cases/multi-offer.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "evidence-verified",
+    "path": "conformance/cross-runtime/cases/evidence-verified.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "evidence-mismatch",
+    "path": "conformance/cross-runtime/cases/evidence-mismatch.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "evidence-unavailable",
+    "path": "conformance/cross-runtime/cases/evidence-unavailable.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "evidence-unauthorized",
+    "path": "conformance/cross-runtime/cases/evidence-unauthorized.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "evidence-inconclusive",
+    "path": "conformance/cross-runtime/cases/evidence-inconclusive.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      },
+      "python": {
+        "code": "INVALID_REFERENCE",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-descriptor-digest",
+    "path": "conformance/cross-runtime/cases/evidence-invalid-descriptor-digest.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      },
+      "python": {
+        "code": "INVALID_PAYLOAD",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-uri",
+    "path": "conformance/cross-runtime/cases/evidence-invalid-uri.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      },
+      "python": {
+        "code": "INVALID_PAYLOAD",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-algorithm",
+    "path": "conformance/cross-runtime/cases/evidence-invalid-algorithm.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      },
+      "python": {
+        "code": "INVALID_PAYLOAD",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "evidence-invalid-expected-digest",
+    "path": "conformance/cross-runtime/cases/evidence-invalid-expected-digest.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "exact-duplicate",
+    "path": "conformance/cross-runtime/cases/exact-duplicate.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "event-id-collision",
+          "sequence-collision"
+        ]
+      },
+      "python": {
+        "code": "ID_COLLISION",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "event-id-collision",
+    "path": "conformance/cross-runtime/cases/event-id-collision.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "sequence-collision"
+        ]
+      },
+      "python": {
+        "code": "INVALID_RECEIPT",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "changed-duplicate-receipt",
+    "path": "conformance/cross-runtime/cases/changed-duplicate-receipt.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "sequence-collision"
+        ]
+      },
+      "python": {
+        "code": "INVALID_RECEIPT",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "sequence-collision",
+    "path": "conformance/cross-runtime/cases/sequence-collision.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "handoff-precondition-failed"
+        ]
+      },
+      "python": {
+        "code": "INVALID_HANDOFF_PARTICIPANT",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "cas-wrong-recipient",
+    "path": "conformance/cross-runtime/cases/cas-wrong-recipient.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "handoff-precondition-failed"
+        ]
+      },
+      "python": {
+        "code": "HANDOFF_PRECONDITION_FAILED",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "cas-changed-boundary",
+    "path": "conformance/cross-runtime/cases/cas-changed-boundary.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "handoff-precondition-failed"
+        ]
+      },
+      "python": {
+        "code": "HANDOFF_PRECONDITION_FAILED",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "cas-second-acceptance",
+    "path": "conformance/cross-runtime/cases/cas-second-acceptance.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "unverified-receipt"
+        ]
+      },
+      "python": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "unverified-receipt",
+    "path": "conformance/cross-runtime/cases/unverified-receipt.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "sequence-gap",
+    "path": "conformance/cross-runtime/cases/sequence-gap.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "final": false,
+        "kind": "projection",
+        "reasons": [
+          "unverified-high-water"
+        ]
+      },
+      "python": {
+        "final": true,
+        "kind": "projection",
+        "reasons": []
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "unverified-high-water",
+    "path": "conformance/cross-runtime/cases/unverified-high-water.json",
     "work_uri": "https://example.test/issues/42"
   }
 ]

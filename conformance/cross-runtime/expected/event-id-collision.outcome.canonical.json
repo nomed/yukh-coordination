@@ -1,0 +1,1 @@
+{"javascript":{"final":false,"kind":"projection","reasons":["event-id-collision","sequence-collision"]},"python":{"code":"ID_COLLISION","kind":"error"}}

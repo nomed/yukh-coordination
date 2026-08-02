@@ -1,0 +1,12 @@
+{
+  "algorithm": "Ed25519",
+  "domain_prefix": "yukh-coordination-receipt-v0.1\u0000",
+  "key_id": "rfc8032-test-vector-1-derived-receipt",
+  "preimage": "conformance/canonical/receipt-signature-preimage.canonical.json",
+  "preimage_bytes": 981,
+  "preimage_digest": "sha-256:2b5196d9e99530c68999e1fcc3fd776019ac46d10e3758f62398addef08ab447",
+  "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "signature_hex": "5a239004a0a226766d0c246a1c386b8295928d677170ec458456a3fe43918e0286467d2970c7c5511399fe373bf2cd0fde00749c81b27732ecae277cc05ed001",
+  "source": "RFC 8032 test vector 1 seed/public key; signature deterministically derived for the frozen receipt preimage"
+}

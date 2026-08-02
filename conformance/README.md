@@ -17,12 +17,17 @@ the independent second runtime required by issue #4.
 - `validate.py`: standard-library schema subset, reference resolver, semantic
   checks, JCS canonicalizer, fixture runner, and manifest verifier;
 - `generate.py`: deterministic corpus regeneration tool.
+- `standards-schema.py`: independent pinned `jsonschema` Draft 2020-12 gate;
+- `signatures`: fixed RFC 8032-derived receipt signature and OpenSSL verifier.
 
 ## Repeatable validation
 
 ```bash
 python3 conformance/generate.py
 python3 conformance/validate.py --check-manifest
+python3 conformance/standards-schema.py
+python3 conformance/signatures/verify.py
+python3 conformance/cross-runtime/run.py
 git diff --exit-code
 ```
 
@@ -32,8 +37,9 @@ checked-in corpus is reproducible.
 
 The validator uses no third-party package. Its schema engine implements the
 Draft 2020-12 keywords used by this repository; it is not presented as a general
-JSON Schema implementation. Issue #4 still requires validation by a conforming
-independent JSON Schema implementation.
+JSON Schema implementation. Independent validation is now supplied by the
+installed standards-conforming `jsonschema` 4.10.3 runtime, pinned in
+`standards-requirements.txt`.
 
 The independent Python and JavaScript replay engines are joined by the
 [`cross-runtime`](cross-runtime/README.md) gate. Common transcripts and committed
