@@ -148,9 +148,16 @@ A claim payload contains a stable `claim_id`, decimal-string generation,
 bounded `scope`, bounded `boundary`, optional immutable `governance_ref`, and an
 `expected_active_claims`, sorted ascending by lowercase UUID lexical Unicode
 code-point order. That set is an advisory observation,
-never a precondition. Every schema-valid, authenticated, channel-authorized
-claim assertion MUST append. A mismatch emits conflict diagnostics but MUST NOT
+never a precondition. Subject only to the frozen neutral resource limit below,
+every schema-valid, authenticated, channel-authorized claim assertion MUST
+append. A mismatch emits conflict diagnostics but MUST NOT
 reject, serialize, upgrade, or select a claim.
+
+One exact work URI admits at most 32 simultaneously active claim assertions as
+a neutral resource bound. A 33rd otherwise valid assertion is rejected before
+append with public `RESOURCE_LIMIT`; restricted audit records internal reason
+`ACTIVE_CLAIM_LIMIT`. This limit never selects, ranks, releases, or upgrades an
+owner.
 
 Concurrent active claims over the same exact work identity MUST project
 `conflicting` with every contender. Arrival order, event time, UUID order,
@@ -211,6 +218,13 @@ outcome is exactly `verified`, `mismatch`, `unavailable`, `unauthorized`, or
 authenticated verifier is the receipt principal/participant instance. The
 signal never rewrites the descriptor or grants authority.
 
+The relay resolves `referenced_event_id`, selects the one descriptor whose
+frozen-domain recomputation equals `descriptor_digest`, and requires payload
+`uri == descriptor.uri`, `algorithm == descriptor.digest.algorithm`, and
+`expected_digest == "sha-256:" + descriptor.digest.value`. Missing, ambiguous,
+or unequal bindings are rejected before append as `INVALID_REFERENCE` or
+`INVALID_PAYLOAD`; they never become verification observations.
+
 Each formula below outputs the string `sha-256:<lowercase hex of the 32-byte
 SHA-256 result>`. Inputs are exactly:
 exact domain-separated inputs:
@@ -246,16 +260,34 @@ accepted handoff through `predecessor_handoff_event`.
 - Pagination cursors are tenant/channel-scoped and opaque or integrity-protected.
 
 The closed work projection state is exactly `unclaimed`, `claimed`,
-`conflicting`, `handoff_offered`, or `released`. Contender claim IDs are sorted
-ascending by lowercase UUID lexical Unicode code-point order. Diagnostics use
-the closed diagnostic schema and are stably ordered by channel `sequence`, then
-`code`, then `event_id` (absent sorts before present), then `claim_id` (absent
-sorts before present). Implementations MUST emit byte-equivalent projection and
-diagnostic ordering for the same complete transcript.
+`conflicting`, `handoff_offered`, or `released`, with this precedence for one
+exact work URI:
+
+1. more than one active claim yields `conflicting`; handoff never overrides it;
+2. exactly one active claim with one current valid handoff offer yields `handoff_offered`;
+3. exactly one active claim otherwise yields `claimed`;
+4. zero active claims with any historical claim yields `released`;
+5. no historical claim yields `unclaimed`.
+
+Contender claim IDs are sorted ascending by lowercase UUID lexical Unicode
+code-point order. A conflict produces exactly one aggregate `CLAIM_CONFLICT`
+diagnostic containing every sorted contender ID; `primary_id` is the first
+contender. Diagnostics contain no free detail and are stably ordered by channel
+sequence ascending, code ascending, then `primary_id` ascending, all by Unicode
+code-point order. For non-conflict diagnostics `primary_id` is the required
+event ID, claim ID, or transcript identifier defined by its schema case.
+Implementations MUST emit byte-equivalent projections and diagnostic order for
+the same complete transcript.
 
 ## Idempotency and collisions
 
-`(tenant, immutable channel mapping, event.id)` is unique. Resubmission of identical JCS canonical bytes returns the original signed receipt without a second append. The same ID with different canonical bytes is rejected and security-audited as `ID_COLLISION`. Similar payloads with distinct IDs remain distinct events.
+`(tenant, immutable channel mapping, event.id)` is unique. Resubmission of
+identical JCS canonical bytes always returns the byte-identical original signed
+receipt, whose `append_outcome` remains `appended`, without a second append or a
+new protocol receipt. Duplicate observation may be recorded only in restricted
+security audit. The same ID with different canonical bytes is rejected and
+security-audited as `ID_COLLISION`. Similar payloads with distinct IDs remain
+distinct events.
 
 Event append, principal binding, channel sequence assignment, and idempotency record MUST commit atomically before success is acknowledged.
 
@@ -292,7 +324,7 @@ Removing fields, changing requiredness, canonicalization, projection semantics, 
 
 Errors use `application/problem+json` and a stable code. The initial codes include:
 
-`INVALID_ENVELOPE`, `UNSUPPORTED_VERSION`, `INVALID_EVENT_TYPE`, `INVALID_PAYLOAD`, `INVALID_REFERENCE`, `CROSS_CHANNEL_REFERENCE`, `UNRESOLVED_CAUSATION`, `CAUSAL_CYCLE`, `ID_COLLISION`, `INVALID_CLAIM_TRANSITION`, `INVALID_HANDOFF_PARTICIPANT`, `HANDOFF_PRECONDITION_FAILED`, `ALREADY_ACCEPTED_HANDOFF`, `EVIDENCE_INTEGRITY_REQUIRED`, `ACCESS_DENIED`, and `TEMPORARILY_UNAVAILABLE`. `CLAIM_CONFLICT` is a projection diagnostic, never a claim-append rejection Problem.
+`INVALID_ENVELOPE`, `UNSUPPORTED_VERSION`, `INVALID_EVENT_TYPE`, `INVALID_PAYLOAD`, `INVALID_REFERENCE`, `CROSS_CHANNEL_REFERENCE`, `UNRESOLVED_CAUSATION`, `CAUSAL_CYCLE`, `ID_COLLISION`, `INVALID_CLAIM_TRANSITION`, `INVALID_HANDOFF_PARTICIPANT`, `HANDOFF_PRECONDITION_FAILED`, `ALREADY_ACCEPTED_HANDOFF`, `EVIDENCE_INTEGRITY_REQUIRED`, `RESOURCE_LIMIT`, `ACCESS_DENIED`, and `TEMPORARILY_UNAVAILABLE`. `CLAIM_CONFLICT` is a projection diagnostic, never a claim-append rejection Problem.
 
 Rejected events are not protocol events. Security-relevant rejection metadata belongs to a separate restricted audit log.
 

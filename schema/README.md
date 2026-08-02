@@ -17,5 +17,8 @@ claim contenders/diagnostics, contiguous receipt sequence from 1, equality of
 receipt and channel-metadata ACL versions/digests, receipt participant binding,
 and conditional evidence-verification fields. Only JCS canonical accepted bytes
 are normative; raw ingress is discarded or nonnormative telemetry.
+Evidence-verification equality and descriptor-domain recomputation are semantic
+checks. Projection precedence and aggregate diagnostic ordering are normative;
+the 32-active-claim bound is a neutral pre-append resource check.
 
 Issue #4 owns positive/negative fixtures and independent qualification evidence.

@@ -4,14 +4,21 @@
   "title": "Deterministic projection diagnostic 0.1",
   "type": "object",
   "additionalProperties": false,
-  "maxProperties": 6,
-  "required": ["sequence", "code", "severity"],
+  "maxProperties": 7,
+  "required": ["sequence", "code", "severity", "primary_id"],
   "properties": {
     "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "code": { "enum": ["CLAIM_CONFLICT", "EXPIRED_PRESENCE", "HANDOFF_ACCEPTED_UNCLAIMED", "INCOMPLETE_TRANSCRIPT", "NON_ACTIVE_TRANSCRIPT"] },
     "severity": { "enum": ["info", "warning", "error"] },
+    "primary_id": { "type": "string", "minLength": 1, "maxLength": 256 },
     "event_id": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" },
     "claim_id": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" },
-    "detail": { "type": "string", "maxLength": 4096 }
-  }
+    "contender_ids": { "type": "array", "minItems": 2, "maxItems": 32, "uniqueItems": true, "items": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" } }
+  },
+  "allOf": [
+    { "if": { "properties": { "code": { "const": "CLAIM_CONFLICT" } }, "required": ["code"] }, "then": { "properties": { "severity": { "const": "warning" } }, "required": ["contender_ids"], "not": { "anyOf": [{ "required": ["event_id"] }, { "required": ["claim_id"] }] } } },
+    { "if": { "properties": { "code": { "const": "EXPIRED_PRESENCE" } }, "required": ["code"] }, "then": { "properties": { "severity": { "const": "info" } }, "required": ["event_id"], "not": { "anyOf": [{ "required": ["claim_id"] }, { "required": ["contender_ids"] }] } } },
+    { "if": { "properties": { "code": { "const": "HANDOFF_ACCEPTED_UNCLAIMED" } }, "required": ["code"] }, "then": { "properties": { "severity": { "const": "warning" } }, "required": ["event_id", "claim_id"], "not": { "required": ["contender_ids"] } } },
+    { "if": { "properties": { "code": { "enum": ["INCOMPLETE_TRANSCRIPT", "NON_ACTIVE_TRANSCRIPT"] } }, "required": ["code"] }, "then": { "properties": { "severity": { "const": "error" } }, "not": { "anyOf": [{ "required": ["event_id"] }, { "required": ["claim_id"] }, { "required": ["contender_ids"] }] } } }
+  ]
 }

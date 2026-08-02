@@ -21,5 +21,14 @@
   "allOf": [{
     "if": { "properties": { "final": { "const": true } }, "required": ["final"] },
     "then": { "properties": { "completeness": { "const": "complete" }, "lifecycle": { "const": "active" } } }
+  }, {
+    "if": { "properties": { "state": { "const": "conflicting" } }, "required": ["state"] },
+    "then": { "properties": { "contenders": { "minItems": 2 } } }
+  }, {
+    "if": { "properties": { "state": { "enum": ["claimed", "handoff_offered"] } }, "required": ["state"] },
+    "then": { "properties": { "contenders": { "minItems": 1, "maxItems": 1 } } }
+  }, {
+    "if": { "properties": { "state": { "enum": ["unclaimed", "released"] } }, "required": ["state"] },
+    "then": { "properties": { "contenders": { "maxItems": 0 } } }
   }]
 }

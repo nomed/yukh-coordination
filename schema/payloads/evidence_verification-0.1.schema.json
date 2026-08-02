@@ -10,7 +10,7 @@
     "descriptor_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
     "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
     "algorithm": { "const": "sha-256" },
-    "expected_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
+    "expected_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$", "description": "Must equal sha-256: followed by the referenced descriptor digest.value." },
     "observed_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
     "outcome": { "enum": ["verified", "mismatch", "unavailable", "unauthorized", "inconclusive"] },
     "method": { "type": "string", "minLength": 1, "maxLength": 4096 },

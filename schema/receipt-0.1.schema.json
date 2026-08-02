@@ -27,7 +27,7 @@
     "acl_policy_version": { "type": "string", "minLength": 1, "maxLength": 256 },
     "acl_policy_digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" },
     "acl_decision_receipt_id": { "type": "string", "minLength": 1, "maxLength": 256 },
-    "append_outcome": { "enum": ["appended", "duplicate"] },
+    "append_outcome": { "const": "appended" },
     "key_id": { "type": "string", "minLength": 1, "maxLength": 256 },
     "signature_algorithm": { "const": "ed25519" },
     "signature": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
