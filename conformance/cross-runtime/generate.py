@@ -59,12 +59,18 @@ def main():
  unverified=json.loads(json.dumps(record(a,1))); unverified["receipt_verified"]=False; cases["unverified-receipt"]=transcript([unverified])
  cases["sequence-gap"]={**transcript([record(a,1),record(offer,3)]),"high_water_sequence":3,"declared_completeness":"incomplete"}
  cases["unverified-high-water"]={**transcript([record(a,1)]),"high_water_receipt_verified":False}
+ cases["lifecycle-deleted"]=transcript([record(a,1)],completeness="incomplete",lifecycle="deleted")
+ cases["missing-origin"]={**transcript([record(a,1)],completeness="incomplete"),"origin_sequence":2}
+ after_high_water=event("release_b","progress",{"claim_id":IDS["claim_a"],"generation":"0","parent_claim_event_id":a["id"],"status":"in_progress","summary":"after high water","completed":[],"remaining":[],"blocked_by":[]},cause=a["id"],corr=a["id"])
+ cases["record-after-high-water"]={**transcript([record(a,1),record(after_high_water,2)],completeness="incomplete"),"high_water_sequence":1}
+ ambiguous_review=json.loads(json.dumps(review)); ambiguous_review["evidence"].append(json.loads(json.dumps(descriptor)))
+ ambiguous_verify=json.loads(json.dumps(verified_event)); cases["evidence-ambiguous-descriptor"]=transcript([record(ambiguous_review,1),record(ambiguous_verify,2)])
  outcomes={name:{"python":{"kind":"error","code":code},"javascript":{"kind":"error","code":code}} for name,code in {
-  "evidence-invalid-descriptor-digest":"evidence-binding-failed", "evidence-invalid-uri":"evidence-binding-failed",
-  "evidence-invalid-algorithm":"evidence-binding-failed", "evidence-invalid-expected-digest":"evidence-binding-failed",
-  "event-id-collision":"event-id-collision", "changed-duplicate-receipt":"receipt-mismatch",
-  "sequence-collision":"sequence-collision", "cas-wrong-recipient":"handoff-precondition-failed",
-  "cas-changed-boundary":"handoff-precondition-failed", "cas-second-acceptance":"handoff-precondition-failed",
+  "evidence-invalid-descriptor-digest":"INVALID_REFERENCE", "evidence-ambiguous-descriptor":"INVALID_REFERENCE",
+  "evidence-invalid-uri":"INVALID_PAYLOAD", "evidence-invalid-algorithm":"INVALID_PAYLOAD", "evidence-invalid-expected-digest":"INVALID_PAYLOAD",
+  "event-id-collision":"ID_COLLISION", "changed-duplicate-receipt":"INVALID_RECEIPT",
+  "sequence-collision":"INVALID_RECEIPT", "cas-wrong-recipient":"HANDOFF_PRECONDITION_FAILED",
+  "cas-changed-boundary":"HANDOFF_PRECONDITION_FAILED", "cas-second-acceptance":"HANDOFF_PRECONDITION_FAILED",
  }.items()}
  index=[]
  for name,value in cases.items():

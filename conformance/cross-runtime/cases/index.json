@@ -56,11 +56,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_REFERENCE",
         "kind": "error"
       },
       "python": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_REFERENCE",
         "kind": "error"
       }
     },
@@ -72,11 +72,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_PAYLOAD",
         "kind": "error"
       },
       "python": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_PAYLOAD",
         "kind": "error"
       }
     },
@@ -88,11 +88,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_PAYLOAD",
         "kind": "error"
       },
       "python": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_PAYLOAD",
         "kind": "error"
       }
     },
@@ -104,11 +104,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_PAYLOAD",
         "kind": "error"
       },
       "python": {
-        "code": "evidence-binding-failed",
+        "code": "INVALID_PAYLOAD",
         "kind": "error"
       }
     },
@@ -126,11 +126,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "event-id-collision",
+        "code": "ID_COLLISION",
         "kind": "error"
       },
       "python": {
-        "code": "event-id-collision",
+        "code": "ID_COLLISION",
         "kind": "error"
       }
     },
@@ -142,11 +142,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "receipt-mismatch",
+        "code": "INVALID_RECEIPT",
         "kind": "error"
       },
       "python": {
-        "code": "receipt-mismatch",
+        "code": "INVALID_RECEIPT",
         "kind": "error"
       }
     },
@@ -158,11 +158,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "sequence-collision",
+        "code": "INVALID_RECEIPT",
         "kind": "error"
       },
       "python": {
-        "code": "sequence-collision",
+        "code": "INVALID_RECEIPT",
         "kind": "error"
       }
     },
@@ -174,11 +174,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "handoff-precondition-failed",
+        "code": "HANDOFF_PRECONDITION_FAILED",
         "kind": "error"
       },
       "python": {
-        "code": "handoff-precondition-failed",
+        "code": "HANDOFF_PRECONDITION_FAILED",
         "kind": "error"
       }
     },
@@ -190,11 +190,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "handoff-precondition-failed",
+        "code": "HANDOFF_PRECONDITION_FAILED",
         "kind": "error"
       },
       "python": {
-        "code": "handoff-precondition-failed",
+        "code": "HANDOFF_PRECONDITION_FAILED",
         "kind": "error"
       }
     },
@@ -206,11 +206,11 @@
   {
     "expected": {
       "javascript": {
-        "code": "handoff-precondition-failed",
+        "code": "HANDOFF_PRECONDITION_FAILED",
         "kind": "error"
       },
       "python": {
-        "code": "handoff-precondition-failed",
+        "code": "HANDOFF_PRECONDITION_FAILED",
         "kind": "error"
       }
     },
@@ -235,6 +235,40 @@
     "mode": "projection-equal",
     "name": "unverified-high-water",
     "path": "conformance/cross-runtime/cases/unverified-high-water.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "lifecycle-deleted",
+    "path": "conformance/cross-runtime/cases/lifecycle-deleted.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "missing-origin",
+    "path": "conformance/cross-runtime/cases/missing-origin.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "mode": "projection-equal",
+    "name": "record-after-high-water",
+    "path": "conformance/cross-runtime/cases/record-after-high-water.json",
+    "work_uri": "https://example.test/issues/42"
+  },
+  {
+    "expected": {
+      "javascript": {
+        "code": "INVALID_REFERENCE",
+        "kind": "error"
+      },
+      "python": {
+        "code": "INVALID_REFERENCE",
+        "kind": "error"
+      }
+    },
+    "mode": "runtime-outcomes",
+    "name": "evidence-ambiguous-descriptor",
+    "path": "conformance/cross-runtime/cases/evidence-ambiguous-descriptor.json",
     "work_uri": "https://example.test/issues/42"
   }
 ]
