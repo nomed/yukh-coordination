@@ -264,13 +264,20 @@ The closed work projection state is exactly `unclaimed`, `claimed`,
 exact work URI:
 
 1. more than one active claim yields `conflicting`; handoff never overrides it;
-2. exactly one active claim with one current valid handoff offer yields `handoff_offered`;
+2. exactly one active claim with one or more current valid handoff offers yields `handoff_offered`;
 3. exactly one active claim otherwise yields `claimed`;
 4. zero active claims with any historical claim yields `released`;
 5. no historical claim yields `unclaimed`.
 
-Contender claim IDs are sorted ascending by lowercase UUID lexical Unicode
-code-point order. A conflict produces exactly one aggregate `CLAIM_CONFLICT`
+Contender claim IDs and `handoff_offer_ids` are independently sorted ascending
+by lowercase UUID lexical Unicode code-point order. Because conflict precedence
+ignores handoffs, `handoff_offer_ids` is empty in `conflicting`; it represents
+offers only for the single active claim. At most 32 current offers
+are admitted per claim; a 33rd is rejected before append with public
+`RESOURCE_LIMIT` and restricted internal reason `ACTIVE_HANDOFF_OFFER_LIMIT`.
+This is a neutral resource bound, not offer or ownership selection.
+
+A conflict produces exactly one aggregate `CLAIM_CONFLICT`
 diagnostic containing every sorted contender ID; `primary_id` is the first
 contender. Diagnostics contain no free detail and are stably ordered by channel
 sequence ascending, code ascending, then `primary_id` ascending, all by Unicode
@@ -278,6 +285,15 @@ code-point order. For non-conflict diagnostics `primary_id` is the required
 event ID, claim ID, or transcript identifier defined by its schema case.
 Implementations MUST emit byte-equivalent projections and diagnostic order for
 the same complete transcript.
+
+`projection.diagnostics` contains only current derived work-projection
+diagnostics at `diagnostics_high_water_sequence`; it is not historical rejection,
+security, audit, or presence history. There is at most one aggregate entry per
+closed diagnostic code. Superseded or resolved entries disappear
+deterministically. Rejected events and presence events never create work
+projection diagnostics; restricted audit owns rejection history. The invariant
+`maxItems: 32` is a compatibility bound for the closed code set, never a
+truncation policy.
 
 ## Idempotency and collisions
 

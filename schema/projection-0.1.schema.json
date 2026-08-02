@@ -4,15 +4,17 @@
   "title": "Deterministic work projection 0.1",
   "type": "object",
   "additionalProperties": false,
-  "maxProperties": 10,
-  "required": ["specversion", "channel_id", "work_uri", "state", "contenders", "diagnostics", "as_of_sequence", "completeness", "lifecycle", "final"],
+  "maxProperties": 12,
+  "required": ["specversion", "channel_id", "work_uri", "state", "contenders", "handoff_offer_ids", "diagnostics", "diagnostics_high_water_sequence", "as_of_sequence", "completeness", "lifecycle", "final"],
   "properties": {
     "specversion": { "const": "0.1" },
     "channel_id": { "type": "string", "minLength": 1, "maxLength": 256 },
     "work_uri": { "type": "string", "format": "uri", "maxLength": 2048 },
     "state": { "enum": ["unclaimed", "claimed", "conflicting", "handoff_offered", "released"] },
     "contenders": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" } },
+    "handoff_offer_ids": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "$ref": "envelope-0.1.schema.json#/$defs/uuidv7" } },
     "diagnostics": { "type": "array", "maxItems": 32, "items": { "$ref": "diagnostic-0.1.schema.json" } },
+    "diagnostics_high_water_sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "as_of_sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "completeness": { "enum": ["complete", "incomplete"] },
     "lifecycle": { "enum": ["active", "redacted", "deleted"] },
@@ -23,12 +25,18 @@
     "then": { "properties": { "completeness": { "const": "complete" }, "lifecycle": { "const": "active" } } }
   }, {
     "if": { "properties": { "state": { "const": "conflicting" } }, "required": ["state"] },
-    "then": { "properties": { "contenders": { "minItems": 2 } } }
+    "then": { "properties": { "contenders": { "minItems": 2 }, "handoff_offer_ids": { "maxItems": 0 } } }
   }, {
     "if": { "properties": { "state": { "enum": ["claimed", "handoff_offered"] } }, "required": ["state"] },
     "then": { "properties": { "contenders": { "minItems": 1, "maxItems": 1 } } }
   }, {
+    "if": { "properties": { "state": { "const": "claimed" } }, "required": ["state"] },
+    "then": { "properties": { "handoff_offer_ids": { "maxItems": 0 } } }
+  }, {
+    "if": { "properties": { "state": { "const": "handoff_offered" } }, "required": ["state"] },
+    "then": { "properties": { "handoff_offer_ids": { "minItems": 1 } } }
+  }, {
     "if": { "properties": { "state": { "enum": ["unclaimed", "released"] } }, "required": ["state"] },
-    "then": { "properties": { "contenders": { "maxItems": 0 } } }
+    "then": { "properties": { "contenders": { "maxItems": 0 }, "handoff_offer_ids": { "maxItems": 0 } } }
   }]
 }

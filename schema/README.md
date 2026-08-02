@@ -20,5 +20,9 @@ are normative; raw ingress is discarded or nonnormative telemetry.
 Evidence-verification equality and descriptor-domain recomputation are semantic
 checks. Projection precedence and aggregate diagnostic ordering are normative;
 the 32-active-claim bound is a neutral pre-append resource check.
+Projection `handoff_offer_ids` and diagnostics are sorted derived current state;
+diagnostic codes are unique aggregates and resolved entries disappear. Rejected
+events and presence history belong outside the work projection. The 32-offer
+per-claim bound is another neutral pre-append resource check.
 
 Issue #4 owns positive/negative fixtures and independent qualification evidence.
