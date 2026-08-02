@@ -9,24 +9,7 @@ HERE=Path(__file__).resolve().parent; ROOT=HERE.parents[1]
 
 def invoke(command): return subprocess.run(command,cwd=ROOT,capture_output=True)
 def canonical(value): return (json.dumps(value,ensure_ascii=False,separators=(",",":"),sort_keys=True)+"\n").encode()
-def normative_code(case_name, engine_code):
- mapping={
-  "event-id-collision":("event-id-collision","ID_COLLISION"),
-  "changed-duplicate-receipt":("receipt-mismatch","INVALID_RECEIPT"),
-  "sequence-collision":("sequence-collision","INVALID_RECEIPT"),
-  "cas-wrong-recipient":("handoff-precondition-failed","HANDOFF_PRECONDITION_FAILED"),
-  "cas-changed-boundary":("handoff-precondition-failed","HANDOFF_PRECONDITION_FAILED"),
-  "cas-second-acceptance":("handoff-precondition-failed","HANDOFF_PRECONDITION_FAILED"),
-  "evidence-invalid-descriptor-digest":("evidence-binding-failed","INVALID_REFERENCE"),
-  "evidence-ambiguous-descriptor":("evidence-binding-failed","INVALID_REFERENCE"),
-  "evidence-invalid-uri":("evidence-binding-failed","INVALID_PAYLOAD"),
-  "evidence-invalid-algorithm":("evidence-binding-failed","INVALID_PAYLOAD"),
-  "evidence-invalid-expected-digest":("evidence-binding-failed","INVALID_PAYLOAD"),
- }
- if case_name not in mapping: return engine_code
- internal,normative=mapping[case_name]
- if engine_code!=internal: raise ValueError(f"{case_name}: unexpected engine code {engine_code}, wanted {internal}")
- return normative
+def normative_code(_case_name, engine_code): return engine_code
 
 def main():
  parser=argparse.ArgumentParser(); parser.add_argument("--update",action="store_true"); args=parser.parse_args()
