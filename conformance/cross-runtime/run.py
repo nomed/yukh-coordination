@@ -9,6 +9,24 @@ HERE=Path(__file__).resolve().parent; ROOT=HERE.parents[1]
 
 def invoke(command): return subprocess.run(command,cwd=ROOT,capture_output=True)
 def canonical(value): return (json.dumps(value,ensure_ascii=False,separators=(",",":"),sort_keys=True)+"\n").encode()
+def normative_code(case_name, engine_code):
+ mapping={
+  "event-id-collision":("event-id-collision","ID_COLLISION"),
+  "changed-duplicate-receipt":("receipt-mismatch","INVALID_RECEIPT"),
+  "sequence-collision":("sequence-collision","INVALID_RECEIPT"),
+  "cas-wrong-recipient":("handoff-precondition-failed","HANDOFF_PRECONDITION_FAILED"),
+  "cas-changed-boundary":("handoff-precondition-failed","HANDOFF_PRECONDITION_FAILED"),
+  "cas-second-acceptance":("handoff-precondition-failed","HANDOFF_PRECONDITION_FAILED"),
+  "evidence-invalid-descriptor-digest":("evidence-binding-failed","INVALID_REFERENCE"),
+  "evidence-ambiguous-descriptor":("evidence-binding-failed","INVALID_REFERENCE"),
+  "evidence-invalid-uri":("evidence-binding-failed","INVALID_PAYLOAD"),
+  "evidence-invalid-algorithm":("evidence-binding-failed","INVALID_PAYLOAD"),
+  "evidence-invalid-expected-digest":("evidence-binding-failed","INVALID_PAYLOAD"),
+ }
+ if case_name not in mapping: return engine_code
+ internal,normative=mapping[case_name]
+ if engine_code!=internal: raise ValueError(f"{case_name}: unexpected engine code {engine_code}, wanted {internal}")
+ return normative
 
 def main():
  parser=argparse.ArgumentParser(); parser.add_argument("--update",action="store_true"); args=parser.parse_args()
@@ -32,11 +50,11 @@ def main():
    summary={"kind":"projection-equal","final":json.loads(payload)["final"]}
   else:
    if py.returncode:
-    try: py_summary={"kind":"error","code":json.loads(py.stderr)["code"]}
+    try: py_summary={"kind":"error","code":normative_code(case["name"],json.loads(py.stderr)["code"])}
     except Exception: failures.append(f"{case['name']}: unreadable Python error"); continue
    else: py_summary={"kind":"projection","final":json.loads(py.stdout)["final"],"reasons":[]}
    if js.returncode:
-    try: js_summary={"kind":"error","code":json.loads(js.stderr)["code"]}
+    try: js_summary={"kind":"error","code":normative_code(case["name"],json.loads(js.stderr)["code"])}
     except Exception: failures.append(f"{case['name']}: unreadable JavaScript error"); continue
    else:
     wrapper=json.loads(js.stdout); js_summary={"kind":"projection","final":wrapper["projection"]["final"],"reasons":wrapper["conformance"]["reasons"]}

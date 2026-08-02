@@ -1,1 +1,1 @@
-{"javascript":{"code":"receipt-mismatch","kind":"error"},"python":{"code":"receipt-mismatch","kind":"error"}}
+{"javascript":{"code":"INVALID_RECEIPT","kind":"error"},"python":{"code":"INVALID_RECEIPT","kind":"error"}}

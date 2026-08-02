@@ -63,29 +63,29 @@
     "output": "conformance/cross-runtime/expected/evidence-inconclusive.projection.canonical.json"
   },
   {
-    "bytes": 124,
-    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
+    "bytes": 112,
+    "digest": "sha-256:b50e3050d8dcad67a478a2a2767572fc5c63b64c3679e439caab3ff1e7d9e6c0",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-descriptor-digest",
     "output": "conformance/cross-runtime/expected/evidence-invalid-descriptor-digest.outcome.canonical.json"
   },
   {
-    "bytes": 124,
-    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
+    "bytes": 108,
+    "digest": "sha-256:5871138db4e08f17c2812ec7b44d713d8266aa1cb7db3ee443deeca25ab6c003",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-uri",
     "output": "conformance/cross-runtime/expected/evidence-invalid-uri.outcome.canonical.json"
   },
   {
-    "bytes": 124,
-    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
+    "bytes": 108,
+    "digest": "sha-256:5871138db4e08f17c2812ec7b44d713d8266aa1cb7db3ee443deeca25ab6c003",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-algorithm",
     "output": "conformance/cross-runtime/expected/evidence-invalid-algorithm.outcome.canonical.json"
   },
   {
-    "bytes": 124,
-    "digest": "sha-256:8d234a63d542ef70e0d21dc8977d13a4fc9129bd3988f4b3aaed295c8b231a8b",
+    "bytes": 108,
+    "digest": "sha-256:5871138db4e08f17c2812ec7b44d713d8266aa1cb7db3ee443deeca25ab6c003",
     "mode": "runtime-outcomes",
     "name": "evidence-invalid-expected-digest",
     "output": "conformance/cross-runtime/expected/evidence-invalid-expected-digest.outcome.canonical.json"
@@ -98,43 +98,43 @@
     "output": "conformance/cross-runtime/expected/exact-duplicate.projection.canonical.json"
   },
   {
-    "bytes": 114,
-    "digest": "sha-256:c054612e37718e945eef3571194e09c620327ab56bbb57010a8cfaed3c5ceba7",
+    "bytes": 102,
+    "digest": "sha-256:86c7d486495a815595652b0ab6237465285d3a1567298c8f97a491344641e01d",
     "mode": "runtime-outcomes",
     "name": "event-id-collision",
     "output": "conformance/cross-runtime/expected/event-id-collision.outcome.canonical.json"
   },
   {
-    "bytes": 110,
-    "digest": "sha-256:daba93934c8bd29967a9c588d1f0ddd02f06e98c18ad8c1a6b2b88a3d6a6a7cb",
+    "bytes": 108,
+    "digest": "sha-256:813544c6b81a5ade8f49a25fb499d8c4300a268ffbe7a7d1d6b548db91e58e27",
     "mode": "runtime-outcomes",
     "name": "changed-duplicate-receipt",
     "output": "conformance/cross-runtime/expected/changed-duplicate-receipt.outcome.canonical.json"
   },
   {
-    "bytes": 114,
-    "digest": "sha-256:5e249a66cbe65e7eb65cd203db19f56bdf5494cedb38747a32ffdb691c633bca",
+    "bytes": 108,
+    "digest": "sha-256:813544c6b81a5ade8f49a25fb499d8c4300a268ffbe7a7d1d6b548db91e58e27",
     "mode": "runtime-outcomes",
     "name": "sequence-collision",
     "output": "conformance/cross-runtime/expected/sequence-collision.outcome.canonical.json"
   },
   {
     "bytes": 132,
-    "digest": "sha-256:667826303097544d48b01cf17a72aec86d528f72652a394e19f10803c981bdb1",
+    "digest": "sha-256:e8088ce36b568058c94a2db74643c765dde126e073a723b5c524cbbc7ccde65e",
     "mode": "runtime-outcomes",
     "name": "cas-wrong-recipient",
     "output": "conformance/cross-runtime/expected/cas-wrong-recipient.outcome.canonical.json"
   },
   {
     "bytes": 132,
-    "digest": "sha-256:667826303097544d48b01cf17a72aec86d528f72652a394e19f10803c981bdb1",
+    "digest": "sha-256:e8088ce36b568058c94a2db74643c765dde126e073a723b5c524cbbc7ccde65e",
     "mode": "runtime-outcomes",
     "name": "cas-changed-boundary",
     "output": "conformance/cross-runtime/expected/cas-changed-boundary.outcome.canonical.json"
   },
   {
     "bytes": 132,
-    "digest": "sha-256:667826303097544d48b01cf17a72aec86d528f72652a394e19f10803c981bdb1",
+    "digest": "sha-256:e8088ce36b568058c94a2db74643c765dde126e073a723b5c524cbbc7ccde65e",
     "mode": "runtime-outcomes",
     "name": "cas-second-acceptance",
     "output": "conformance/cross-runtime/expected/cas-second-acceptance.outcome.canonical.json"
@@ -159,5 +159,33 @@
     "mode": "projection-equal",
     "name": "unverified-high-water",
     "output": "conformance/cross-runtime/expected/unverified-high-water.projection.canonical.json"
+  },
+  {
+    "bytes": 567,
+    "digest": "sha-256:2f7b5b17fd4dde234080b84b1d29e974c14a070a8e0b2d1894450fa6881bc6e9",
+    "mode": "projection-equal",
+    "name": "lifecycle-deleted",
+    "output": "conformance/cross-runtime/expected/lifecycle-deleted.projection.canonical.json"
+  },
+  {
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
+    "name": "missing-origin",
+    "output": "conformance/cross-runtime/expected/missing-origin.projection.canonical.json"
+  },
+  {
+    "bytes": 449,
+    "digest": "sha-256:7f0fb2a12ae537fbd35cbb19d0b28e03ddeca437776bea6ce8c5815cfa6c0985",
+    "mode": "projection-equal",
+    "name": "record-after-high-water",
+    "output": "conformance/cross-runtime/expected/record-after-high-water.projection.canonical.json"
+  },
+  {
+    "bytes": 112,
+    "digest": "sha-256:b50e3050d8dcad67a478a2a2767572fc5c63b64c3679e439caab3ff1e7d9e6c0",
+    "mode": "runtime-outcomes",
+    "name": "evidence-ambiguous-descriptor",
+    "output": "conformance/cross-runtime/expected/evidence-ambiguous-descriptor.outcome.canonical.json"
   }
 ]
