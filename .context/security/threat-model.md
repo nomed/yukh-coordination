@@ -489,6 +489,38 @@ and hermetic qualification. No endpoint, credential, bootstrap execution,
 listener exposure, MCP request, provider execution, protected mutation or
 production authority crosses from this record.
 
+### RFC-0023 transcript lifecycle design review — 2026-08-03
+
+Issue #133 proposes the mandatory single-node lifecycle boundary required by
+RFC-0008 before a relay executable may admit events. Every transcript binds a
+finite signed policy before sequence 1. Lifecycle administration remains on a
+separate SQLite port unavailable to `relay.Store`, public HTTP/SSE, relay
+sessions and ordinary publish/replay/watch credentials.
+
+Destructive work is modeled as a monotonic recoverable saga rather than a
+false cross-database transaction. Authorization, optional required export,
+append-only marker/preimage persistence and external signature attachment all
+complete before payload removal. Event, identity and security-audit backup
+deletion remain distinct evidenced obligations. Exact retry reconciles one
+operation ID; ambiguity never creates a replacement or broadens the target.
+
+Redaction and deletion make the affected transcript non-active and incomplete,
+fence append/live delivery and preserve signed evidence that accepted history
+existed. Successor epochs are explicit and higher; identifiers are never
+reused. Clock rollback, overdue work, contradictory restore state or resurrected
+removed payload fences the channel until deterministic recovery completes.
+
+The review also closes an existing read-contract gap: the unreleased RFC-0004
+page currently omits lifecycle and refuses non-active lookup. RFC-0023 requires
+one explicit pre-release relay/client revision with mandatory lifecycle/policy
+fields and signed lifecycle receipt references. No dual-shape compatibility or
+route alias may hide non-active state.
+
+This design creates no destructive capability or deployment authority. Its
+acceptance would authorize only separately reviewed schemas/port, SQLite,
+worker/recovery and hermetic synthetic implementation increments. Real data,
+backups, relay deployment, Matrix, MCP and production remain excluded.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
