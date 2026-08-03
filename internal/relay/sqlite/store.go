@@ -284,10 +284,14 @@ func lookupChannel(ctx context.Context, query queryRower, key relay.ChannelKey) 
 }
 
 func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare relay.PrepareRecord) (relay.AppendResult, error) {
+	return s.AppendChecked(ctx, intent, func(relay.AdmissionView) error { return nil }, prepare)
+}
+
+func (s *Store) AppendChecked(ctx context.Context, intent relay.AppendIntent, admit relay.Admit, prepare relay.PrepareRecord) (relay.AppendResult, error) {
 	if err := ctx.Err(); err != nil {
 		return relay.AppendResult{}, err
 	}
-	if err := relay.ValidateAppendIntent(intent, prepare); err != nil {
+	if err := relay.ValidateCheckedAppend(intent, admit, prepare); err != nil {
 		return relay.AppendResult{}, err
 	}
 
@@ -320,6 +324,9 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 			return relay.AppendResult{}, err
 		}
 		return relay.AppendResult{Outcome: relay.AppendOutcomeDuplicate, Record: existing}, nil
+	}
+	if err := admit(sqliteAdmissionView{ctx: ctx, query: tx.conn, key: intent.Channel}); err != nil {
+		return relay.AppendResult{}, err
 	}
 
 	digest := relay.EventDigest(intent.CanonicalEvent)
@@ -368,6 +375,50 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 		return relay.AppendResult{}, err
 	}
 	return relay.AppendResult{Outcome: relay.AppendOutcomeAppended, Record: relay.CloneRecord(record)}, nil
+}
+
+type sqliteAdmissionView struct {
+	ctx   context.Context
+	query queryRower
+	key   relay.ChannelKey
+}
+
+func (v sqliteAdmissionView) Lookup(eventID string) (relay.AcceptedRecord, error) {
+	record, found, err := findRecord(v.ctx, v.query, v.key.TenantID, v.key.ChannelID, eventID)
+	if err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if !found || record.Channel != v.key {
+		return relay.AcceptedRecord{}, relay.ErrEventNotFound
+	}
+	return record, nil
+}
+
+func (v sqliteAdmissionView) Read(after uint64, limit int) ([]relay.AcceptedRecord, error) {
+	if limit < 1 || limit > 1000 || after > math.MaxInt64 {
+		return nil, relay.ErrInvalidArgument
+	}
+	rows, err := v.query.(interface {
+		QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	}).QueryContext(v.ctx, `SELECT transcript_epoch, server_sequence, event_id, canonical_event,
+		event_digest, authenticated_binding, authorization_binding, receipt_id,
+		signing_key_id, signature_algorithm, unsigned_receipt_preimage, signature
+		FROM accepted_records WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?
+		AND server_sequence > ? ORDER BY server_sequence LIMIT ?`,
+		v.key.TenantID, v.key.ChannelID, v.key.TranscriptEpoch, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]relay.AcceptedRecord, 0)
+	for rows.Next() {
+		record := relay.AcceptedRecord{Channel: relay.ChannelKey{TenantID: v.key.TenantID, ChannelID: v.key.ChannelID}}
+		if err := rows.Scan(&record.Channel.TranscriptEpoch, &record.Sequence, &record.EventID, &record.CanonicalEvent, &record.EventDigest, &record.AuthenticatedBinding, &record.AuthorizationBinding, &record.ReceiptID, &record.SigningKeyID, &record.SignatureAlgorithm, &record.UnsignedReceiptPreimage, &record.Signature); err != nil {
+			return nil, err
+		}
+		result = append(result, record)
+	}
+	return result, rows.Err()
 }
 
 func (s *Store) Lookup(ctx context.Context, key relay.ChannelKey, eventID string) (relay.AcceptedRecord, error) {

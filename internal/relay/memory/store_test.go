@@ -136,6 +136,40 @@ func TestConcurrentAppendsAreGapFree(t *testing.T) {
 	}
 }
 
+func TestCheckedAppendSerializesAdmissionWithSequenceAllocation(t *testing.T) {
+	store := newStore(t)
+	results := make(chan error, 2)
+	for index := range 2 {
+		go func() {
+			intent := relay.AppendIntent{Channel: testChannel.Key, EventID: fmt.Sprintf("candidate-%d", index), CanonicalEvent: []byte(fmt.Sprintf(`{"id":"candidate-%d"}`, index))}
+			_, err := store.AppendChecked(context.Background(), intent, func(view relay.AdmissionView) error {
+				records, err := view.Read(0, 1)
+				if err != nil {
+					return err
+				}
+				if len(records) != 0 {
+					return relay.ErrTransitionConflict
+				}
+				return nil
+			}, prepare(intent))
+			results <- err
+		}()
+	}
+	accepted, rejected := 0, 0
+	for range 2 {
+		if err := <-results; err == nil {
+			accepted++
+		} else if errors.Is(err, relay.ErrTransitionConflict) {
+			rejected++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if accepted != 1 || rejected != 1 {
+		t.Fatalf("accepted=%d rejected=%d", accepted, rejected)
+	}
+}
+
 func TestReadReturnsOrderedDefensiveCopies(t *testing.T) {
 	store := newStore(t)
 	for i := 1; i <= 3; i++ {

@@ -34,6 +34,8 @@ builds deterministic bounded pages and performs subscribe-before-read live
 delivery. Live notifications are bounded wake-ups only; every emitted record is
 read again from the durable store.
 
-The current validator covers closed schema and event-local semantics. Stateful
-RFC-0001 reference, claim-limit and handoff-CAS admission remains the next
-application increment and must precede a runnable relay.
+The stateful validator reconstructs the admitted transcript inside the same
+adapter transaction that allocates the next sequence. It resolves causation and
+typed references, enforces claim and offer limits, verifies evidence bindings,
+and applies handoff acceptance as a recipient-bound compare-and-set. No
+read-before-append race can admit two transitions against the same stale view.

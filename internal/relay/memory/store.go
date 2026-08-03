@@ -84,10 +84,14 @@ func (s *Store) LookupChannel(ctx context.Context, key relay.ChannelKey) (relay.
 }
 
 func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare relay.PrepareRecord) (relay.AppendResult, error) {
+	return s.AppendChecked(ctx, intent, func(relay.AdmissionView) error { return nil }, prepare)
+}
+
+func (s *Store) AppendChecked(ctx context.Context, intent relay.AppendIntent, admit relay.Admit, prepare relay.PrepareRecord) (relay.AppendResult, error) {
 	if err := ctx.Err(); err != nil {
 		return relay.AppendResult{}, err
 	}
-	if err := relay.ValidateAppendIntent(intent, prepare); err != nil {
+	if err := relay.ValidateCheckedAppend(intent, admit, prepare); err != nil {
 		return relay.AppendResult{}, err
 	}
 
@@ -105,6 +109,9 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 		}
 		return relay.AppendResult{Outcome: relay.AppendOutcomeDuplicate, Record: relay.CloneRecord(existing)}, nil
 	}
+	if err := admit(memoryAdmissionView{store: s, key: intent.Channel}); err != nil {
+		return relay.AppendResult{}, err
+	}
 
 	digest := relay.EventDigest(intent.CanonicalEvent)
 	sequence := uint64(len(t.records) + 1)
@@ -120,6 +127,36 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 	t.records = append(t.records, committed)
 	s.events[identity][intent.EventID] = committed
 	return relay.AppendResult{Outcome: relay.AppendOutcomeAppended, Record: relay.CloneRecord(committed)}, nil
+}
+
+type memoryAdmissionView struct {
+	store *Store
+	key   relay.ChannelKey
+}
+
+func (v memoryAdmissionView) Lookup(eventID string) (relay.AcceptedRecord, error) {
+	record, ok := v.store.events[identityOf(v.key)][eventID]
+	if !ok || record.Channel != v.key {
+		return relay.AcceptedRecord{}, relay.ErrEventNotFound
+	}
+	return relay.CloneRecord(record), nil
+}
+
+func (v memoryAdmissionView) Read(after uint64, limit int) ([]relay.AcceptedRecord, error) {
+	if limit < 1 || limit > 1000 {
+		return nil, relay.ErrInvalidArgument
+	}
+	t := v.store.transcripts[v.key]
+	start := len(t.records)
+	if after < uint64(len(t.records)) {
+		start = int(after)
+	}
+	end := min(start+limit, len(t.records))
+	result := make([]relay.AcceptedRecord, 0, end-start)
+	for _, record := range t.records[start:end] {
+		result = append(result, relay.CloneRecord(record))
+	}
+	return result, nil
 }
 
 func (s *Store) Lookup(ctx context.Context, key relay.ChannelKey, eventID string) (relay.AcceptedRecord, error) {

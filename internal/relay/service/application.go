@@ -30,6 +30,7 @@ type RelayApplication struct {
 	store         relay.Store
 	appendService *AppendService
 	validator     *protocol.Validator
+	transitions   *TransitionValidator
 	subscriptions SubscriptionSource
 	clock         func() time.Time
 	newReceiptID  func() (string, error)
@@ -42,7 +43,7 @@ func NewRelayApplication(store relay.Store, appendService *AppendService, valida
 		return nil, relay.ErrInvalidArgument
 	}
 	return &RelayApplication{
-		store: store, appendService: appendService, validator: validator, subscriptions: subscriptions,
+		store: store, appendService: appendService, validator: validator, transitions: NewTransitionValidator(), subscriptions: subscriptions,
 		clock: time.Now,
 		newReceiptID: func() (string, error) {
 			value, err := uuid.NewV7()
@@ -66,7 +67,9 @@ func (a *RelayApplication) Append(ctx context.Context, admitted httpapi.Admitted
 	}
 	acceptedAt := a.clock().UTC().Truncate(time.Millisecond).Format("2006-01-02T15:04:05.000Z")
 	intent := relay.AppendIntent{Channel: admitted.Channel, EventID: event.ID, CanonicalEvent: event.Canonical}
-	result, err := a.appendService.Append(ctx, intent, func(sequence uint64, eventDigest string, selection SigningSelection) (relay.AcceptedRecord, error) {
+	result, err := a.appendService.AppendChecked(ctx, intent, func(view relay.AdmissionView) error {
+		return a.transitions.Validate(view, event, admitted.Identity.ParticipantInstanceID)
+	}, func(sequence uint64, eventDigest string, selection SigningSelection) (relay.AcceptedRecord, error) {
 		if sequence == 0 || sequence > maxSafeInteger {
 			return relay.AcceptedRecord{}, relay.ErrInvalidArgument
 		}
