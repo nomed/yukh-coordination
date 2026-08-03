@@ -7,6 +7,8 @@ grep -q '^  - Reference:' mkdocs.yml
 grep -q '^  - Explanation:' mkdocs.yml
 grep -q 'not production-ready' documentation/index.md
 grep -q 'npm run replay' documentation/tutorials/first-replay.md
+test "$(grep -c 'primary: black' mkdocs.yml)" -eq 2
+grep -q 'logo: assets/repository-mark.svg' mkdocs.yml
 
 if grep -RiqE '(```|~~~)mermaid' documentation mkdocs.yml; then
   echo "Mermaid is not permitted in public documentation" >&2
