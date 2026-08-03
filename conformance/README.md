@@ -13,7 +13,8 @@ operated service or turn local audit evidence into external transparency.
   cross-envelope/semantic failures;
 - `canonical`: JCS inputs, exact bytes, SHA-256 digests, and applicable frozen
   domain digests for event, channel metadata, evidence descriptor/set, receipt,
-  receipt signature preimage, diagnostics, audit record and audit receipt;
+  receipt signature preimage, diagnostics, audit record, audit receipt and
+  independent Merkle roots/proofs;
 - `SHA256SUMS`: immutable byte manifest for all corpus and runner inputs;
 - `validate.py`: standard-library schema subset, reference resolver, semantic
   checks, JCS canonicalizer, fixture runner, and manifest verifier;

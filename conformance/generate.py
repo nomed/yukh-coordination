@@ -22,6 +22,20 @@ DIG="sha-256:"+"1"*64
 
 def write(path,value): path.parent.mkdir(parents=True,exist_ok=True); path.write_text(json.dumps(value,ensure_ascii=False,indent=2,sort_keys=True)+"\n",encoding="utf-8")
 def evidence(): return {"uri":"https://example.test/evidence/1","media_type":"application/json","digest":{"algorithm":"sha-256","value":"2"*64},"declared_size":"128","revision":"rev-1"}
+def merkle_node(left,right): return hashlib.sha256(b"\x01"+left+right).digest()
+def merkle_root(leaves):
+ if not leaves:return hashlib.sha256(b"").digest()
+ if len(leaves)==1:return leaves[0]
+ k=1<<(len(leaves)-1).bit_length()-1
+ return merkle_node(merkle_root(leaves[:k]),merkle_root(leaves[k:]))
+def inclusion_path(leaves,index):
+ if len(leaves)==1:return []
+ k=1<<(len(leaves)-1).bit_length()-1
+ return inclusion_path(leaves[:k],index)+[merkle_root(leaves[k:])] if index<k else inclusion_path(leaves[k:],index-k)+[merkle_root(leaves[:k])]
+def consistency_path(leaves,first,complete=True):
+ if first==len(leaves):return [] if complete else [merkle_root(leaves)]
+ k=1<<(len(leaves)-1).bit_length()-1
+ return consistency_path(leaves[:k],first,complete)+[merkle_root(leaves[k:])] if first<=k else consistency_path(leaves[k:],first-k,False)+[merkle_root(leaves[:k])]
 def event(i,typ,data,*,work=True,corr=None,cause=None,ev=None):
  d={"specversion":"0.1","id":U[i],"type":typ,"channel":CH,"source":"urn:yukh:source:fixture","participant":{"id":"session:fixture","kind":"session","display":"fixture"},"time":TS,"data":data,"evidence":ev or [],"extensions":{}}
  if work:d["work"]={"uri":WORK}
@@ -121,7 +135,10 @@ def main():
  audit_ledger_id="0198f56b-0c00-7000-8000-000000000003"; audit_genesis=hashlib.sha256(b"yukh-coordination:audit-chain-genesis:v1\n"+uuid.UUID(audit_ledger_id).bytes).digest()
  audit_chain=hashlib.sha256(b"yukh-coordination:audit-chain:v1\n"+struct.pack(">Q",1)+audit_genesis+audit_record_digest).digest()
  audit_receipt={"profile":"yukh-security-audit-receipt/v1","ledger_id":audit_ledger_id,"sequence":1,"operation_id":audit_record["operation_id"],"record_digest":b64(audit_record_digest),"previous_chain_digest":b64(audit_genesis),"chain_digest":b64(audit_chain)}
- vector_values={"event":events["claim"],"channel":meta["channel"][0],"evidence-descriptor":evidence(),"evidence-set":[evidence()],"receipt":meta["receipt"][0],"receipt-signature-preimage":receipt_preimage,"diagnostics":[{"sequence":2,"code":"CLAIM_CONFLICT","severity":"warning","primary_id":U[3],"contender_ids":[U[20],U[21]],"contender_event_ids":[U[3],U[4]]}],"audit-record":audit_record,"audit-receipt":audit_receipt}
+ audit_chains=[hashlib.sha256(f"audit-chain-{i}".encode()).digest() for i in range(1,8)]
+ audit_leaves=[hashlib.sha256(b"\x00"+b"yukh-coordination:audit-merkle-leaf:v1\n"+struct.pack(">Q",i)+chain).digest() for i,chain in enumerate(audit_chains,1)]
+ audit_merkle={"profile":"yukh-security-audit-merkle/v1","chain_digests":[b64(x) for x in audit_chains],"leaf_hashes":[b64(x) for x in audit_leaves],"tree_heads":[{"tree_size":i,"root_hash":b64(merkle_root(audit_leaves[:i]))} for i in range(8)],"inclusion_proofs":[{"leaf_index":i,"tree_size":7,"path":[b64(x) for x in inclusion_path(audit_leaves,i)]} for i in (0,3,4,6)],"consistency_proofs":[{"first_size":i,"second_size":7,"path":[b64(x) for x in consistency_path(audit_leaves,i)]} for i in (3,4,6)]}
+ vector_values={"event":events["claim"],"channel":meta["channel"][0],"evidence-descriptor":evidence(),"evidence-set":[evidence()],"receipt":meta["receipt"][0],"receipt-signature-preimage":receipt_preimage,"diagnostics":[{"sequence":2,"code":"CLAIM_CONFLICT","severity":"warning","primary_id":U[3],"contender_ids":[U[20],U[21]],"contender_event_ids":[U[3],U[4]]}],"audit-record":audit_record,"audit-receipt":audit_receipt,"audit-merkle":audit_merkle}
  domains={"channel":"yukh.channel-metadata.v0.1\u0000","evidence-descriptor":"yukh.evidence-descriptor.v0.1\u0000","evidence-set":"yukh.evidence-set.v0.1\u0000","receipt-signature-preimage":"yukh-coordination-receipt-v0.1\u0000","audit-record":"yukh-coordination:audit-record:v1\n"}
  vectors=[]
  for name,obj in vector_values.items():

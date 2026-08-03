@@ -62,5 +62,11 @@
     "digest": "sha-256:9b9011ecaf07f6066c0f9483999c46b7273e9256258013fc957e7460bfadfc75",
     "input": "conformance/canonical/audit-receipt.input.json",
     "name": "audit-receipt"
+  },
+  {
+    "canonical": "conformance/canonical/audit-merkle.canonical.json",
+    "digest": "sha-256:c11ed9731d2cc326606c513b17f6727517f43f404b2a7c509209bf4d47b7dc5e",
+    "input": "conformance/canonical/audit-merkle.input.json",
+    "name": "audit-merkle"
   }
 ]
