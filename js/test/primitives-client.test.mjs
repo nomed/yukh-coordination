@@ -28,11 +28,23 @@ test("client does not retry transport failure or redirect", async () => {
   const client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 1000, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async () => { calls += 1; throw new Error("provider body secret"); } });
   await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable" && !error.message.includes("secret"));
   assert.equal(calls, 1);
+	const typed = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 1000, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async () => { throw new TypeError("provider body secret"); } });
+	await assert.rejects(typed.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable" && !error.message.includes("secret"));
 });
 
-test("client rejects ambient or malformed configuration", () => {
+test("client rejects ambient configuration and ignores proxy environment", async () => {
   assert.throws(() => new PrimitivesClient({ baseUri: "http://coordination.invalid", deadlineMs: 1000, authenticate() {} }), /invalid base URI/u);
   assert.throws(() => new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 5001, authenticate() {} }), /invalid client configuration/u);
+  const prior = process.env.HTTPS_PROXY;
+  process.env.HTTPS_PROXY = "http://ambient-proxy.invalid";
+  try {
+    let target;
+    const client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 1000, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async (observed) => { target = observed; return response({ outcome: "valid", specversion: "1" }); } });
+    await client.inspect(new LeaseCapability("opaque"));
+    assert.equal(target, "https://coordination.invalid/coordination-primitives/v1/leases:inspect");
+  } finally {
+    if (prior === undefined) delete process.env.HTTPS_PROXY; else process.env.HTTPS_PROXY = prior;
+  }
 });
 
 test("client bounds the response while streaming before allocation", async () => {
@@ -61,4 +73,29 @@ test("client rejects malformed UTF-8 without exposing response bytes", async () 
     transport: async () => ({ ok: true, status: 200, type: "basic", headers: { get: () => MEDIA_TYPE }, body: streamed([new Uint8Array([0xff])]) }),
   });
   await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation" && !error.message.includes("255"));
+});
+
+test("client deadline covers authentication, headers, and streamed response", async () => {
+  const never = () => new Promise(() => {});
+  let client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 10, authenticate: never, transport: async () => { throw new Error("must not run"); } });
+  await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable");
+
+  client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 10, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: never });
+  await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable");
+
+  const body = new ReadableStream({ pull() {} });
+  client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 10, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async () => ({ ok: true, status: 200, type: "basic", headers: { get: () => MEDIA_TYPE }, body }) });
+  await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable");
+});
+
+test("client accepts only closed route-specific success and problem shapes", async () => {
+  const make = (result, status = 200) => new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 1000, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async () => response(result, status) });
+  await assert.rejects(make({ outcome: "owner_selected_text", specversion: "1" }).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation" && !error.message.includes("owner_selected"));
+  await assert.rejects(make({ extra: true, outcome: "valid", specversion: "1" }).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation");
+  await assert.rejects(make({ code: "provider body secret", status: 503, title: "provider body secret", type: "urn:yukh:coordination-primitives:problem:provider_body_secret" }, 503).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation" && !error.message.includes("secret"));
+  await assert.rejects(make({ code: "temporarily_unavailable", status: 500, title: "temporarily_unavailable", type: "urn:yukh:coordination-primitives:problem:temporarily_unavailable" }, 503).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation");
+});
+
+test("client rejects capabilities that cannot fit a complete 4 KiB message", async () => {
+  assert.throws(() => new LeaseCapability("x".repeat(3801)), /invalid capability/u);
 });
