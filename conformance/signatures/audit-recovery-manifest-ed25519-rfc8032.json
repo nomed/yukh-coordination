@@ -1,0 +1,12 @@
+{
+  "algorithm": "Ed25519",
+  "domain_prefix": "yukh-coordination:audit-recovery-manifest:v1\n",
+  "key_id": "rfc8032-checkpoint-1",
+  "preimage": "conformance/canonical/audit-recovery-manifest.canonical.json",
+  "preimage_bytes": 1160,
+  "preimage_digest": "sha-256:1e9b1c11614579bd3de6df7f6e5a484adda51fa85e67841509134fcc4ed78b8f",
+  "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "signature_hex": "081536025d9d63310ac4f8b18833bbdeed93c4e525538c80a599f278764f7c9d3434d2199268042e898c8278a7e9254024059d04fa5353ef8d6324b93cf52a00",
+  "source": "RFC 8032 test vector 1 seed/public key; signature independently derived with OpenSSL for the frozen recovery-manifest preimage"
+}

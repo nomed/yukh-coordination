@@ -297,6 +297,39 @@ func TestRestoreFenceRequiresCompleteMonotonicFloors(t *testing.T) {
 	}
 }
 
+func TestRecoverySnapshotIsCompleteSortedAndFenced(t *testing.T) {
+	clock := &testClock{now: time.Date(2026, 8, 3, 8, 0, 0, 0, time.UTC)}
+	path := filepath.Join(t.TempDir(), "identity.db")
+	registry, err := Open(path, clock.read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := bootstrapRequest(t, clock.read(), 1)
+	second := bootstrapRequest(t, clock.read(), 2)
+	second.Session.TenantID = "tenant-b"
+	if _, err := registry.ReserveBootstrap(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.ReserveBootstrap(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := registry.RecoverySnapshot(context.Background())
+	if err != nil || len(snapshot.EpochFloors) != 2 || snapshot.EpochFloors[0].TenantID > snapshot.EpochFloors[1].TenantID {
+		t.Fatalf("snapshot = %#v, %v", snapshot, err)
+	}
+	if err := registry.Close(); err != nil {
+		t.Fatal(err)
+	}
+	registry, err = OpenRestored(path, clock.read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = registry.Close() })
+	if _, err := registry.RecoverySnapshot(context.Background()); !errors.Is(err, identity.ErrRegistryFenced) {
+		t.Fatalf("fenced snapshot = %v", err)
+	}
+}
+
 func TestProofCleanupIsBoundedAndStrictlyPastWindow(t *testing.T) {
 	registry, clock := openTestRegistry(t)
 	pending, err := registry.ReserveBootstrap(context.Background(), bootstrapRequest(t, clock.read(), 1))

@@ -92,3 +92,9 @@ type RegistryStatus struct {
 	FenceState    string
 	WallHighWater time.Time
 }
+
+type RecoverySnapshot struct {
+	DatabaseID    string
+	WallHighWater time.Time
+	EpochFloors   []EpochFloor
+}

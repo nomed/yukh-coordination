@@ -25,6 +25,9 @@ func (l *Ledger) InstallVerificationKey(ctx context.Context, signed audit.Signed
 		return audit.ErrUnavailable
 	}
 	defer tx.rollback()
+	if err := requireAdmitted(ctx, tx.conn); err != nil {
+		return err
+	}
 	if err := pinAuthority(ctx, tx.conn, authority); err != nil {
 		return err
 	}
@@ -163,6 +166,9 @@ func (l *Ledger) WitnessCheckpoint(ctx context.Context, reference string, author
 		return audit.WitnessAcknowledgement{}, audit.ErrUnavailable
 	}
 	defer tx.rollback()
+	if err := requireAdmitted(ctx, tx.conn); err != nil {
+		return audit.WitnessAcknowledgement{}, err
+	}
 	var existing, existingDigest []byte
 	err = tx.conn.QueryRowContext(ctx, `SELECT canonical_acknowledgement, acknowledgement_digest FROM audit_witness_acknowledgements WHERE witness_id = ? AND checkpoint_reference = ?`, ack.WitnessID, reference).Scan(&existing, &existingDigest)
 	if err == nil {
@@ -214,6 +220,9 @@ func (l *Ledger) commitCheckpoint(ctx context.Context, signed audit.SignedCheckp
 		return audit.SignedCheckpoint{}, audit.ErrUnavailable
 	}
 	defer tx.rollback()
+	if err := requireAdmitted(ctx, tx.conn); err != nil {
+		return audit.SignedCheckpoint{}, err
+	}
 	var ledgerID string
 	var size uint64
 	var root, head []byte

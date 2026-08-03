@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 const metadataAppendTriggerV2 = `CREATE TRIGGER audit_metadata_append_only BEFORE UPDATE ON audit_metadata
 	WHEN NEW.singleton != OLD.singleton OR NEW.profile_version != OLD.profile_version OR NEW.ledger_id != OLD.ledger_id
@@ -31,6 +31,28 @@ type Ledger struct{ db *sql.DB }
 
 func Open(path string) (*Ledger, error) {
 	return open(path, true)
+}
+
+// OpenRestored verifies the immutable backup bytes before SQLite can modify
+// them, then persists a restore fence before returning the ledger.
+func OpenRestored(path string, expectedBackupDigest audit.Hash) (*Ledger, error) {
+	digest, err := audit.DigestBackupFile(path)
+	if err != nil || digest != expectedBackupDigest {
+		return nil, audit.ErrUnavailable
+	}
+	ledger, err := open(path, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := ledger.fenceRestored(context.Background(), expectedBackupDigest); err != nil {
+		_ = ledger.Close()
+		return nil, err
+	}
+	if err := ledger.Verify(context.Background()); err != nil {
+		_ = ledger.Close()
+		return nil, err
+	}
+	return ledger, nil
 }
 
 func open(path string, verify bool) (*Ledger, error) {
@@ -96,6 +118,9 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
 	defer tx.rollback()
+	if err := requireAdmitted(ctx, tx.conn); err != nil {
+		return audit.Receipt{}, err
+	}
 
 	if existing, found, err := lookupOperation(ctx, tx.conn, record.OperationID); err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
@@ -183,7 +208,10 @@ func (l *Ledger) Verify(ctx context.Context) error {
 	if err := verifyStoredNodes(ctx, l.db, expectedNodes); err != nil {
 		return err
 	}
-	return verifyCheckpointState(ctx, l.db)
+	if err := verifyCheckpointState(ctx, l.db); err != nil {
+		return err
+	}
+	return verifyRecoveryState(ctx, l.db)
 }
 
 type chainReader interface {
@@ -291,13 +319,60 @@ func (l *Ledger) migrate(ctx context.Context) error {
 		}
 		version = 3
 	}
+	if version == 3 {
+		if err := migrateV4(ctx, tx.conn); err != nil {
+			return audit.ErrUnavailable
+		}
+		version = 4
+	}
 	if version != schemaVersion {
 		return audit.ErrUnavailable
 	}
-	if _, err := tx.conn.ExecContext(ctx, "PRAGMA user_version=3"); err != nil {
+	if _, err := tx.conn.ExecContext(ctx, "PRAGMA user_version=4"); err != nil {
 		return audit.ErrUnavailable
 	}
 	return tx.commit(ctx)
+}
+
+func migrateV4(ctx context.Context, conn *sql.Conn) error {
+	statements := []string{
+		`CREATE TABLE audit_operational_state (
+			singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+			fence_state TEXT NOT NULL CHECK (fence_state IN ('admitted', 'restore_fenced', 'clock_fenced')),
+			wall_high_water_ms INTEGER NOT NULL CHECK (wall_high_water_ms >= 0 AND wall_high_water_ms <= 9007199254740991),
+			restore_backup_digest BLOB CHECK (restore_backup_digest IS NULL OR length(restore_backup_digest) = 32),
+			accepted_manifest_reference TEXT CHECK (accepted_manifest_reference IS NULL OR (length(accepted_manifest_reference) = 58 AND accepted_manifest_reference GLOB 'audit-recovery:*' AND accepted_manifest_reference NOT GLOB '*[^A-Za-z0-9_:-]*')),
+			external_checkpoint_reference TEXT CHECK (external_checkpoint_reference IS NULL OR (length(external_checkpoint_reference) = 60 AND external_checkpoint_reference GLOB 'audit-checkpoint:*' AND external_checkpoint_reference NOT GLOB '*[^A-Za-z0-9_:-]*')),
+			completion_receipt TEXT CHECK (completion_receipt IS NULL OR (length(completion_receipt) BETWEEN 1 AND 256 AND completion_receipt NOT GLOB '*[^A-Za-z0-9._:/-]*')),
+			CHECK ((fence_state = 'restore_fenced' AND restore_backup_digest IS NOT NULL AND accepted_manifest_reference IS NULL AND external_checkpoint_reference IS NULL AND completion_receipt IS NULL) OR (fence_state != 'restore_fenced'))
+		) STRICT`,
+		`CREATE TABLE audit_recovery_manifests (
+			manifest_reference TEXT PRIMARY KEY CHECK (length(manifest_reference) = 58 AND manifest_reference GLOB 'audit-recovery:*' AND manifest_reference NOT GLOB '*[^A-Za-z0-9_:-]*'),
+			manifest_id TEXT NOT NULL UNIQUE CHECK (manifest_id GLOB '????????-????-7???-[89ab]???-????????????' AND manifest_id NOT GLOB '*[^0-9a-f-]*'),
+			canonical_manifest BLOB NOT NULL UNIQUE CHECK (length(canonical_manifest) BETWEEN 1 AND 1048576),
+			signature BLOB NOT NULL CHECK (length(signature) = 64),
+			checkpoint_reference TEXT NOT NULL CHECK (length(checkpoint_reference) = 60),
+			completion_receipt TEXT NOT NULL CHECK (length(completion_receipt) BETWEEN 1 AND 256 AND completion_receipt NOT GLOB '*[^A-Za-z0-9._:/-]*')
+		) STRICT`,
+		`INSERT INTO audit_operational_state VALUES (1, 'admitted', 0, NULL, NULL, NULL, NULL)`,
+		`CREATE TRIGGER audit_operational_state_transition BEFORE UPDATE ON audit_operational_state
+			WHEN NEW.singleton != OLD.singleton OR NEW.wall_high_water_ms < OLD.wall_high_water_ms OR NOT (
+				(OLD.fence_state = 'admitted' AND NEW.fence_state = 'admitted' AND NEW.restore_backup_digest IS OLD.restore_backup_digest AND NEW.accepted_manifest_reference IS OLD.accepted_manifest_reference AND NEW.external_checkpoint_reference IS OLD.external_checkpoint_reference AND NEW.completion_receipt IS OLD.completion_receipt) OR
+				(OLD.fence_state = 'admitted' AND NEW.fence_state = 'restore_fenced' AND NEW.restore_backup_digest IS NOT NULL AND NEW.accepted_manifest_reference IS NULL AND NEW.external_checkpoint_reference IS NULL AND NEW.completion_receipt IS NULL) OR
+				(OLD.fence_state = 'admitted' AND NEW.fence_state = 'clock_fenced' AND NEW.restore_backup_digest IS OLD.restore_backup_digest AND NEW.accepted_manifest_reference IS OLD.accepted_manifest_reference AND NEW.external_checkpoint_reference IS OLD.external_checkpoint_reference AND NEW.completion_receipt IS OLD.completion_receipt) OR
+				(OLD.fence_state = 'restore_fenced' AND NEW.fence_state = 'admitted' AND NEW.restore_backup_digest = OLD.restore_backup_digest AND NEW.accepted_manifest_reference IS NOT NULL AND NEW.external_checkpoint_reference IS NOT NULL AND NEW.completion_receipt IS NOT NULL)
+			)
+			BEGIN SELECT RAISE(ABORT, 'audit operational transition is invalid'); END`,
+		`CREATE TRIGGER audit_operational_state_no_delete BEFORE DELETE ON audit_operational_state BEGIN SELECT RAISE(ABORT, 'audit operational state is immutable'); END`,
+		`CREATE TRIGGER audit_recovery_manifests_no_update BEFORE UPDATE ON audit_recovery_manifests BEGIN SELECT RAISE(ABORT, 'recovery manifests are immutable'); END`,
+		`CREATE TRIGGER audit_recovery_manifests_no_delete BEFORE DELETE ON audit_recovery_manifests BEGIN SELECT RAISE(ABORT, 'recovery manifests are immutable'); END`,
+	}
+	for _, statement := range statements {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return audit.ErrUnavailable
+		}
+	}
+	return nil
 }
 
 func migrateV3(ctx context.Context, conn *sql.Conn) error {

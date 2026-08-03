@@ -11,6 +11,8 @@ conformance/canonical/audit-receipt.canonical.json
 conformance/canonical/audit-receipt.input.json
 conformance/canonical/audit-record.canonical.json
 conformance/canonical/audit-record.input.json
+conformance/canonical/audit-recovery-manifest.canonical.json
+conformance/canonical/audit-recovery-manifest.input.json
 conformance/canonical/audit-verification-key.canonical.json
 conformance/canonical/audit-verification-key.input.json
 conformance/canonical/channel.canonical.json
@@ -161,6 +163,7 @@ conformance/python/test_yukh_projection.py
 conformance/python/yukh_projection.py
 conformance/signatures/README.md
 conformance/signatures/audit-checkpoint-ed25519-rfc8032.json
+conformance/signatures/audit-recovery-manifest-ed25519-rfc8032.json
 conformance/signatures/receipt-ed25519-rfc8032.json
 conformance/signatures/verify.py
 conformance/standards-requirements.txt
