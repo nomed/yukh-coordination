@@ -56,7 +56,11 @@ func testService(t *testing.T, now *time.Time, keys *fixedKeys) (*Service, Ident
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(store, store, sealer, &tokenSource{}, 1)
+	budget, err := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return *now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(store, store, budget, sealer, &tokenSource{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

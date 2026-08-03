@@ -114,7 +114,7 @@ func (flow *sealedFlow) Run(ctx context.Context, _ primitivesauth.Identity, acti
 	case primitivesauth.LeaseRenew:
 		flow.lease, err = flow.service.RenewOpened(ctx, flow.identity, flow.opened, flow.expires)
 	case primitivesauth.LeaseRelease:
-		err = flow.service.ReleaseOpened(ctx, flow.opened)
+		err = flow.service.ReleaseOpened(ctx, flow.identity, flow.opened)
 	default:
 		return primitivesauth.ErrInvalidArgument
 	}

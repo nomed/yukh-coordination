@@ -28,6 +28,7 @@ type fixture struct {
 	authErr   error
 	actionErr error
 	scopeErr  error
+	token     byte
 }
 
 type gatedReader struct {
@@ -54,7 +55,8 @@ func TestHandlerAdmitsCanonicalBoundedAcquire(t *testing.T) {
 	key, _ := primitives.NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
 	fixture := &fixture{identity: identity, key: key}
 	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 256)))
-	service, _ := primitives.NewService(store, store, sealer, fixture, 1)
+	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
+	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1)
 	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
 	bridge, _ := NewBridge(pipeline, service)
 	handler, err := NewHandler(bridge, "https://coordination.invalid", 1, time.Second, 4)
@@ -198,7 +200,8 @@ func newHandlerFixture(t *testing.T) (*Handler, *fixture, time.Time) {
 	key, _ := primitives.NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
 	fixture := &fixture{identity: identity, key: key}
 	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 2048)))
-	service, _ := primitives.NewService(store, store, sealer, fixture, 1)
+	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
+	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1)
 	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
 	bridge, _ := NewBridge(pipeline, service)
 	handler, err := NewHandler(bridge, "https://coordination.invalid", 1, time.Second, 4)
@@ -248,7 +251,10 @@ func (value *fixture) Open(context.Context, string) (primitives.SealingKey, erro
 	value.opens++
 	return value.key, nil
 }
-func (*fixture) NewTokenID() ([16]byte, error) { return [16]byte{1}, nil }
+func (value *fixture) NewTokenID() ([16]byte, error) {
+	value.token++
+	return [16]byte{value.token}, nil
+}
 
 func TestBridgeComposesTwoPhaseSingleOpenLifecycle(t *testing.T) {
 	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
@@ -260,7 +266,8 @@ func TestBridgeComposesTwoPhaseSingleOpenLifecycle(t *testing.T) {
 	key, _ := primitives.NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
 	fixture := &fixture{identity: identity, key: key}
 	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 256)))
-	service, _ := primitives.NewService(store, store, sealer, fixture, 1)
+	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
+	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1)
 	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
 	bridge, err := NewBridge(pipeline, service)
 	if err != nil {
