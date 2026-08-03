@@ -90,6 +90,17 @@ func TestEncryptedStoreSignerAndExactCAS(t *testing.T) {
 	if !ecdsa.Verify(&public, digest[:], new(big.Int).SetBytes(signature[:32]), new(big.Int).SetBytes(signature[32:])) {
 		t.Fatal("signature did not verify")
 	}
+	store.root = fixedRoot{err: errors.New("locked secret service")}
+	if _, err := signer.PublicJWK(); err != nil {
+		t.Fatalf("public key requires root key: %v", err)
+	}
+	if _, err := signer.SignES256(context.Background(), input); !errors.Is(err, clientauth.ErrProofSigner) {
+		t.Fatalf("retained signer bypassed root-key lock: %v", err)
+	}
+	store.root = fixedRoot{key: [32]byte{1, 2, 3, 4, 5}}
+	if _, err := signer.SignES256(context.Background(), input); err != nil {
+		t.Fatalf("sign after root-key restore: %v", err)
+	}
 
 	assertNoPlaintext(t, path, record.Credential())
 	assertPrivateModes(t, path)
@@ -191,6 +202,17 @@ func TestConfigurationRootErrorsAndEncryptionLimitAreClosed(t *testing.T) {
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
+	}
+	realParent := filepath.Join(dir, "real")
+	if err := os.MkdirAll(filepath.Join(realParent, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	linkedParent := filepath.Join(dir, "linked")
+	if err := os.Symlink(realParent, linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filepath.Join(linkedParent, "nested", "custody.db"), fixedRoot{key: [32]byte{1}}); !errors.Is(err, ErrInvalidConfiguration) {
+		t.Fatalf("intermediate symlink: %v", err)
 	}
 	if _, err := Open("relative.db", fixedRoot{key: [32]byte{1}}); !errors.Is(err, ErrInvalidConfiguration) {
 		t.Fatalf("relative path: %v", err)

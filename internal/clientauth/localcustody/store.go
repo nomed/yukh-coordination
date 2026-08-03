@@ -81,7 +81,7 @@ func open(path string, root RootKeySource, entropy io.Reader) (*Store, error) {
 	}
 	parent := filepath.Dir(path)
 	info, err := os.Lstat(parent)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 || !ownedByEffectiveUser(info) {
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 || !ownedByEffectiveUser(info) || hasSymlinkComponent(parent) {
 		return nil, ErrInvalidConfiguration
 	}
 	created := false
@@ -152,6 +152,8 @@ func (s *Store) initialize(ctx context.Context) error {
 			reference TEXT PRIMARY KEY,
 			profile TEXT NOT NULL UNIQUE,
 			provisional INTEGER NOT NULL CHECK (provisional IN (0, 1)),
+			public_x BLOB NOT NULL CHECK (length(public_x) = 32),
+			public_y BLOB NOT NULL CHECK (length(public_y) = 32),
 			nonce BLOB NOT NULL CHECK (length(nonce) = 24),
 			ciphertext BLOB NOT NULL CHECK (length(ciphertext) > 16)
 		) STRICT`,
@@ -344,6 +346,14 @@ func (s *Store) ProvisionP256(ctx context.Context, profile string) (clientauth.P
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
 	}
 	defer clear(der)
+	defer clearPrivateKey(key)
+	jwk, err := clientauth.NewPublicP256JWK(key.X.FillBytes(make([]byte, 32)), key.Y.FillBytes(make([]byte, 32)))
+	if err != nil {
+		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
+	}
+	publicX, publicY := jwk.Coordinates()
+	publicThumbprint := jwk.Thumbprint()
+	publicBinding := base64.RawURLEncoding.EncodeToString(publicThumbprint[:])
 	id, err := uuid.NewV7FromReader(s.entropy)
 	if err != nil {
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
@@ -353,7 +363,7 @@ func (s *Store) ProvisionP256(ctx context.Context, profile string) (clientauth.P
 	if err != nil {
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
 	}
-	nonce, ciphertext, err := sealEnvelope(s.entropy, root, profile, "signer", reference, "", "", der)
+	nonce, ciphertext, err := sealEnvelope(s.entropy, root, profile, "signer", reference, "", publicBinding, der)
 	clear(root[:])
 	if err != nil {
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
@@ -366,7 +376,7 @@ func (s *Store) ProvisionP256(ctx context.Context, profile string) (clientauth.P
 	if err := consumeEncryption(ctx, tx); err != nil {
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO signers (reference, profile, provisional, nonce, ciphertext) VALUES (?, ?, 1, ?, ?)", reference, profile, nonce, ciphertext)
+	_, err = tx.ExecContext(ctx, "INSERT INTO signers (reference, profile, provisional, public_x, public_y, nonce, ciphertext) VALUES (?, ?, 1, ?, ?, ?, ?)", reference, profile, publicX[:], publicY[:], nonce, ciphertext)
 	if err != nil {
 		if constraint(err) {
 			if queryErr := tx.QueryRowContext(ctx, "SELECT reference FROM signers WHERE profile = ?", profile).Scan(&existing); queryErr != nil {
@@ -384,7 +394,7 @@ func (s *Store) ProvisionP256(ctx context.Context, profile string) (clientauth.P
 	if err := tx.Commit(); err != nil {
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
 	}
-	signer, err := softwareSigner(reference, key)
+	signer, err := s.Open(ctx, reference)
 	if err != nil {
 		return clientauth.ProvisionedSigner{}, clientauth.ErrProofSigner
 	}
@@ -396,39 +406,19 @@ func (s *Store) Open(ctx context.Context, reference string) (clientauth.ProofSig
 		return nil, clientauth.ErrProofSigner
 	}
 	var profile string
-	var nonce, ciphertext []byte
-	err := s.db.QueryRowContext(ctx, "SELECT profile, nonce, ciphertext FROM signers WHERE reference = ?", reference).Scan(&profile, &nonce, &ciphertext)
+	var publicX, publicY []byte
+	err := s.db.QueryRowContext(ctx, "SELECT profile, public_x, public_y FROM signers WHERE reference = ?", reference).Scan(&profile, &publicX, &publicY)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, clientauth.ErrProofKeyMissing
 	}
 	if err != nil {
 		return nil, clientauth.ErrProofSigner
 	}
-	root, err := s.loadRoot(ctx, profile)
+	jwk, err := clientauth.NewPublicP256JWK(publicX, publicY)
 	if err != nil {
 		return nil, clientauth.ErrProofSigner
 	}
-	der, err := openEnvelope(root, profile, "signer", reference, "", "", nonce, ciphertext)
-	clear(root[:])
-	if err != nil {
-		return nil, clientauth.ErrProofSigner
-	}
-	defer clear(der)
-	parsed, err := x509.ParsePKCS8PrivateKey(der)
-	if err != nil {
-		return nil, clientauth.ErrProofSigner
-	}
-	key, ok := parsed.(*ecdsa.PrivateKey)
-	if !ok || key.Curve != elliptic.P256() || key.D == nil || key.D.Sign() <= 0 || key.D.Cmp(key.Params().N) >= 0 {
-		return nil, clientauth.ErrProofSigner
-	}
-	canonical, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil || len(canonical) != len(der) || subtle.ConstantTimeCompare(canonical, der) != 1 {
-		clear(canonical)
-		return nil, clientauth.ErrProofSigner
-	}
-	clear(canonical)
-	return softwareSigner(reference, key)
+	return &signer{reference: reference, profile: profile, store: s, jwk: jwk}, nil
 }
 
 func (s *Store) Retire(ctx context.Context, reference string) error {
@@ -450,41 +440,82 @@ func (s *Store) Retire(ctx context.Context, reference string) error {
 
 type signer struct {
 	reference string
-	key       *ecdsa.PrivateKey
+	profile   string
+	store     *Store
 	jwk       clientauth.PublicP256JWK
-}
-
-func softwareSigner(reference string, key *ecdsa.PrivateKey) (*signer, error) {
-	if key == nil || key.X == nil || key.Y == nil {
-		return nil, clientauth.ErrProofSigner
-	}
-	jwk, err := clientauth.NewPublicP256JWK(key.X.FillBytes(make([]byte, 32)), key.Y.FillBytes(make([]byte, 32)))
-	if err != nil {
-		return nil, clientauth.ErrProofSigner
-	}
-	return &signer{reference: reference, key: key, jwk: jwk}, nil
 }
 
 func (s *signer) KeyReference() string { return s.reference }
 func (s *signer) PublicJWK() (clientauth.PublicP256JWK, error) {
-	if s == nil || s.key == nil {
+	if s == nil || s.store == nil || !validReference(s.reference) || invalidProfile(s.profile) {
 		return clientauth.PublicP256JWK{}, clientauth.ErrProofSigner
 	}
 	return s.jwk, nil
 }
 func (s *signer) SignES256(ctx context.Context, input []byte) ([64]byte, error) {
 	var signature [64]byte
-	if s == nil || s.key == nil || len(input) == 0 || len(input) > maximumSigningInput || ctx.Err() != nil {
+	if s == nil || s.store == nil || len(input) == 0 || len(input) > maximumSigningInput || ctx.Err() != nil {
 		return signature, clientauth.ErrProofSigner
 	}
+	key, err := s.store.loadPrivateKey(ctx, s.profile, s.reference, s.jwk)
+	if err != nil {
+		return signature, clientauth.ErrProofSigner
+	}
+	defer clearPrivateKey(key)
 	digest := sha256.Sum256(input)
-	r, ss, err := ecdsa.Sign(rand.Reader, s.key, digest[:])
-	if err != nil || !ecdsa.Verify(&s.key.PublicKey, digest[:], r, ss) {
+	r, ss, err := ecdsa.Sign(rand.Reader, key, digest[:])
+	if err != nil || !ecdsa.Verify(&key.PublicKey, digest[:], r, ss) {
 		return signature, clientauth.ErrProofSigner
 	}
 	r.FillBytes(signature[:32])
 	ss.FillBytes(signature[32:])
 	return signature, nil
+}
+
+func (s *Store) loadPrivateKey(ctx context.Context, profile, reference string, expected clientauth.PublicP256JWK) (*ecdsa.PrivateKey, error) {
+	var storedProfile string
+	var publicX, publicY, nonce, ciphertext []byte
+	err := s.db.QueryRowContext(ctx, "SELECT profile, public_x, public_y, nonce, ciphertext FROM signers WHERE reference = ?", reference).Scan(&storedProfile, &publicX, &publicY, &nonce, &ciphertext)
+	if err != nil || storedProfile != profile {
+		return nil, clientauth.ErrProofSigner
+	}
+	storedJWK, err := clientauth.NewPublicP256JWK(publicX, publicY)
+	if err != nil || storedJWK.Thumbprint() != expected.Thumbprint() {
+		return nil, clientauth.ErrProofSigner
+	}
+	storedThumbprint := storedJWK.Thumbprint()
+	publicBinding := base64.RawURLEncoding.EncodeToString(storedThumbprint[:])
+	root, err := s.loadRoot(ctx, profile)
+	if err != nil {
+		return nil, clientauth.ErrProofSigner
+	}
+	der, err := openEnvelope(root, profile, "signer", reference, "", publicBinding, nonce, ciphertext)
+	clear(root[:])
+	if err != nil {
+		return nil, clientauth.ErrProofSigner
+	}
+	defer clear(der)
+	parsed, err := x509.ParsePKCS8PrivateKey(der)
+	if err != nil {
+		return nil, clientauth.ErrProofSigner
+	}
+	key, ok := parsed.(*ecdsa.PrivateKey)
+	if !ok || key.Curve != elliptic.P256() || key.D == nil || key.D.Sign() <= 0 || key.D.Cmp(key.Params().N) >= 0 {
+		return nil, clientauth.ErrProofSigner
+	}
+	canonical, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil || len(canonical) != len(der) || subtle.ConstantTimeCompare(canonical, der) != 1 {
+		clear(canonical)
+		clearPrivateKey(key)
+		return nil, clientauth.ErrProofSigner
+	}
+	clear(canonical)
+	derived, err := clientauth.NewPublicP256JWK(key.X.FillBytes(make([]byte, 32)), key.Y.FillBytes(make([]byte, 32)))
+	if err != nil || derived.Thumbprint() != expected.Thumbprint() {
+		clearPrivateKey(key)
+		return nil, clientauth.ErrProofSigner
+	}
+	return key, nil
 }
 
 func (s *Store) loadRoot(ctx context.Context, profile string) ([32]byte, error) {
@@ -625,6 +656,21 @@ func invalidProfile(profile string) bool {
 	return false
 }
 
+func hasSymlinkComponent(path string) bool {
+	current := filepath.Clean(path)
+	for {
+		info, err := os.Lstat(current)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return false
+		}
+		current = parent
+	}
+}
+
 func validReference(reference string) bool {
 	return strings.HasPrefix(reference, keyReferencePrefix) && len(reference) == len(keyReferencePrefix)+36
 }
@@ -645,4 +691,14 @@ func clear(value []byte) {
 	for index := range value {
 		value[index] = 0
 	}
+}
+
+func clearPrivateKey(key *ecdsa.PrivateKey) {
+	if key == nil {
+		return
+	}
+	if key.D != nil {
+		key.D.SetInt64(0)
+	}
+	key.D = nil
 }
