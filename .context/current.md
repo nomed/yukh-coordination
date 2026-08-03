@@ -2,17 +2,16 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #53
-- Active increment: RFC-0014 neutral client-authentication refactor under
-  review in PR #62
+- Last delivery pull request: #62
+- Active increment: no implementation increment is currently active
 - Runtime decisions: RFC-0003 through RFC-0016 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
-  read-only client foundation in #52, and its DPoP credential foundation in
-  #53
+  read-only client foundation in #52, its DPoP credential foundation in #53,
+  and the RFC-0014 neutral client-authentication refactor in #62
 - Accepted design: RFC-0014 client credential custody and proof signing in #56
-- Next action: review the separated store, signer and external-token ports and
-  their deterministic conformance fakes; concrete adapters, bootstrap, watch,
-  mutations and a process executable remain separate increments
+- Next action: select and specify the first concrete RFC-0014 credential
+  custody adapter; bootstrap, watch, mutations and a process executable remain
+  separate increments
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
