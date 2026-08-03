@@ -17,6 +17,8 @@ import (
 	"cloud.google.com/go/kms/apiv1/kmspb"
 	"github.com/googleapis/gax-go/v2"
 	"github.com/nomed/yukh-coordination/internal/clientauth"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -55,30 +57,32 @@ func (b sdkKMSBackend) sign(ctx context.Context, request *kmspb.AsymmetricSignRe
 // CloudKMS owns the two immutable RFC-0020 key-version capabilities. It never
 // constructs a client, discovers credentials or mutates key lifecycle state.
 type CloudKMS struct {
-	backend     kmsBackend
-	profile     string
-	encryption  KeyVersion
-	signing     KeyVersion
-	protection  kmspb.ProtectionLevel
-	public      clientauth.PublicP256JWK
-	publicECDSA *ecdsa.PublicKey
-	thumbprint  [32]byte
-	timeout     time.Duration
-	maxAttempts int
+	backend      kmsBackend
+	profile      string
+	encryption   KeyVersion
+	signing      KeyVersion
+	protection   kmspb.ProtectionLevel
+	public       clientauth.PublicP256JWK
+	publicECDSA  *ecdsa.PublicKey
+	thumbprint   [32]byte
+	timeout      time.Duration
+	totalTimeout time.Duration
+	retryDelay   time.Duration
+	maxAttempts  int
 }
 
-func NewCloudKMS(ctx context.Context, client *kms.KeyManagementClient, profile string, encryption, signing KeyVersion, protection kmspb.ProtectionLevel, expectedThumbprint [32]byte, timeout time.Duration, maxAttempts int) (*CloudKMS, error) {
+func NewCloudKMS(ctx context.Context, client *kms.KeyManagementClient, profile string, encryption, signing KeyVersion, protection kmspb.ProtectionLevel, expectedThumbprint [32]byte, requestTimeout, totalTimeout, retryDelay time.Duration, maxAttempts int) (*CloudKMS, error) {
 	if client == nil {
 		return nil, ErrInvalidContract
 	}
-	return newCloudKMS(ctx, sdkKMSBackend{client}, profile, encryption, signing, protection, expectedThumbprint, timeout, maxAttempts)
+	return newCloudKMS(ctx, sdkKMSBackend{client}, profile, encryption, signing, protection, expectedThumbprint, requestTimeout, totalTimeout, retryDelay, maxAttempts)
 }
 
-func newCloudKMS(ctx context.Context, backend kmsBackend, profile string, encryption, signing KeyVersion, protection kmspb.ProtectionLevel, expectedThumbprint [32]byte, timeout time.Duration, maxAttempts int) (*CloudKMS, error) {
-	if backend == nil || !validProfileName(profile) || !validKeyVersion(encryption) || !validKeyVersion(signing) || encryption.value == signing.value || zero32(expectedThumbprint) || (protection != kmspb.ProtectionLevel_SOFTWARE && protection != kmspb.ProtectionLevel_HSM) || timeout <= 0 || maxAttempts < 1 || maxAttempts > 5 {
+func newCloudKMS(ctx context.Context, backend kmsBackend, profile string, encryption, signing KeyVersion, protection kmspb.ProtectionLevel, expectedThumbprint [32]byte, requestTimeout, totalTimeout, retryDelay time.Duration, maxAttempts int) (*CloudKMS, error) {
+	if backend == nil || !validProfileName(profile) || !validKeyVersion(encryption) || !validKeyVersion(signing) || encryption.value == signing.value || zero32(expectedThumbprint) || (protection != kmspb.ProtectionLevel_SOFTWARE && protection != kmspb.ProtectionLevel_HSM) || requestTimeout <= 0 || totalTimeout < requestTimeout || retryDelay <= 0 || retryDelay > requestTimeout || maxAttempts < 1 || maxAttempts > 5 {
 		return nil, ErrInvalidContract
 	}
-	value := &CloudKMS{backend: backend, profile: profile, encryption: encryption, signing: signing, protection: protection, timeout: timeout, maxAttempts: maxAttempts}
+	value := &CloudKMS{backend: backend, profile: profile, encryption: encryption, signing: signing, protection: protection, timeout: requestTimeout, totalTimeout: totalTimeout, retryDelay: retryDelay, maxAttempts: maxAttempts}
 	enc, err := value.getVersion(ctx, encryption.value)
 	if err != nil || enc == nil || enc.Name != encryption.value || enc.State != kmspb.CryptoKeyVersion_ENABLED || enc.Algorithm != kmspb.CryptoKeyVersion_AES_256_GCM || enc.ProtectionLevel != protection {
 		return nil, ErrUnavailable
@@ -233,19 +237,38 @@ func (k *CloudKMS) getPublic(ctx context.Context) (*kmspb.PublicKey, error) {
 	return out, err
 }
 func (k *CloudKMS) attempt(ctx context.Context, call func(context.Context) error) error {
+	total, totalCancel := context.WithTimeout(ctx, k.totalTimeout)
+	defer totalCancel()
 	var err error
 	for i := 0; i < k.maxAttempts; i++ {
-		operation, cancel := context.WithTimeout(ctx, k.timeout)
+		operation, cancel := context.WithTimeout(total, k.timeout)
 		err = call(operation)
 		cancel()
 		if err == nil {
 			return nil
 		}
-		if ctx.Err() != nil {
-			return ctx.Err()
+		if total.Err() != nil || !retryableKMSError(err) || i+1 == k.maxAttempts {
+			return err
+		}
+		delay := k.retryDelay << i
+		timer := time.NewTimer(delay)
+		select {
+		case <-total.Done():
+			timer.Stop()
+			return total.Err()
+		case <-timer.C:
 		}
 	}
 	return err
+}
+
+func retryableKMSError(err error) bool {
+	switch status.Code(err) {
+	case codes.Unavailable, codes.ResourceExhausted, codes.DeadlineExceeded, codes.Aborted:
+		return true
+	default:
+		return false
+	}
 }
 func crcValue(value CRC32C) *wrapperspb.Int64Value {
 	return wrapperspb.Int64(int64(value.ProviderValue()))

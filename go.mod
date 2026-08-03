@@ -3,7 +3,7 @@ module github.com/nomed/yukh-coordination
 go 1.26
 
 require (
-	cloud.google.com/go/kms v1.26.0
+	cloud.google.com/go/kms v1.31.0
 	cloud.google.com/go/storage v1.62.1
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -13,6 +13,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	golang.org/x/crypto v0.49.0
 	google.golang.org/api v0.274.0
+	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.55.0
 )
@@ -65,7 +66,6 @@ require (
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/grpc v1.80.0 // indirect
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

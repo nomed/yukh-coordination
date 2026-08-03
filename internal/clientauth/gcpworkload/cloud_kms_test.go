@@ -16,15 +16,18 @@ import (
 	"time"
 
 	"cloud.google.com/go/kms/apiv1/kmspb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type fakeKMS struct {
-	encryption string
-	signing    string
-	private    *ecdsa.PrivateKey
-	publicPEM  string
-	protection kmspb.ProtectionLevel
+	encryption        string
+	signing           string
+	private           *ecdsa.PrivateKey
+	publicPEM         string
+	protection        kmspb.ProtectionLevel
+	signatureOverride []byte
 }
 
 func (f *fakeKMS) version(_ context.Context, name string) (*kmspb.CryptoKeyVersion, error) {
@@ -54,6 +57,10 @@ func (*fakeKMS) rawDecrypt(_ context.Context, request *kmspb.RawDecryptRequest) 
 	return &kmspb.RawDecryptResponse{Plaintext: plaintext, PlaintextCrc32C: crcValue(Checksum(plaintext)), ProtectionLevel: kmspb.ProtectionLevel_SOFTWARE, VerifiedCiphertextCrc32C: true, VerifiedAdditionalAuthenticatedDataCrc32C: true, VerifiedInitializationVectorCrc32C: true}, nil
 }
 func (f *fakeKMS) sign(_ context.Context, request *kmspb.AsymmetricSignRequest) (*kmspb.AsymmetricSignResponse, error) {
+	if f.signatureOverride != nil {
+		signature := append([]byte(nil), f.signatureOverride...)
+		return &kmspb.AsymmetricSignResponse{Signature: signature, SignatureCrc32C: crcValue(Checksum(signature)), VerifiedDigestCrc32C: true, Name: f.signing, ProtectionLevel: f.protection}, nil
+	}
 	digest := request.Digest.GetSha256()
 	r, s, err := ecdsa.Sign(bytes.NewReader(bytes.Repeat([]byte{3}, 256)), f.private, digest)
 	if err != nil {
@@ -61,6 +68,24 @@ func (f *fakeKMS) sign(_ context.Context, request *kmspb.AsymmetricSignRequest) 
 	}
 	signature, _ := asn1.Marshal(derSignature{r, s})
 	return &kmspb.AsymmetricSignResponse{Signature: signature, SignatureCrc32C: wrapperspb.Int64(int64(Checksum(signature).ProviderValue())), VerifiedDigestCrc32C: true, Name: f.signing, ProtectionLevel: f.protection}, nil
+}
+
+type scriptedKMS struct {
+	*fakeKMS
+	versionErrors []error
+	versionCalls  int
+}
+
+func (s *scriptedKMS) version(ctx context.Context, name string) (*kmspb.CryptoKeyVersion, error) {
+	s.versionCalls++
+	if len(s.versionErrors) > 0 {
+		err := s.versionErrors[0]
+		s.versionErrors = s.versionErrors[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s.fakeKMS.version(ctx, name)
 }
 
 func TestCloudKMSRawAEADAndSigner(t *testing.T) {
@@ -98,8 +123,35 @@ func TestCloudKMSRawAEADAndSigner(t *testing.T) {
 func TestCloudKMSFailsClosedOnProviderEvidence(t *testing.T) {
 	backend, encryption, signing := kmsBackendFixture(t)
 	backend.publicPEM += "corrupt"
-	if _, err := newCloudKMS(context.Background(), backend, "server", encryption, signing, kmspb.ProtectionLevel_SOFTWARE, [32]byte{1}, time.Second, 2); err == nil {
+	if _, err := newCloudKMS(context.Background(), backend, "server", encryption, signing, kmspb.ProtectionLevel_SOFTWARE, [32]byte{1}, time.Second, 3*time.Second, time.Millisecond, 2); err == nil {
 		t.Fatal("accepted corrupt public-key evidence")
+	}
+}
+
+func TestCloudKMSRejectsMalformedDERSignature(t *testing.T) {
+	adapter, _, _, _ := kmsFixture(t)
+	adapter.backend.(*fakeKMS).signatureOverride = []byte{0x30, 0x01, 0x00}
+	if _, err := adapter.SignES256(context.Background(), []byte("header.payload")); err == nil {
+		t.Fatal("accepted malformed DER")
+	}
+}
+
+func TestCloudKMSRetriesOnlyTransientErrors(t *testing.T) {
+	backend, encryption, signing := kmsBackendFixture(t)
+	parsed, _, _ := validatePublicKey(mustPublicKey(t, backend), signing.value, kmspb.ProtectionLevel_SOFTWARE)
+	transient := &scriptedKMS{fakeKMS: backend, versionErrors: []error{status.Error(codes.Unavailable, "transient")}}
+	if _, err := newCloudKMS(context.Background(), transient, "server", encryption, signing, kmspb.ProtectionLevel_SOFTWARE, parsed.Thumbprint(), time.Second, 3*time.Second, time.Millisecond, 2); err != nil {
+		t.Fatalf("transient retry: %v", err)
+	}
+	if transient.versionCalls != 3 {
+		t.Fatalf("version calls = %d", transient.versionCalls)
+	}
+	permanent := &scriptedKMS{fakeKMS: backend, versionErrors: []error{status.Error(codes.PermissionDenied, "denied")}}
+	if _, err := newCloudKMS(context.Background(), permanent, "server", encryption, signing, kmspb.ProtectionLevel_SOFTWARE, parsed.Thumbprint(), time.Second, 3*time.Second, time.Millisecond, 2); err == nil {
+		t.Fatal("accepted permanent provider error")
+	}
+	if permanent.versionCalls != 1 {
+		t.Fatalf("permanent calls = %d", permanent.versionCalls)
 	}
 }
 
@@ -109,7 +161,7 @@ func kmsFixture(t *testing.T) (*CloudKMS, KeyVersion, KeyVersion, AssociatedData
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter, err := newCloudKMS(context.Background(), backend, "server", encryption, signing, kmspb.ProtectionLevel_SOFTWARE, parsed.Thumbprint(), time.Second, 2)
+	adapter, err := newCloudKMS(context.Background(), backend, "server", encryption, signing, kmspb.ProtectionLevel_SOFTWARE, parsed.Thumbprint(), time.Second, 3*time.Second, time.Millisecond, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
