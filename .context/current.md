@@ -2,11 +2,11 @@
 
 - Updated: 2026-08-03
 - Governing implementation issue: #5
-- Last merged pull request: #17
-- Active pull request: #18
+- Last merged pull request: #18
+- Active pull request: pending for HTTP/SSE contract review
 - Runtime decision: RFC-0003 Accepted
-- Current increment: durable receipt signing and ACK-recovery service
-- Next qualified increment: HTTP/SSE binding RFC and application edge
+- Current increment: HTTP/SSE binding contract review
+- Next qualified increment: executable HTTP/SSE application edge after RFC acceptance
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
