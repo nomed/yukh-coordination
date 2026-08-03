@@ -35,6 +35,14 @@ func TestDurableAppendRetryAndReplay(t *testing.T) {
 
 	store = openStore(t, path)
 	t.Cleanup(func() { _ = store.Close() })
+	attachment := relay.SignatureAttachment{
+		Channel: testChannel.Key, ReceiptID: first.Record.ReceiptID,
+		UnsignedReceiptPreimage: first.Record.UnsignedReceiptPreimage,
+		Signature:               []byte("signature-1"),
+	}
+	if _, err := store.AttachSignature(context.Background(), attachment); err != nil {
+		t.Fatal(err)
+	}
 	duplicate, err := store.Append(context.Background(), firstIntent, func(uint64, string) (relay.AcceptedRecord, error) {
 		t.Fatal("durable retry must not prepare another record")
 		return relay.AcceptedRecord{}, nil
@@ -44,6 +52,16 @@ func TestDurableAppendRetryAndReplay(t *testing.T) {
 	}
 	if duplicate.Outcome != relay.AppendOutcomeDuplicate || duplicate.Record.ReceiptID != first.Record.ReceiptID {
 		t.Fatalf("retry lost committed identity: %#v", duplicate)
+	}
+	if string(duplicate.Record.Signature) != "signature-1" {
+		t.Fatalf("retry lost durable signature: %#v", duplicate.Record)
+	}
+	if _, err := store.AttachSignature(context.Background(), attachment); err != nil {
+		t.Fatalf("exact signature retry failed: %v", err)
+	}
+	attachment.Signature = []byte("changed-signature")
+	if _, err := store.AttachSignature(context.Background(), attachment); !errors.Is(err, relay.ErrSignatureCollision) {
+		t.Fatalf("expected signature collision, got %v", err)
 	}
 
 	secondIntent := intent(testChannel.Key, "event-2")
@@ -283,6 +301,8 @@ func prepare(intent relay.AppendIntent) relay.PrepareRecord {
 			AuthenticatedBinding:    []byte(`{"principal_id":"principal:test"}`),
 			AuthorizationBinding:    []byte(`{"decision":"allow"}`),
 			ReceiptID:               "receipt-" + intent.Channel.TenantID + "-" + intent.EventID,
+			SigningKeyID:            "key-1",
+			SignatureAlgorithm:      "Ed25519",
 			UnsignedReceiptPreimage: []byte(fmt.Sprintf(`{"server_sequence":"%d"}`, sequence)),
 		}, nil
 	}

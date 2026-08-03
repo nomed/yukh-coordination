@@ -106,6 +106,26 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 	return relay.AppendResult{Outcome: relay.AppendOutcomeAppended, Record: relay.CloneRecord(committed)}, nil
 }
 
+func (s *Store) Lookup(ctx context.Context, key relay.ChannelKey, eventID string) (relay.AcceptedRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if key.TenantID == "" || key.ChannelID == "" || key.TranscriptEpoch == "" || eventID == "" {
+		return relay.AcceptedRecord{}, relay.ErrInvalidArgument
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.transcripts[key]; !ok {
+		return relay.AcceptedRecord{}, relay.ErrChannelNotFound
+	}
+	record, ok := s.events[identityOf(key)][eventID]
+	if !ok {
+		return relay.AcceptedRecord{}, relay.ErrEventNotFound
+	}
+	return relay.CloneRecord(record), nil
+}
+
 func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, limit int) ([]relay.AcceptedRecord, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -131,6 +151,41 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 		result = append(result, relay.CloneRecord(record))
 	}
 	return result, nil
+}
+
+func (s *Store) AttachSignature(ctx context.Context, attachment relay.SignatureAttachment) (relay.AcceptedRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if err := relay.ValidateSignatureAttachment(attachment); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.transcripts[attachment.Channel]
+	if !ok {
+		return relay.AcceptedRecord{}, relay.ErrReceiptNotFound
+	}
+	for index, record := range t.records {
+		if record.ReceiptID != attachment.ReceiptID {
+			continue
+		}
+		if !bytes.Equal(record.UnsignedReceiptPreimage, attachment.UnsignedReceiptPreimage) {
+			return relay.AcceptedRecord{}, relay.ErrSignatureCollision
+		}
+		if len(record.Signature) > 0 {
+			if !bytes.Equal(record.Signature, attachment.Signature) {
+				return relay.AcceptedRecord{}, relay.ErrSignatureCollision
+			}
+			return relay.CloneRecord(record), nil
+		}
+		record.Signature = bytes.Clone(attachment.Signature)
+		t.records[index] = record
+		s.events[identityOf(attachment.Channel)][record.EventID] = record
+		return relay.CloneRecord(record), nil
+	}
+	return relay.AcceptedRecord{}, relay.ErrReceiptNotFound
 }
 
 func identityOf(key relay.ChannelKey) channelIdentity {

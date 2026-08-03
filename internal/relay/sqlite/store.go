@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 type Store struct {
 	db *sql.DB
@@ -94,10 +94,27 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err := tx.conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("read sqlite schema version: %w", err)
 	}
-	if version != 0 && version != schemaVersion {
+	if version < 0 || version > schemaVersion {
 		return fmt.Errorf("unsupported sqlite schema version %d", version)
 	}
 	if version == schemaVersion {
+		return tx.commit(ctx)
+	}
+
+	if version == 1 {
+		migrationStatements := []string{
+			"ALTER TABLE accepted_records ADD COLUMN signing_key_id TEXT",
+			"ALTER TABLE accepted_records ADD COLUMN signature_algorithm TEXT",
+			"ALTER TABLE accepted_records ADD COLUMN signature BLOB CHECK (signature IS NULL OR length(signature) > 0)",
+		}
+		for _, statement := range migrationStatements {
+			if _, err := tx.conn.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("migrate sqlite relay signatures: %w", err)
+			}
+		}
+		if _, err := tx.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
+			return fmt.Errorf("set sqlite schema version: %w", err)
+		}
 		return tx.commit(ctx)
 	}
 
@@ -129,7 +146,10 @@ func (s *Store) migrate(ctx context.Context) error {
 			authenticated_binding BLOB NOT NULL,
 			authorization_binding BLOB NOT NULL,
 			receipt_id TEXT NOT NULL,
+			signing_key_id TEXT NOT NULL,
+			signature_algorithm TEXT NOT NULL,
 			unsigned_receipt_preimage BLOB NOT NULL,
+			signature BLOB CHECK (signature IS NULL OR length(signature) > 0),
 			PRIMARY KEY (tenant_id, channel_id, event_id),
 			UNIQUE (receipt_id),
 			UNIQUE (tenant_id, channel_id, transcript_epoch, server_sequence),
@@ -256,11 +276,13 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 		`INSERT INTO accepted_records (
 			tenant_id, channel_id, transcript_epoch, server_sequence, event_id,
 			canonical_event, event_digest, authenticated_binding,
-			authorization_binding, receipt_id, unsigned_receipt_preimage
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			authorization_binding, receipt_id, signing_key_id,
+			signature_algorithm, unsigned_receipt_preimage
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.Channel.TenantID, record.Channel.ChannelID, record.Channel.TranscriptEpoch,
 		record.Sequence, record.EventID, record.CanonicalEvent, record.EventDigest,
 		record.AuthenticatedBinding, record.AuthorizationBinding, record.ReceiptID,
+		record.SigningKeyID, record.SignatureAlgorithm,
 		record.UnsignedReceiptPreimage,
 	); err != nil {
 		return relay.AppendResult{}, fmt.Errorf("insert sqlite accepted record: %w", err)
@@ -284,6 +306,33 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 		return relay.AppendResult{}, err
 	}
 	return relay.AppendResult{Outcome: relay.AppendOutcomeAppended, Record: relay.CloneRecord(record)}, nil
+}
+
+func (s *Store) Lookup(ctx context.Context, key relay.ChannelKey, eventID string) (relay.AcceptedRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if key.TenantID == "" || key.ChannelID == "" || key.TranscriptEpoch == "" || eventID == "" {
+		return relay.AcceptedRecord{}, relay.ErrInvalidArgument
+	}
+	var exists int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM transcripts
+		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?`,
+		key.TenantID, key.ChannelID, key.TranscriptEpoch,
+	).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return relay.AcceptedRecord{}, relay.ErrChannelNotFound
+	} else if err != nil {
+		return relay.AcceptedRecord{}, fmt.Errorf("look up sqlite transcript: %w", err)
+	}
+	record, found, err := findRecord(ctx, s.db, key.TenantID, key.ChannelID, eventID)
+	if err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if !found {
+		return relay.AcceptedRecord{}, relay.ErrEventNotFound
+	}
+	return record, nil
 }
 
 func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, limit int) ([]relay.AcceptedRecord, error) {
@@ -311,7 +360,8 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT transcript_epoch, server_sequence, event_id, canonical_event,
 		        event_digest, authenticated_binding, authorization_binding,
-		        receipt_id, unsigned_receipt_preimage
+		        receipt_id, signing_key_id, signature_algorithm,
+		        unsigned_receipt_preimage, signature
 		 FROM accepted_records
 		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?
 		   AND server_sequence > ?
@@ -330,7 +380,9 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 		if err := rows.Scan(
 			&record.Channel.TranscriptEpoch, &record.Sequence, &record.EventID,
 			&record.CanonicalEvent, &record.EventDigest, &record.AuthenticatedBinding,
-			&record.AuthorizationBinding, &record.ReceiptID, &record.UnsignedReceiptPreimage,
+			&record.AuthorizationBinding, &record.ReceiptID, &record.SigningKeyID,
+			&record.SignatureAlgorithm, &record.UnsignedReceiptPreimage,
+			&record.Signature,
 		); err != nil {
 			return nil, fmt.Errorf("scan sqlite accepted record: %w", err)
 		}
@@ -342,25 +394,116 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 	return records, nil
 }
 
-func findRecord(ctx context.Context, conn *sql.Conn, tenantID, channelID, eventID string) (relay.AcceptedRecord, bool, error) {
+func (s *Store) AttachSignature(ctx context.Context, attachment relay.SignatureAttachment) (relay.AcceptedRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if err := relay.ValidateSignatureAttachment(attachment); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+
+	tx, err := beginImmediate(ctx, s.db)
+	if err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	defer tx.rollback()
+
+	record, found, err := findReceipt(ctx, tx.conn, attachment.Channel, attachment.ReceiptID)
+	if err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	if !found {
+		return relay.AcceptedRecord{}, relay.ErrReceiptNotFound
+	}
+	if !bytes.Equal(record.UnsignedReceiptPreimage, attachment.UnsignedReceiptPreimage) {
+		return relay.AcceptedRecord{}, relay.ErrSignatureCollision
+	}
+	if len(record.Signature) > 0 {
+		if !bytes.Equal(record.Signature, attachment.Signature) {
+			return relay.AcceptedRecord{}, relay.ErrSignatureCollision
+		}
+		if err := tx.commit(ctx); err != nil {
+			return relay.AcceptedRecord{}, err
+		}
+		return record, nil
+	}
+
+	result, err := tx.conn.ExecContext(ctx,
+		`UPDATE accepted_records SET signature = ?
+		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?
+		   AND receipt_id = ? AND signature IS NULL`,
+		attachment.Signature, attachment.Channel.TenantID, attachment.Channel.ChannelID,
+		attachment.Channel.TranscriptEpoch, attachment.ReceiptID,
+	)
+	if err != nil {
+		return relay.AcceptedRecord{}, fmt.Errorf("attach sqlite receipt signature: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return relay.AcceptedRecord{}, fmt.Errorf("read sqlite signature update result: %w", err)
+	}
+	if rows != 1 {
+		return relay.AcceptedRecord{}, fmt.Errorf("attach sqlite receipt signature: expected one row, got %d", rows)
+	}
+	if err := tx.commit(ctx); err != nil {
+		return relay.AcceptedRecord{}, err
+	}
+	record.Signature = bytes.Clone(attachment.Signature)
+	return record, nil
+}
+
+type queryRower interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func findRecord(ctx context.Context, query queryRower, tenantID, channelID, eventID string) (relay.AcceptedRecord, bool, error) {
 	record := relay.AcceptedRecord{Channel: relay.ChannelKey{TenantID: tenantID, ChannelID: channelID}}
-	err := conn.QueryRowContext(ctx,
+	err := query.QueryRowContext(ctx,
 		`SELECT transcript_epoch, server_sequence, event_id, canonical_event,
 		        event_digest, authenticated_binding, authorization_binding,
-		        receipt_id, unsigned_receipt_preimage
+		        receipt_id, signing_key_id, signature_algorithm,
+		        unsigned_receipt_preimage, signature
 		 FROM accepted_records
 		 WHERE tenant_id = ? AND channel_id = ? AND event_id = ?`,
 		tenantID, channelID, eventID,
 	).Scan(
 		&record.Channel.TranscriptEpoch, &record.Sequence, &record.EventID,
 		&record.CanonicalEvent, &record.EventDigest, &record.AuthenticatedBinding,
-		&record.AuthorizationBinding, &record.ReceiptID, &record.UnsignedReceiptPreimage,
+		&record.AuthorizationBinding, &record.ReceiptID, &record.SigningKeyID,
+		&record.SignatureAlgorithm, &record.UnsignedReceiptPreimage,
+		&record.Signature,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return relay.AcceptedRecord{}, false, nil
 	}
 	if err != nil {
 		return relay.AcceptedRecord{}, false, fmt.Errorf("look up sqlite event id: %w", err)
+	}
+	return record, true, nil
+}
+
+func findReceipt(ctx context.Context, conn *sql.Conn, key relay.ChannelKey, receiptID string) (relay.AcceptedRecord, bool, error) {
+	record := relay.AcceptedRecord{Channel: relay.ChannelKey{TenantID: key.TenantID, ChannelID: key.ChannelID}}
+	err := conn.QueryRowContext(ctx,
+		`SELECT transcript_epoch, server_sequence, event_id, canonical_event,
+		        event_digest, authenticated_binding, authorization_binding,
+		        receipt_id, signing_key_id, signature_algorithm,
+		        unsigned_receipt_preimage, signature
+		 FROM accepted_records
+		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ? AND receipt_id = ?`,
+		key.TenantID, key.ChannelID, key.TranscriptEpoch, receiptID,
+	).Scan(
+		&record.Channel.TranscriptEpoch, &record.Sequence, &record.EventID,
+		&record.CanonicalEvent, &record.EventDigest, &record.AuthenticatedBinding,
+		&record.AuthorizationBinding, &record.ReceiptID, &record.SigningKeyID,
+		&record.SignatureAlgorithm, &record.UnsignedReceiptPreimage,
+		&record.Signature,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return relay.AcceptedRecord{}, false, nil
+	}
+	if err != nil {
+		return relay.AcceptedRecord{}, false, fmt.Errorf("look up sqlite receipt: %w", err)
 	}
 	return record, true, nil
 }
