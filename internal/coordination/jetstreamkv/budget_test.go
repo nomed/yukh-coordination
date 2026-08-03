@@ -39,6 +39,9 @@ func TestCapabilityBudgetAgainstDisposableNATS(t *testing.T) {
 	if err := budget.Retire(ctx, principal, second, 1); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := OpenCapabilityBudget(ctx, connection, testConfig(1), 2, time.Second); !errors.Is(err, coordination.ErrInvalidArgument) {
+		t.Fatalf("changed limit accepted: %v", err)
+	}
 }
 
 func TestCapabilityBudgetReconcilesOneExactAmbiguousMutation(t *testing.T) {

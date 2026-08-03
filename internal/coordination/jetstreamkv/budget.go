@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -40,7 +41,7 @@ type CapabilityBudget struct {
 }
 
 func OpenCapabilityBudget(ctx context.Context, connection *nats.Conn, config Config, limit int, pendingTTL time.Duration) (*CapabilityBudget, error) {
-	if connection == nil || limit < 1 || limit > 32 || pendingTTL <= 0 || pendingTTL > 5*time.Second || config.Replicas < 1 || config.Replicas > 5 || config.Retention <= config.MaxLifetime || config.Epoch == 0 {
+	if connection == nil || limit < 1 || limit > 32 || pendingTTL <= 0 || pendingTTL > 5*time.Second || config.Replicas < 1 || config.Replicas > 5 || config.MaxLifetime <= 0 || config.ReplaySafetyWindow <= 0 || config.Retention <= config.MaxLifetime || config.Retention-config.MaxLifetime <= config.ReplaySafetyWindow || config.Epoch == 0 {
 		return nil, coordination.ErrInvalidArgument
 	}
 	js, err := natsjs.New(connection)
@@ -49,6 +50,8 @@ func OpenCapabilityBudget(ctx context.Context, connection *nats.Conn, config Con
 	}
 	expectedConfig := expected(CapabilityBudgetBucket, "Yukh bounded capability accounting", config)
 	expectedConfig.MaxValueSize = maxBudgetValueBytes
+	expectedConfig.Metadata["yukh.capability.limit"] = strconv.Itoa(limit)
+	expectedConfig.Metadata["yukh.capability.pending_ttl_ms"] = strconv.FormatInt(pendingTTL.Milliseconds(), 10)
 	kv, err := js.KeyValue(ctx, CapabilityBudgetBucket)
 	if errors.Is(err, natsjs.ErrBucketNotFound) && config.Bootstrap {
 		kv, err = js.CreateKeyValue(ctx, expectedConfig)
