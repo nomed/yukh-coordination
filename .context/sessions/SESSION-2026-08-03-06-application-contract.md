@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-06: Relay application contract
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #21
 - Status: Active
 
 ## Objective
