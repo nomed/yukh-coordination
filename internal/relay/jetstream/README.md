@@ -9,8 +9,10 @@ exact fail-closed stream profile against a real `nats-server`. It implements
 per-tenant-subject optimistic concurrency and identity-based reconciliation of
 ambiguous publish acknowledgements.
 
-Live notification is deliberately separate. Until the next qualified
-increment implements the application `SubscriptionSource`, this package is a
-durable Store adapter rather than a complete relay runtime adapter.
+The same adapter implements the application live-notification shape with an
+ephemeral JetStream consumer filtered to the exact tenant subject. Setup
+completes before the first durable read, wake-ups are bounded and coalesced,
+and cancellation removes the server-side consumer. Notifications never carry
+records or cursors: durable Store reads remain authoritative.
 
 No NATS credentials, endpoint defaults or deployment topology belong here.
