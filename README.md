@@ -1,4 +1,10 @@
-# Yukh Coordination
+<p align="center">
+  <a href="https://nomed.github.io/system/coordination/"><img src="docs/assets/repository-mark.svg" width="96" alt="Yukh Coordination"></a>
+</p>
+
+<h1 align="center">Yukh Coordination</h1>
+
+<p align="center"><a href="https://nomed.github.io/system/coordination/">Role in the Yukh system</a></p>
 
 > Two isolated sessions can discover each other's ownership and progress, ask questions, exchange verifiable evidence, and complete a handoff without using the user as their coordination channel.
 
