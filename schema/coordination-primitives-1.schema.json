@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/coordination-primitives-1.schema.json",
+  "title": "Yukh coordination primitives v1 closed messages",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "expiry": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
+    "epoch": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "capability": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "nonceConsumeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["epoch", "expires_at", "scope_digest", "value_digest"],
+      "properties": { "epoch": { "$ref": "#/$defs/epoch" }, "expires_at": { "$ref": "#/$defs/expiry" }, "scope_digest": { "$ref": "#/$defs/digest" }, "value_digest": { "$ref": "#/$defs/digest" } }
+    },
+    "leaseAcquireRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["epoch", "expires_at", "holder_digest", "scope_digest"],
+      "properties": { "epoch": { "$ref": "#/$defs/epoch" }, "expires_at": { "$ref": "#/$defs/expiry" }, "holder_digest": { "$ref": "#/$defs/digest" }, "scope_digest": { "$ref": "#/$defs/digest" } }
+    },
+    "leaseCapabilityRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lease_capability"], "properties": { "lease_capability": { "$ref": "#/$defs/capability" } }
+    },
+    "leaseRenewRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expires_at", "lease_capability"],
+      "properties": { "expires_at": { "$ref": "#/$defs/expiry" }, "lease_capability": { "$ref": "#/$defs/capability" } }
+    },
+    "simpleResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "specversion"],
+      "properties": { "specversion": { "const": "1" }, "outcome": { "enum": ["consumed", "replayed", "valid", "expired", "released", "stale"] } }
+    },
+    "leaseResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expires_at", "fencing_token", "lease_capability", "outcome", "specversion"],
+      "properties": { "specversion": { "const": "1" }, "outcome": { "enum": ["acquired", "renewed"] }, "expires_at": { "$ref": "#/$defs/expiry" }, "fencing_token": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }, "lease_capability": { "$ref": "#/$defs/capability" } }
+    },
+    "problem": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "status", "title", "type"],
+      "properties": {
+        "code": { "enum": ["unauthenticated", "access_denied", "conflict", "replayed", "stale_fence", "temporarily_unavailable", "invariant_violation", "invalid_request"] },
+        "status": { "enum": [400, 401, 403, 409, 500, 503] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "type": { "type": "string", "pattern": "^urn:yukh:coordination-primitives:problem:[a-z_]+$" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/nonceConsumeRequest" },
+    { "$ref": "#/$defs/leaseAcquireRequest" },
+    { "$ref": "#/$defs/leaseCapabilityRequest" },
+    { "$ref": "#/$defs/leaseRenewRequest" },
+    { "$ref": "#/$defs/simpleResponse" },
+    { "$ref": "#/$defs/leaseResponse" },
+    { "$ref": "#/$defs/problem" }
+  ]
+}
