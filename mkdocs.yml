@@ -18,7 +18,7 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: cyan
+      primary: black
       accent: cyan
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
