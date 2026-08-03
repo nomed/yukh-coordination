@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 type Store struct {
 	db *sql.DB
@@ -112,6 +112,19 @@ func (s *Store) migrate(ctx context.Context) error {
 				return fmt.Errorf("migrate sqlite relay signatures: %w", err)
 			}
 		}
+		version = 2
+	}
+	if version == 2 {
+		migrationStatements := []string{
+			"ALTER TABLE transcripts ADD COLUMN canonical_metadata BLOB",
+			"ALTER TABLE transcripts ADD COLUMN metadata_digest TEXT",
+			"ALTER TABLE transcripts ADD COLUMN lifecycle TEXT",
+		}
+		for _, statement := range migrationStatements {
+			if _, err := tx.conn.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("migrate sqlite channel metadata: %w", err)
+			}
+		}
 		if _, err := tx.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 			return fmt.Errorf("set sqlite schema version: %w", err)
 		}
@@ -131,6 +144,9 @@ func (s *Store) migrate(ctx context.Context) error {
 			channel_id TEXT NOT NULL,
 			transcript_epoch TEXT NOT NULL,
 			next_sequence INTEGER NOT NULL DEFAULT 1 CHECK (next_sequence > 0),
+			canonical_metadata BLOB NOT NULL,
+			metadata_digest TEXT NOT NULL,
+			lifecycle TEXT NOT NULL CHECK (lifecycle IN ('active', 'redacted', 'deleted')),
 			PRIMARY KEY (tenant_id, channel_id, transcript_epoch),
 			FOREIGN KEY (tenant_id, channel_id)
 				REFERENCES channel_identities (tenant_id, channel_id)
@@ -211,14 +227,60 @@ func (s *Store) CreateChannel(ctx context.Context, channel relay.Channel) error 
 		return fmt.Errorf("look up sqlite channel identity: %w", err)
 	}
 
-	if _, err := tx.conn.ExecContext(ctx,
-		`INSERT INTO transcripts (tenant_id, channel_id, transcript_epoch)
-		 VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
+	result, err := tx.conn.ExecContext(ctx,
+		`INSERT INTO transcripts (tenant_id, channel_id, transcript_epoch, canonical_metadata, metadata_digest, lifecycle)
+		 VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
 		channel.Key.TenantID, channel.Key.ChannelID, channel.Key.TranscriptEpoch,
-	); err != nil {
+		channel.CanonicalMetadata, channel.MetadataDigest, channel.Lifecycle,
+	)
+	if err != nil {
 		return fmt.Errorf("insert sqlite transcript: %w", err)
 	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read sqlite transcript insert result: %w", err)
+	}
+	if rows == 0 {
+		existing, err := lookupChannel(ctx, tx.conn, channel.Key)
+		if err != nil {
+			return err
+		}
+		if !relay.SameChannel(existing, channel) {
+			return relay.ErrChannelConflict
+		}
+	}
 	return tx.commit(ctx)
+}
+
+func (s *Store) LookupChannel(ctx context.Context, key relay.ChannelKey) (relay.Channel, error) {
+	if err := ctx.Err(); err != nil {
+		return relay.Channel{}, err
+	}
+	if key.TenantID == "" || key.ChannelID == "" || key.TranscriptEpoch == "" {
+		return relay.Channel{}, relay.ErrInvalidArgument
+	}
+	return lookupChannel(ctx, s.db, key)
+}
+
+func lookupChannel(ctx context.Context, query queryRower, key relay.ChannelKey) (relay.Channel, error) {
+	channel := relay.Channel{Key: key}
+	err := query.QueryRowContext(ctx,
+		`SELECT identities.uri, transcripts.canonical_metadata, transcripts.metadata_digest, transcripts.lifecycle
+		 FROM transcripts
+		 JOIN channel_identities AS identities USING (tenant_id, channel_id)
+		 WHERE transcripts.tenant_id = ? AND transcripts.channel_id = ? AND transcripts.transcript_epoch = ?`,
+		key.TenantID, key.ChannelID, key.TranscriptEpoch,
+	).Scan(&channel.URI, &channel.CanonicalMetadata, &channel.MetadataDigest, &channel.Lifecycle)
+	if errors.Is(err, sql.ErrNoRows) {
+		return relay.Channel{}, relay.ErrChannelNotFound
+	}
+	if err != nil {
+		return relay.Channel{}, fmt.Errorf("look up sqlite channel metadata: %w", err)
+	}
+	if err := relay.ValidateChannel(channel); err != nil {
+		return relay.Channel{}, fmt.Errorf("%w: incomplete channel metadata", relay.ErrChannelNotFound)
+	}
+	return relay.CloneChannel(channel), nil
 }
 
 func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare relay.PrepareRecord) (relay.AppendResult, error) {

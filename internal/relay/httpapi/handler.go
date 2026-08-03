@@ -45,7 +45,7 @@ type Identity struct {
 	TenantID              string
 	PrincipalID           string
 	ParticipantInstanceID string
-	SessionEpoch          string
+	SessionEpoch          uint64
 }
 
 type AccessRequest struct {
@@ -55,9 +55,12 @@ type AccessRequest struct {
 }
 
 type Decision struct {
-	Allowed          bool
-	CanonicalBinding []byte
-	Revoked          <-chan struct{}
+	Allowed           bool
+	CanonicalBinding  []byte
+	ACLPolicyVersion  string
+	ACLPolicyDigest   string
+	DecisionReceiptID string
+	Revoked           <-chan struct{}
 }
 
 type Authenticator interface {
@@ -72,6 +75,9 @@ type AdmittedRequest struct {
 	Identity             Identity
 	Channel              relay.ChannelKey
 	AuthorizationBinding []byte
+	ACLPolicyVersion     string
+	ACLPolicyDigest      string
+	ACLDecisionReceiptID string
 }
 
 type AppendResponse struct {
@@ -93,6 +99,7 @@ type StreamRecord struct {
 type StreamItem struct {
 	Record             *StreamRecord
 	IncompleteBoundary *uint64
+	Err                error
 }
 
 type Application interface {
@@ -170,11 +177,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	route.channel.TenantID = identity.TenantID
 	decision, err := h.authorizer.Authorize(r.Context(), AccessRequest{Identity: identity, Channel: route.channel, Action: route.action})
-	if err != nil || !decision.Allowed || len(decision.CanonicalBinding) == 0 {
+	if err != nil || !validDecision(decision) {
 		writeProblem(w, requestID, http.StatusNotFound, "resource_unavailable", "Resource unavailable")
 		return
 	}
-	admitted := AdmittedRequest{Identity: identity, Channel: route.channel, AuthorizationBinding: bytes.Clone(decision.CanonicalBinding)}
+	admitted := AdmittedRequest{
+		Identity: identity, Channel: route.channel,
+		AuthorizationBinding: bytes.Clone(decision.CanonicalBinding),
+		ACLPolicyVersion:     decision.ACLPolicyVersion, ACLPolicyDigest: decision.ACLPolicyDigest,
+		ACLDecisionReceiptID: decision.DecisionReceiptID,
+	}
 
 	switch route.action {
 	case ActionPublish:
@@ -297,6 +309,9 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request, requestID strin
 			flusher.Flush()
 		case item, open := <-items:
 			if !open {
+				return
+			}
+			if item.Err != nil {
 				return
 			}
 			if isRevoked(revoked) {
@@ -494,7 +509,11 @@ func validBearerToken(token string) bool {
 }
 
 func validIdentity(identity Identity) bool {
-	return identity.TenantID != "" && identity.PrincipalID != "" && identity.ParticipantInstanceID != "" && identity.SessionEpoch != ""
+	return identity.TenantID != "" && identity.PrincipalID != "" && identity.ParticipantInstanceID != ""
+}
+
+func validDecision(decision Decision) bool {
+	return decision.Allowed && len(decision.CanonicalBinding) > 0 && decision.ACLPolicyVersion != "" && decision.ACLPolicyDigest != "" && decision.DecisionReceiptID != ""
 }
 
 func matchesVersionedMediaType(value, expected string) bool {

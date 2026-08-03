@@ -16,8 +16,8 @@ import (
 )
 
 var testChannel = relay.Channel{
-	Key: relay.ChannelKey{TenantID: "tenant:test", ChannelID: "channel:test", TranscriptEpoch: "epoch:1"},
-	URI: "https://coord.example/channels/test",
+	Key: relay.ChannelKey{TenantID: "tenant:test", ChannelID: "channel:test", TranscriptEpoch: "epoch:1"}, URI: "https://coord.example/channels/test",
+	CanonicalMetadata: []byte(`{"specversion":"0.1"}`), MetadataDigest: "sha256:test", Lifecycle: "active",
 }
 
 func TestDurableAppendRetryAndReplay(t *testing.T) {

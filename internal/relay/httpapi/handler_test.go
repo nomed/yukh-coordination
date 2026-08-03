@@ -211,7 +211,7 @@ func (a *fakeAuthenticator) Authenticate(_ context.Context, token string) (httpa
 	}
 	return httpapi.Identity{
 		TenantID: "tenant:trusted", PrincipalID: "principal:trusted",
-		ParticipantInstanceID: "participant:1", SessionEpoch: "session:1",
+		ParticipantInstanceID: "participant:1", SessionEpoch: 1,
 	}, a.err
 }
 
@@ -267,7 +267,7 @@ func newHandler(t *testing.T, authenticator httpapi.Authenticator, authorizer ht
 }
 
 func allowedDecision() httpapi.Decision {
-	return httpapi.Decision{Allowed: true, CanonicalBinding: []byte(`{"decision":"allow"}`)}
+	return httpapi.Decision{Allowed: true, CanonicalBinding: []byte(`{"decision":"allow"}`), ACLPolicyVersion: "acl-v1", ACLPolicyDigest: "sha-256:test", DecisionReceiptID: "decision-1"}
 }
 
 func request(method, target, body string) *http.Request {

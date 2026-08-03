@@ -23,7 +23,7 @@ func TestOpenAppliesDurabilityProfile(t *testing.T) {
 		{"synchronous", "2"},
 		{"foreign_keys", "1"},
 		{"busy_timeout", "5000"},
-		{"user_version", "2"},
+		{"user_version", "3"},
 	}
 	for _, check := range checks {
 		t.Run(check.pragma, func(t *testing.T) {
@@ -57,6 +57,9 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 	if _, err := db.Exec(`CREATE TABLE accepted_records (id INTEGER) STRICT`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`CREATE TABLE transcripts (id INTEGER) STRICT`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec("PRAGMA user_version=1"); err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +76,8 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version: got %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("schema version: got %d, want 3", version)
 	}
 	rows, err := store.db.Query("PRAGMA table_info(accepted_records)")
 	if err != nil {
@@ -100,6 +103,28 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 	for name, found := range foundColumns {
 		if !found {
 			t.Fatalf("version-one migration did not add %s column", name)
+		}
+	}
+	metadataRows, err := store.db.Query("PRAGMA table_info(transcripts)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer metadataRows.Close()
+	foundMetadata := map[string]bool{"canonical_metadata": false, "metadata_digest": false, "lifecycle": false}
+	for metadataRows.Next() {
+		var cid, notNull, primaryKey int
+		var name, dataType string
+		var defaultValue any
+		if err := metadataRows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, tracked := foundMetadata[name]; tracked {
+			foundMetadata[name] = true
+		}
+	}
+	for name, found := range foundMetadata {
+		if !found {
+			t.Fatalf("version-two migration did not add %s column", name)
 		}
 	}
 }

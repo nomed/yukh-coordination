@@ -22,5 +22,18 @@ retry finds the original record, selects no replacement key, signs its persisted
 preimage and returns the original receipt identity. A retry of an already signed
 record performs neither key selection nor signing.
 
-Authentication, authorization, protocol validation and HTTP error mapping are
-separate preceding/following boundaries; this package does not infer them.
+Authentication, authorization and HTTP error mapping remain edge boundaries;
+the admitted context now carries their server-derived bindings explicitly.
+
+## Relay application
+
+`RelayApplication` implements RFC-0005 without owning a transport or provider.
+It validates exact canonical event bytes against the public embedded schema,
+checks immutable channel and ACL bindings, prepares canonical signed receipts,
+builds deterministic bounded pages and performs subscribe-before-read live
+delivery. Live notifications are bounded wake-ups only; every emitted record is
+read again from the durable store.
+
+The current validator covers closed schema and event-local semantics. Stateful
+RFC-0001 reference, claim-limit and handoff-CAS admission remains the next
+application increment and must precede a runnable relay.
