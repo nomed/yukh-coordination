@@ -23,3 +23,13 @@ jobs:
         run: go install github.com/nats-io/nats-server/v2@v2.12.0
       - name: Run race and JetStream qualification tests
         run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Run dependency-free Node 24 qualification offline
+        run: |
+          node_bin="$(dirname "$(command -v node)")"
+          sudo env \
+            "PATH=${node_bin}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+            npm_config_offline=true npm_config_audit=false npm_config_fund=false \
+            unshare --net bash -c 'ip link set lo up && npm run check:primitives-bundle && npm test'

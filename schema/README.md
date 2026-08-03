@@ -1,5 +1,9 @@
 # Protocol schema boundary
 
+`coordination-primitives-1.schema.json` publishes the closed request, response
+and Problem Details shapes for the separate RFC-0015 primitives service. It
+does not add a relay route or expose provider storage fields.
+
 These closed JSON Schemas are machine-readable parts of RFC-0001 Draft 0.1.
 They do not make the RFC accepted.
 

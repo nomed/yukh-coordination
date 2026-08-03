@@ -12,6 +12,7 @@ var (
 	ErrInvalidArgument = errors.New("coordination: invalid argument")
 	ErrUnavailable     = errors.New("coordination: unavailable")
 	ErrConflict        = errors.New("coordination: conflict")
+	ErrInvariant       = errors.New("coordination: invariant violation")
 )
 
 type Digest string
@@ -67,6 +68,7 @@ func (value LeaseResumeValue) Epoch() uint64        { return value.epoch }
 func (value LeaseResumeValue) FencingToken() uint64 { return value.fencingToken }
 
 type NonceStore interface {
+	ConfiguredEpoch() uint64
 	Consume(context.Context, Digest, NonceValue) (NonceOutcome, error)
 }
 
@@ -78,6 +80,17 @@ type Lease interface {
 }
 
 type FencedLeaseStore interface {
+	ConfiguredEpoch() uint64
 	Acquire(context.Context, Digest, LeaseValue) (Lease, error)
 	Resume(context.Context, Digest, LeaseResumeValue) (Lease, error)
+	Inspect(context.Context, Digest, LeaseResumeValue) (LeaseStatus, error)
 }
+
+type LeaseStatus string
+
+const (
+	LeaseValid    LeaseStatus = "valid"
+	LeaseExpired  LeaseStatus = "expired"
+	LeaseReleased LeaseStatus = "released"
+	LeaseStale    LeaseStatus = "stale"
+)

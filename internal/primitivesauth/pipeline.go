@@ -16,6 +16,8 @@ var (
 	ErrAccessDenied           = errors.New("primitives authorization: access denied")
 	ErrInvalidCapability      = errors.New("primitives authorization: invalid capability")
 	ErrTemporarilyUnavailable = errors.New("primitives authorization: temporarily unavailable")
+	ErrInvariantViolation     = errors.New("primitives authorization: invariant violation")
+	ErrConflict               = errors.New("primitives authorization: conflict")
 )
 
 type Action string
@@ -76,6 +78,8 @@ func NewIdentity(tenant, principal string) (Identity, error) {
 func (Identity) String() string               { return "Identity{REDACTED}" }
 func (Identity) GoString() string             { return "Identity{REDACTED}" }
 func (Identity) MarshalJSON() ([]byte, error) { return nil, ErrInvalidArgument }
+func (value Identity) Tenant() string         { return value.tenant }
+func (value Identity) Principal() string      { return value.principal }
 
 type Authenticator interface {
 	Authenticate(context.Context, RequestAuthentication) (Identity, error)
@@ -103,6 +107,8 @@ type Pipeline struct {
 	scopes        ScopeAuthorizer
 }
 
+const maxCapabilitySize = 3800
+
 func NewPipeline(authenticator Authenticator, actions ActionAuthorizer, scopes ScopeAuthorizer) (*Pipeline, error) {
 	if authenticator == nil || actions == nil || scopes == nil {
 		return nil, ErrInvalidArgument
@@ -114,9 +120,16 @@ func (pipeline *Pipeline) ExecutePublic(ctx context.Context, authentication Requ
 	if !validAction(action) || !validDigest(scope) || operation == nil {
 		return ErrInvalidArgument
 	}
-	identity, err := pipeline.admit(ctx, authentication, action)
+	identity, err := pipeline.Admit(ctx, authentication, action)
 	if err != nil {
 		return err
+	}
+	return pipeline.ExecutePublicAdmitted(ctx, identity, action, scope, operation)
+}
+
+func (pipeline *Pipeline) ExecutePublicAdmitted(ctx context.Context, identity Identity, action Action, scope coordination.Digest, operation ScopedOperation) error {
+	if !validAction(action) || !validIdentity(identity) || !validDigest(scope) || operation == nil {
+		return ErrInvalidArgument
 	}
 	if err := pipeline.scopes.AuthorizeScope(ctx, identity, action, scope); err != nil {
 		return mapAuthorizationError(err)
@@ -125,12 +138,19 @@ func (pipeline *Pipeline) ExecutePublic(ctx context.Context, authentication Requ
 }
 
 func (pipeline *Pipeline) ExecuteSealed(ctx context.Context, authentication RequestAuthentication, action Action, capability string, opener CapabilityOpener, operation ScopedOperation) error {
-	if !validAction(action) || capability == "" || len(capability) > 4096 || opener == nil || operation == nil {
+	if !validAction(action) || capability == "" || len(capability) > maxCapabilitySize || opener == nil || operation == nil {
 		return ErrInvalidArgument
 	}
-	identity, err := pipeline.admit(ctx, authentication, action)
+	identity, err := pipeline.Admit(ctx, authentication, action)
 	if err != nil {
 		return err
+	}
+	return pipeline.ExecuteSealedAdmitted(ctx, identity, action, capability, opener, operation)
+}
+
+func (pipeline *Pipeline) ExecuteSealedAdmitted(ctx context.Context, identity Identity, action Action, capability string, opener CapabilityOpener, operation ScopedOperation) error {
+	if !validAction(action) || !validIdentity(identity) || capability == "" || len(capability) > maxCapabilitySize || opener == nil || operation == nil {
+		return ErrInvalidArgument
 	}
 	scope, err := opener.OpenScope(ctx, identity, capability)
 	if err != nil || !validDigest(scope) {
@@ -145,7 +165,10 @@ func (pipeline *Pipeline) ExecuteSealed(ctx context.Context, authentication Requ
 	return mapOperationError(operation.Run(ctx, identity, action, scope))
 }
 
-func (pipeline *Pipeline) admit(ctx context.Context, authentication RequestAuthentication, action Action) (Identity, error) {
+func (pipeline *Pipeline) Admit(ctx context.Context, authentication RequestAuthentication, action Action) (Identity, error) {
+	if !validAction(action) {
+		return Identity{}, ErrInvalidArgument
+	}
 	identity, err := pipeline.authenticator.Authenticate(ctx, authentication)
 	if err != nil {
 		if errors.Is(err, ErrUnauthenticated) {
@@ -153,13 +176,17 @@ func (pipeline *Pipeline) admit(ctx context.Context, authentication RequestAuthe
 		}
 		return Identity{}, ErrTemporarilyUnavailable
 	}
-	if !identifierPattern.MatchString(identity.tenant) || !identifierPattern.MatchString(identity.principal) {
+	if !validIdentity(identity) {
 		return Identity{}, ErrTemporarilyUnavailable
 	}
 	if err := pipeline.actions.AuthorizeAction(ctx, identity, action); err != nil {
 		return Identity{}, mapAuthorizationError(err)
 	}
 	return identity, nil
+}
+
+func validIdentity(identity Identity) bool {
+	return identifierPattern.MatchString(identity.tenant) && identifierPattern.MatchString(identity.principal)
 }
 
 func mapAuthorizationError(err error) error {
@@ -170,7 +197,7 @@ func mapAuthorizationError(err error) error {
 }
 
 func mapOperationError(err error) error {
-	if err == nil || errors.Is(err, ErrInvalidCapability) {
+	if err == nil || errors.Is(err, ErrInvalidCapability) || errors.Is(err, ErrInvariantViolation) || errors.Is(err, ErrConflict) {
 		return err
 	}
 	return ErrTemporarilyUnavailable

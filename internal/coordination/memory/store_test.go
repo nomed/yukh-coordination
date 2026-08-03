@@ -123,6 +123,34 @@ func TestResumeRejectsInvalidAndExpiredState(t *testing.T) {
 	}
 }
 
+func TestInspectClassifiesTerminalState(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	store, _ := New(time.Minute, 1, func() time.Time { return now })
+	key := coordination.Digest("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	holder := coordination.Digest("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	expires := now.Add(20 * time.Second)
+	held, _ := store.Acquire(context.Background(), key, coordination.LeaseValue{HolderDigest: holder, ExpiresAt: expires, Epoch: 1})
+	resume := mustResumeValue(t, holder, expires, 1, held.FencingToken())
+	if status, err := store.Inspect(context.Background(), key, resume); err != nil || status != coordination.LeaseValid {
+		t.Fatalf("valid: %s %v", status, err)
+	}
+	store.Now = func() time.Time { return expires }
+	if status, err := store.Inspect(context.Background(), key, resume); err != nil || status != coordination.LeaseExpired {
+		t.Fatalf("expired: %s %v", status, err)
+	}
+	store.Now = func() time.Time { return now }
+	if err := held.Release(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := store.Inspect(context.Background(), key, resume); err != nil || status != coordination.LeaseReleased {
+		t.Fatalf("released: %s %v", status, err)
+	}
+	changed := mustResumeValue(t, holder, expires, 1, resume.FencingToken()+2)
+	if status, err := store.Inspect(context.Background(), key, changed); err != nil || status != coordination.LeaseStale {
+		t.Fatalf("stale: %s %v", status, err)
+	}
+}
+
 func mustResumeValue(t *testing.T, holder coordination.Digest, expires time.Time, epoch, token uint64) coordination.LeaseResumeValue {
 	t.Helper()
 	value, err := coordination.NewLeaseResumeValue(holder, expires, epoch, token)

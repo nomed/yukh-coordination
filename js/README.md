@@ -23,6 +23,11 @@ npm test
 npm run replay -- --input transcript.json --work https://example.test/issues/42 --pretty
 ```
 
+The dependency-free coordination-primitives client is bundled deterministically
+into `js/dist/primitives-client.mjs`. Regenerate it with
+`npm run build:primitives`; CI uses `npm run check:primitives-bundle` to require
+byte-identical output and the committed SHA-256 checksum.
+
 For JSONL, the first line is a transcript header with `"kind":"transcript"`;
 remaining lines are records with optional `"kind":"record"`. File order is not
 semantic: receipt sequence determines relay-local replay order.
