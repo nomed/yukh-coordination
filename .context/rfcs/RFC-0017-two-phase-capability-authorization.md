@@ -1,10 +1,15 @@
 # RFC-0017: Two-phase authorization for sealed capabilities
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #65
 - Governing architecture: ADR-0001, RFC-0015 and RFC-0016
+
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes the separately reviewed authorization-port and synthetic HTTP
+implementation described here. It does not authorize deployment, credentials,
+publication, protected consumer use or live apply.
 
 ## Decision requested
 
