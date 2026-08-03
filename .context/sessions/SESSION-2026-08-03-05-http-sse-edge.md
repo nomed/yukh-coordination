@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-05: HTTP/SSE edge
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #20
 - Status: Active
 
 ## Objective
