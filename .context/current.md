@@ -3,7 +3,7 @@
 - Updated: 2026-08-03
 - Governing implementation issue: #5
 - Last merged pull request: #22
-- Active pull request: pending for stateful admission
+- Active pull request: #23 for stateful admission
 - Runtime decisions: RFC-0003, RFC-0004 and RFC-0005 Accepted
 - Current increment: atomic stateful reference, resource-limit and handoff-CAS admission
 - Next qualified increment: JetStream durability adapter

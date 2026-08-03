@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-08: Stateful admission
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #23
 - Status: Active
 
 ## Objective
