@@ -90,6 +90,13 @@ func TestHandlerAdmitsCanonicalBoundedAcquire(t *testing.T) {
 	}
 }
 
+func TestHandlerRefusesServiceEpochMismatchAtConstruction(t *testing.T) {
+	handler, _, _ := newHandlerFixture(t)
+	if _, err := NewHandler(handler.bridge, "https://coordination.invalid", 2, time.Second, 1); !errors.Is(err, primitivesauth.ErrInvalidArgument) {
+		t.Fatalf("handler epoch mismatch: %v", err)
+	}
+}
+
 func (value *fixture) Authenticate(context.Context, primitivesauth.RequestAuthentication) (primitivesauth.Identity, error) {
 	value.calls = append(value.calls, "authenticate")
 	return value.identity, value.authErr

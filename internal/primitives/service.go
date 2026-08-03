@@ -80,11 +80,13 @@ type Service struct {
 }
 
 func NewService(nonces coordination.NonceStore, leases coordination.FencedLeaseStore, budget coordination.CapabilityBudget, sealer CapabilitySealer, tokens TokenIDSource, epoch uint64, maxTTL time.Duration, now func() time.Time) (*Service, error) {
-	if nonces == nil || leases == nil || budget == nil || sealer == nil || tokens == nil || epoch == 0 || epoch > maxSafeInteger || maxTTL <= 0 || now == nil {
+	if nonces == nil || leases == nil || budget == nil || sealer == nil || tokens == nil || epoch == 0 || epoch > maxSafeInteger || nonces.ConfiguredEpoch() != epoch || leases.ConfiguredEpoch() != epoch || budget.ConfiguredEpoch() != epoch || maxTTL <= 0 || now == nil {
 		return nil, ErrInvalidArgument
 	}
 	return &Service{nonces: nonces, leases: leases, budget: budget, sealer: sealer, tokens: tokens, epoch: epoch, maxTTL: maxTTL, now: now}, nil
 }
+
+func (service *Service) Epoch() uint64 { return service.epoch }
 
 func (service *Service) ConsumeNonce(ctx context.Context, identity Identity, scope, value coordination.Digest, expiresAt time.Time) (coordination.NonceOutcome, error) {
 	key, err := deriveKey(identity, "nonce", scope)

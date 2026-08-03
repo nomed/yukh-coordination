@@ -1,6 +1,7 @@
 package jetstreamkv
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -39,6 +40,8 @@ type CapabilityBudget struct {
 	epoch      uint64
 	now        func() time.Time
 }
+
+func (budget *CapabilityBudget) ConfiguredEpoch() uint64 { return budget.epoch }
 
 func OpenCapabilityBudget(ctx context.Context, connection *nats.Conn, config Config, limit int, pendingTTL time.Duration) (*CapabilityBudget, error) {
 	if connection == nil || limit < 1 || limit > 32 || pendingTTL <= 0 || pendingTTL > 5*time.Second || config.Replicas < 1 || config.Replicas > 5 || config.MaxLifetime <= 0 || config.ReplaySafetyWindow <= 0 || config.Retention <= config.MaxLifetime || config.Retention-config.MaxLifetime <= config.ReplaySafetyWindow || config.Epoch == 0 {
@@ -214,6 +217,10 @@ func (budget *CapabilityBudget) prune(value *budgetValue) {
 
 func decodeBudget(raw []byte, value *budgetValue) error {
 	if len(raw) == 0 || len(raw) > int(maxBudgetValueBytes) || json.Unmarshal(raw, value) != nil || value.Schema != 1 || value.Epoch == 0 || len(value.Entries) > 32 {
+		return coordination.ErrInvariant
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil || !bytes.Equal(raw, canonical) {
 		return coordination.ErrInvariant
 	}
 	for _, entry := range value.Entries {

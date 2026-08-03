@@ -68,6 +68,7 @@ func (value LeaseResumeValue) Epoch() uint64        { return value.epoch }
 func (value LeaseResumeValue) FencingToken() uint64 { return value.fencingToken }
 
 type NonceStore interface {
+	ConfiguredEpoch() uint64
 	Consume(context.Context, Digest, NonceValue) (NonceOutcome, error)
 }
 
@@ -79,6 +80,7 @@ type Lease interface {
 }
 
 type FencedLeaseStore interface {
+	ConfiguredEpoch() uint64
 	Acquire(context.Context, Digest, LeaseValue) (Lease, error)
 	Resume(context.Context, Digest, LeaseResumeValue) (Lease, error)
 	Inspect(context.Context, Digest, LeaseResumeValue) (LeaseStatus, error)

@@ -34,6 +34,8 @@ type Store struct {
 	revision    uint64
 }
 
+func (store *Store) ConfiguredEpoch() uint64 { return store.Epoch }
+
 func New(maxLifetime time.Duration, epoch uint64, now func() time.Time) (*Store, error) {
 	if maxLifetime <= 0 || epoch == 0 || now == nil {
 		return nil, coordination.ErrInvalidArgument

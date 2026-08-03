@@ -46,6 +46,8 @@ type Store struct {
 	now    func() time.Time
 }
 
+func (store *Store) ConfiguredEpoch() uint64 { return store.config.Epoch }
+
 type value struct {
 	Schema    int    `json:"schema"`
 	Kind      string `json:"kind"`

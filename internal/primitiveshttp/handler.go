@@ -30,7 +30,7 @@ type Handler struct {
 
 func NewHandler(bridge *Bridge, baseURI string, epoch uint64, deadline time.Duration, maxConcurrent int) (*Handler, error) {
 	parsed, err := url.Parse(baseURI)
-	if bridge == nil || err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.HasSuffix(baseURI, "/") || epoch == 0 || deadline <= 0 || deadline > 5*time.Second || maxConcurrent < 1 {
+	if bridge == nil || err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.HasSuffix(baseURI, "/") || epoch == 0 || bridge.Epoch() != epoch || deadline <= 0 || deadline > 5*time.Second || maxConcurrent < 1 {
 		return nil, primitivesauth.ErrInvalidArgument
 	}
 	return &Handler{bridge: bridge, baseURI: baseURI, epoch: epoch, deadline: deadline, slots: make(chan struct{}, maxConcurrent)}, nil

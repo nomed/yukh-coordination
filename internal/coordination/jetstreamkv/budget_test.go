@@ -130,6 +130,32 @@ func TestCapabilityBudgetConcurrentReserveNeverExceedsLimit(t *testing.T) {
 	}
 }
 
+func TestCapabilityBudgetThirtyTwoSlotLimitAgainstDisposableNATS(t *testing.T) {
+	connection := startServer(t, "14324")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	budget, err := OpenCapabilityBudget(ctx, connection, testConfig(1), 32, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	budget.now = func() time.Time { return now }
+	principal := coordination.Digest(strings.Repeat("9", 64))
+	for index := byte(1); index <= 32; index++ {
+		token, _ := coordination.NewCapabilityTokenID([16]byte{index})
+		if err := budget.Reserve(ctx, principal, token, now.Add(time.Minute), 1); err != nil {
+			t.Fatalf("reserve %d: %v", index, err)
+		}
+		if err := budget.Commit(ctx, principal, token, 1); err != nil {
+			t.Fatalf("commit %d: %v", index, err)
+		}
+	}
+	overflow, _ := coordination.NewCapabilityTokenID([16]byte{33})
+	if err := budget.Reserve(ctx, principal, overflow, now.Add(time.Minute), 1); !errors.Is(err, coordination.ErrUnavailable) {
+		t.Fatalf("slot 33: %v", err)
+	}
+}
+
 func TestCapabilityBudgetReplacesOlderEpochAndRejectsMalformedLedger(t *testing.T) {
 	connection := startServer(t, "14322")
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -160,6 +186,19 @@ func TestCapabilityBudgetReplacesOlderEpochAndRejectsMalformedLedger(t *testing.
 	}
 	if err := budget.Reserve(ctx, malformedPrincipal, token, now.Add(30*time.Second), 2); !errors.Is(err, coordination.ErrInvariant) {
 		t.Fatalf("malformed ledger: %v", err)
+	}
+	for index, malformed := range []string{
+		`{"schema":1,"epoch":2,"unknown":true,"entries":[]}`,
+		`{"schema":1,"epoch":2,"epoch":2,"entries":[]}`,
+		`{"schema":1,"epoch":2,"entries":[{"token":"02000000000000000000000000000000","expires_at":"` + now.Add(time.Minute).Format(time.RFC3339Nano) + `","lease_expires_at":"` + now.Add(time.Minute).Format(time.RFC3339Nano) + `","phase":"active","unknown":true}]}`,
+	} {
+		principal := coordination.Digest(strings.Repeat(string(rune('1'+index)), 64))
+		if _, err := budget.kv.Create(ctx, string(principal), []byte(malformed)); err != nil {
+			t.Fatal(err)
+		}
+		if err := budget.Reserve(ctx, principal, token, now.Add(30*time.Second), 2); !errors.Is(err, coordination.ErrInvariant) {
+			t.Fatalf("ambiguous ledger %d: %v", index, err)
+		}
 	}
 
 	futurePrincipal := coordination.Digest("efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef")

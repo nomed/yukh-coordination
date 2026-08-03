@@ -24,6 +24,7 @@ func (CapabilityTokenID) GoString() string             { return "CapabilityToken
 func (CapabilityTokenID) MarshalJSON() ([]byte, error) { return nil, ErrInvalidArgument }
 
 type CapabilityBudget interface {
+	ConfiguredEpoch() uint64
 	Reserve(context.Context, Digest, CapabilityTokenID, time.Time, uint64) error
 	Commit(context.Context, Digest, CapabilityTokenID, uint64) error
 	Cancel(context.Context, Digest, CapabilityTokenID, uint64) error

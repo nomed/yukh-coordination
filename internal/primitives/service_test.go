@@ -179,7 +179,15 @@ func TestCapabilityFromEarlierEpochFailsBeforeCoordinationLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, _ := NewService(store, store, budget, sealer, &tokenSource{}, 2, time.Minute, func() time.Time { return now })
+	if _, err := NewService(store, store, budget, sealer, &tokenSource{}, 2, time.Minute, func() time.Time { return now }); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("mismatched adapter epochs: %v", err)
+	}
+	secondStore, _ := memory.New(time.Minute, 2, func() time.Time { return now })
+	secondBudget, _ := memory.NewCapabilityBudget(32, time.Second, 2, func() time.Time { return now })
+	second, err := NewService(secondStore, secondStore, secondBudget, sealer, &tokenSource{}, 2, time.Minute, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := second.Inspect(context.Background(), identity, acquired.Capability); !errors.Is(err, ErrConflict) {
 		t.Fatalf("earlier epoch capability: %v", err)
 	}

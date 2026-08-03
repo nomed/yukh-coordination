@@ -17,6 +17,8 @@ type Bridge struct {
 	service  *primitives.Service
 }
 
+func (bridge *Bridge) Epoch() uint64 { return bridge.service.Epoch() }
+
 func (bridge *Bridge) Admit(ctx context.Context, authentication primitivesauth.RequestAuthentication, action primitivesauth.Action) (primitivesauth.Identity, error) {
 	return bridge.pipeline.Admit(ctx, authentication, action)
 }

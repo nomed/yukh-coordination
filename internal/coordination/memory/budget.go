@@ -24,6 +24,8 @@ type CapabilityBudget struct {
 	entries    map[coordination.Digest][]budgetEntry
 }
 
+func (budget *CapabilityBudget) ConfiguredEpoch() uint64 { return budget.epoch }
+
 func NewCapabilityBudget(limit int, pendingTTL time.Duration, epoch uint64, now func() time.Time) (*CapabilityBudget, error) {
 	if limit < 1 || limit > 32 || pendingTTL <= 0 || pendingTTL > 5*time.Second || epoch == 0 || now == nil {
 		return nil, coordination.ErrInvalidArgument
