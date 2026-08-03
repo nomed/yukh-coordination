@@ -5,8 +5,6 @@ package memory
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -44,8 +42,8 @@ func (s *Store) CreateChannel(ctx context.Context, channel relay.Channel) error 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if channel.Key.TenantID == "" || channel.Key.ChannelID == "" || channel.Key.TranscriptEpoch == "" || channel.URI == "" {
-		return relay.ErrInvalidArgument
+	if err := relay.ValidateChannel(channel); err != nil {
+		return err
 	}
 
 	s.mu.Lock()
@@ -73,8 +71,8 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 	if err := ctx.Err(); err != nil {
 		return relay.AppendResult{}, err
 	}
-	if intent.Channel.TenantID == "" || intent.Channel.ChannelID == "" || intent.Channel.TranscriptEpoch == "" || intent.EventID == "" || len(intent.CanonicalEvent) == 0 || prepare == nil {
-		return relay.AppendResult{}, relay.ErrInvalidArgument
+	if err := relay.ValidateAppendIntent(intent, prepare); err != nil {
+		return relay.AppendResult{}, err
 	}
 
 	s.mu.Lock()
@@ -89,24 +87,23 @@ func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare r
 		if existing.Channel != intent.Channel || !bytes.Equal(existing.CanonicalEvent, intent.CanonicalEvent) {
 			return relay.AppendResult{}, relay.ErrEventIDCollision
 		}
-		return relay.AppendResult{Outcome: relay.AppendOutcomeDuplicate, Record: cloneRecord(existing)}, nil
+		return relay.AppendResult{Outcome: relay.AppendOutcomeDuplicate, Record: relay.CloneRecord(existing)}, nil
 	}
 
-	digestBytes := sha256.Sum256(intent.CanonicalEvent)
-	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
+	digest := relay.EventDigest(intent.CanonicalEvent)
 	sequence := uint64(len(t.records) + 1)
 	record, err := prepare(sequence, digest)
 	if err != nil {
 		return relay.AppendResult{}, fmt.Errorf("prepare accepted record: %w", err)
 	}
-	if err := validateRecord(intent, sequence, digest, record); err != nil {
+	if err := relay.ValidatePreparedRecord(intent, sequence, digest, record); err != nil {
 		return relay.AppendResult{}, err
 	}
 
-	committed := cloneRecord(record)
+	committed := relay.CloneRecord(record)
 	t.records = append(t.records, committed)
 	s.events[identity][intent.EventID] = committed
-	return relay.AppendResult{Outcome: relay.AppendOutcomeAppended, Record: cloneRecord(committed)}, nil
+	return relay.AppendResult{Outcome: relay.AppendOutcomeAppended, Record: relay.CloneRecord(committed)}, nil
 }
 
 func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, limit int) ([]relay.AcceptedRecord, error) {
@@ -131,29 +128,11 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 	end := min(start+limit, len(t.records))
 	result := make([]relay.AcceptedRecord, 0, end-start)
 	for _, record := range t.records[start:end] {
-		result = append(result, cloneRecord(record))
+		result = append(result, relay.CloneRecord(record))
 	}
 	return result, nil
 }
 
 func identityOf(key relay.ChannelKey) channelIdentity {
 	return channelIdentity{tenantID: key.TenantID, channelID: key.ChannelID}
-}
-
-func validateRecord(intent relay.AppendIntent, sequence uint64, digest string, record relay.AcceptedRecord) error {
-	if record.Channel != intent.Channel || record.Sequence != sequence || record.EventID != intent.EventID || !bytes.Equal(record.CanonicalEvent, intent.CanonicalEvent) || record.EventDigest != digest {
-		return fmt.Errorf("%w: prepared record does not match append intent", relay.ErrInvalidArgument)
-	}
-	if record.ReceiptID == "" || len(record.AuthenticatedBinding) == 0 || len(record.AuthorizationBinding) == 0 || len(record.UnsignedReceiptPreimage) == 0 {
-		return fmt.Errorf("%w: prepared record is incomplete", relay.ErrInvalidArgument)
-	}
-	return nil
-}
-
-func cloneRecord(record relay.AcceptedRecord) relay.AcceptedRecord {
-	record.CanonicalEvent = bytes.Clone(record.CanonicalEvent)
-	record.AuthenticatedBinding = bytes.Clone(record.AuthenticatedBinding)
-	record.AuthorizationBinding = bytes.Clone(record.AuthorizationBinding)
-	record.UnsignedReceiptPreimage = bytes.Clone(record.UnsignedReceiptPreimage)
-	return record
 }
