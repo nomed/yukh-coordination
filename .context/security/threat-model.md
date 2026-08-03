@@ -332,6 +332,34 @@ prove append-failure denial.
 Capability-key custody, JetStream/epoch composition, provisioning and MCP
 traffic remain separate gates.
 
+### RFC-0022 capability-key custody implementation review — 2026-08-03
+
+Issue #104 consumes one canonical closed capability keyring exactly once from
+the supervisor-provided descriptor. Configuration contains only the descriptor
+contract and maximum lease lifetime, never key bytes. The keyring admits one
+active key and at most one decrypt-only predecessor; duplicate identifiers,
+future-only or overlapping seal windows, multiple active keys and expired or
+over-retained material fail closed.
+
+Each decrypt window ends exactly one configured maximum lease lifetime after
+its seal window, bounding rotation retention while preserving every capability
+sealed before the cutoff. The provider implements the existing neutral
+`SealingKeyProvider`; unknown or expired key IDs remain non-enumerating
+unavailability. Held material is best-effort memory-locked on Linux, excluded
+from strings/JSON/errors, and deterministically cleared and unlocked at close.
+Secret JSON fields and canonical parsing copies use clearable byte buffers
+rather than immutable Go strings.
+
+Key load and zeroization are committed through the mandatory staging audit
+gate. The runtime now requires a ready secret-custody dependency and closes it
+before appending `stopped`. Tests cover old-capability opening across rotation,
+ambiguous windows, expiry, retention bounds, descriptor closure/reuse,
+oversized or truncated input, audit failure, redaction and backing-buffer
+zeroization.
+
+JetStream/epoch composition, provisioning and MCP traffic remain separate
+gates.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

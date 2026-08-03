@@ -52,6 +52,8 @@ const (
 	AuditReasonTLSReady                AuditReason = "tls_ready"
 	AuditReasonStarted                 AuditReason = "started"
 	AuditReasonStopped                 AuditReason = "stopped"
+	AuditReasonCapabilityKeyLoaded     AuditReason = "capability_key_loaded"
+	AuditReasonCapabilityKeyZeroed     AuditReason = "capability_key_zeroed"
 )
 
 type AuditRecord struct {

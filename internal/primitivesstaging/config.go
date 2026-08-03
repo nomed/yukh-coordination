@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -42,6 +43,7 @@ type configJSON struct {
 	RequestDeadlineMS         int    `json:"request_deadline_ms"`
 	MaxConcurrentRequests     int    `json:"max_concurrent_requests"`
 	MaxReplayEntries          int    `json:"max_replay_entries"`
+	MaxLeaseLifetimeMS        int    `json:"max_lease_lifetime_ms"`
 	Epoch                     uint64 `json:"epoch"`
 }
 
@@ -50,8 +52,9 @@ type Config struct{ value configJSON }
 // SecretDescriptors is constructed by the supervisor and is deliberately not
 // part of the serializable configuration surface.
 type SecretDescriptors struct {
-	natsCredential int
-	capabilityKey  int
+	natsCredential  int
+	capabilityKey   int
+	capabilityTaken atomic.Bool
 }
 
 func NewSecretDescriptors(natsCredential, capabilityKey int) (*SecretDescriptors, error) {
@@ -68,7 +71,7 @@ func ParseConfig(raw []byte) (*Config, error) {
 	var value configJSON
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 {
+	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.MaxLeaseLifetimeMS < 1 || value.MaxLeaseLifetimeMS > 900_000 || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 {
 		return nil, ErrInvalid
 	}
 	paths := []string{value.TLSCertificatePath, value.TLSPrivateKeyPath, value.TLSTrustBundlePath, value.RegistrationPath, value.RegistrationSignaturePath, value.ReplayDatabasePath, value.AuditDatabasePath}
@@ -120,6 +123,9 @@ func (c *Config) RequestDeadline() time.Duration {
 }
 func (c *Config) MaxConcurrentRequests() int { return c.value.MaxConcurrentRequests }
 func (c *Config) MaxReplayEntries() int      { return c.value.MaxReplayEntries }
+func (c *Config) MaxLeaseLifetime() time.Duration {
+	return time.Duration(c.value.MaxLeaseLifetimeMS) * time.Millisecond
+}
 func (c *Config) Epoch() uint64              { return c.value.Epoch }
 func (*Config) String() string               { return "Config{REDACTED}" }
 func (*Config) GoString() string             { return "Config{REDACTED}" }
@@ -130,11 +136,11 @@ func (s *SecretDescriptors) NATSCredential() int {
 	}
 	return s.natsCredential
 }
-func (s *SecretDescriptors) CapabilityKey() int {
-	if s == nil {
-		return -1
+func (s *SecretDescriptors) takeCapabilityKey() (int, bool) {
+	if s == nil || !s.capabilityTaken.CompareAndSwap(false, true) {
+		return -1, false
 	}
-	return s.capabilityKey
+	return s.capabilityKey, true
 }
 func (*SecretDescriptors) String() string               { return "SecretDescriptors{REDACTED}" }
 func (*SecretDescriptors) GoString() string             { return "SecretDescriptors{REDACTED}" }

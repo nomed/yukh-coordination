@@ -34,6 +34,11 @@ type LifecycleAuditor interface {
 	Ready() bool
 }
 
+type SecretCustody interface {
+	Ready() bool
+	Close(context.Context) error
+}
+
 type ReadinessSet struct{ probes []Readiness }
 
 func NewReadinessSet(probes ...Readiness) (*ReadinessSet, error) {
@@ -68,6 +73,7 @@ type Runtime struct {
 	dependency Readiness
 	tlsConfig  *tls.Config
 	audit      LifecycleAuditor
+	custody    SecretCustody
 	running    atomic.Bool
 	stopping   atomic.Bool
 	mu         sync.Mutex
@@ -127,15 +133,15 @@ func LoadServerTLSConfig(config *Config) (*tls.Config, error) {
 	}, nil
 }
 
-func NewRuntime(config *Config, handler *primitiveshttp.Handler, dependency Readiness, tlsConfig *tls.Config, audit LifecycleAuditor) (*Runtime, error) {
-	if config == nil || handler == nil || dependency == nil || audit == nil || !validServerTLS(tlsConfig) {
+func NewRuntime(config *Config, handler *primitiveshttp.Handler, dependency Readiness, tlsConfig *tls.Config, audit LifecycleAuditor, custody SecretCustody) (*Runtime, error) {
+	if config == nil || handler == nil || dependency == nil || audit == nil || custody == nil || !validServerTLS(tlsConfig) {
 		return nil, ErrInvalid
 	}
-	return &Runtime{config: config, handler: handler, dependency: dependency, tlsConfig: tlsConfig.Clone(), audit: audit}, nil
+	return &Runtime{config: config, handler: handler, dependency: dependency, tlsConfig: tlsConfig.Clone(), audit: audit, custody: custody}, nil
 }
 
 func (r *Runtime) Ready() bool {
-	return r != nil && r.running.Load() && !r.stopping.Load() && r.dependency != nil && r.dependency.Ready()
+	return r != nil && r.running.Load() && !r.stopping.Load() && r.dependency != nil && r.dependency.Ready() && r.custody != nil && r.custody.Ready()
 }
 
 func (r *Runtime) ListenAndServe(ctx context.Context) error {
@@ -166,7 +172,7 @@ func (r *Runtime) Serve(ctx context.Context, publicListener, operationsListener 
 		r.mu.Unlock()
 		return ErrInvalid
 	}
-	if !r.audit.Ready() || r.audit.RecordLifecycle(ctx, identity.AuditReasonTLSReady) != nil || r.audit.RecordLifecycle(ctx, identity.AuditReasonStarted) != nil {
+	if !r.audit.Ready() || !r.custody.Ready() || r.audit.RecordLifecycle(ctx, identity.AuditReasonTLSReady) != nil || r.audit.RecordLifecycle(ctx, identity.AuditReasonStarted) != nil {
 		r.mu.Unlock()
 		_ = publicListener.Close()
 		_ = operationsListener.Close()
@@ -204,6 +210,9 @@ func (r *Runtime) Serve(ctx context.Context, publicListener, operationsListener 
 	}
 	auditCtx, auditCancel := context.WithTimeout(context.Background(), r.config.RequestDeadline())
 	defer auditCancel()
+	if err := r.custody.Close(auditCtx); err != nil {
+		result = ErrUnavailable
+	}
 	if err := r.audit.RecordLifecycle(auditCtx, identity.AuditReasonStopped); err != nil {
 		result = ErrUnavailable
 	}
