@@ -390,6 +390,25 @@ qualify exact buckets, restart and rollback rejection.
 This increment does not create buckets, provision infrastructure, mint a
 credential, expose a listener or send MCP traffic. Those remain later gates.
 
+### RFC-0022 immutable record and deployment-plan review — 2026-08-03
+
+Issue #110 records implementation candidate `1af3ddb` and Git tree
+`507a2358fdb17bc48b31e9af68f8d18296754bd8`, together with the successful
+repository qualification and the complete reviewed delivery chain. The
+redacted plan fixes a single isolated Linux host, a direct private TLS
+listener, loopback operations, local replay/audit stores and the delivered
+loopback-only NATS composition. It defines separate owner approvals for
+provisioning and one live synthetic window, closed review evidence, teardown
+and state-preserving rollback.
+
+The review also identifies two pre-provisioning gaps: the repository publishes
+no executable entrypoint or artifact, and normal composition disables bucket
+bootstrap without providing the separately reviewed accountable bootstrap
+operation required by RFC-0022. Those gaps stop provisioning approval. They
+must be delivered at a new immutable commit, after which the implementation
+record and plan must be reconciled. Publishing the present documents creates
+no infrastructure, credential, listener or MCP authority.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
