@@ -43,6 +43,7 @@ integration is included. Those remain separately reviewable RFC-0013 increments.
 
 ## Next step
 
-Owner review of this foundation. After acceptance, the next bounded increment is
-DPoP request signing and operating-system credential-store ports with no
-plaintext fallback; it must not be combined with watch or event mutation.
+The owner explicitly accepted this foundation on 2026-08-03. The next bounded
+increment is DPoP request signing and operating-system credential-store ports
+with no plaintext fallback; it must not be combined with watch or event
+mutation.
