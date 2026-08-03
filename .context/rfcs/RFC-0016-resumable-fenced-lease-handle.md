@@ -1,10 +1,16 @@
 # RFC-0016: Resumable fenced-lease handle
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #59
 - Governing architecture: ADR-0001, RFC-0012 and RFC-0015
+
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes the separately reviewed neutral-port and adapter implementation with
+deterministic qualification described here. It does not authorize the RFC-0015
+HTTP service, deployment, a public listener, credentials, protected consumer
+use, publication or live apply.
 
 ## Decision requested
 
