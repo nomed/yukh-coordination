@@ -3,7 +3,7 @@
 - Date: 2026-08-03
 - Governing issue: #37
 - Accepted decision: RFC-0011
-- Pull request: pending
+- Pull request: #41
 - Branch: `agent/security-audit-merkle-step-2`
 
 ## Outcome
