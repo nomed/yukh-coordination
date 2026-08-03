@@ -19,4 +19,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go test -race ./...
+      - name: Install qualification NATS server
+        run: go install github.com/nats-io/nats-server/v2@v2.12.0
+      - name: Run race and JetStream qualification tests
+        run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
