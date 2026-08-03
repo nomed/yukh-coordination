@@ -2,12 +2,12 @@
 
 - Date: 2026-08-03
 - Governing issues: #3 and #5
-- Proposed decision: RFC-0008
+- Accepted decision: RFC-0008
 - Branch: `agent/single-node-provider-profile-rfc`
 
 ## Outcome
 
-Proposed the complete provider and operational profile required before the
+Accepted the complete provider and operational profile required before the
 reference relay may become a process binary. The review found that provider
 wiring alone is insufficient: finite transcript lifecycle, security audit,
 live revocation and operational isolation are also mandatory gates from the
@@ -26,5 +26,5 @@ design.
 
 This session changes documentation only. It adds no route, provider,
 dependency, database, secret, `cmd/` directory or deployment configuration.
-Owner acceptance is required before the first focused session-bootstrap
-contract increment.
+The next authorized increment is the focused session-bootstrap contract. It
+does not authorize a provider, database schema or executable composition.

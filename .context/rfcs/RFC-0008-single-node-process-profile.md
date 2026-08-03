@@ -1,6 +1,6 @@
 # RFC-0008: Single-node reference process profile
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issues: #3 and #5
