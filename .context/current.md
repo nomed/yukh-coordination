@@ -2,10 +2,10 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #130
-- Active Coordination increment: none; the immutable RFC-0022 contract is
-  handed off to downstream `nomed/yukh-mcp#50`
-- Runtime decisions: RFC-0003 through RFC-0022 Accepted
+- Last delivery pull request: #132
+- Active Coordination increment: #133 proposes RFC-0023 for the mandatory
+  single-node transcript lifecycle and retention boundary
+- Runtime decisions: RFC-0003 through RFC-0022 Accepted; RFC-0023 Draft
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017
@@ -32,18 +32,16 @@
   published in #123; the accountable three-bucket bootstrap executable was
   delivered in #127; the canonical documentation header was aligned in #128;
   the superseding immutable candidate and execution-forbidden deployment plan
-  were reconciled in #130
+  were reconciled in #130; the bounded MCP handoff was recorded in #132
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next action: `nomed/yukh-mcp#50` may continue disabled-by-default
-  implementation and hermetic qualification against the immutable contract.
-  Coordination provisioning still requires a separate complete operator
-  packet and explicit owner approval; live
-  infrastructure, credentials, listener exposure, MCP traffic, protected
-  mutations and production use remain separately gated
+- Next action: review and explicitly accept or revise RFC-0023 in #133. No
+  relay executable may admit events until the accepted lifecycle boundary is
+  implemented and qualified. Implementation, destructive execution,
+  deployment, Matrix, MCP and production use remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
