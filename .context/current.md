@@ -2,8 +2,10 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #91
-- Active increment: no implementation increment is currently active
+- Last delivery pull request: #94
+- Active increment: #95 implements the RFC-0022 closed configuration,
+  signed-registration, DPoP and durable replay foundation; listener and service
+  composition remain a later increment
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -24,7 +26,8 @@
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next actions ready for separate ownership: the bounded RFC-0020 explicit
+- Next actions ready for separate ownership: after review of #95, the bounded
+  RFC-0022 listener and primitives pipeline composition increment; the bounded RFC-0020 explicit
   profile-composition and synthetic end-to-end qualification increment over
   the delivered Storage and KMS adapters; and the separately reviewed
   RFC-0022 hermetic private-staging implementation. WIF, live infrastructure,
