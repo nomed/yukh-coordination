@@ -1,10 +1,9 @@
 # Current context
 
 - Updated: 2026-08-03
-- Governing issue: #90
-- Last delivery pull request: #109
-- Active increment: #110 immutable RFC-0022 implementation record and
-  redacted deployment plan
+- Governing issue: #6
+- Last delivery pull request: #112
+- Active increment: #113 reconciles the PR #112 delivery context
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -25,13 +24,15 @@
   its private TLS listener and primitives pipeline composition in #100, and
   its mandatory fail-closed audit gate in #103, and its descriptor-delivered
   capability-key custody in #106, and its exact loopback JetStream/epoch
-  composition in #109 at immutable implementation candidate `1af3ddb`
+  composition in #109 at immutable implementation candidate `1af3ddb`; its
+  immutable record and redacted, execution-forbidden deployment plan were
+  published in #112
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next action after #110: implement and review the missing closed executable
+- Next action after #113: implement and review the missing closed executable
   assembly plus the separate accountable three-bucket bootstrap operation,
   then supersede the immutable candidate and reconcile the deployment plan.
   Provisioning approval is premature until those artifacts exist. Live
