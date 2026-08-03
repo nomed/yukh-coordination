@@ -3,7 +3,7 @@
 - Updated: 2026-08-03
 - Governing implementation issue: #5
 - Last merged pull request: #28
-- Active branch: `agent/relay-runtime-lifecycle`
+- Active pull request: #29 for the relay runtime lifecycle
 - Runtime decisions: RFC-0003, RFC-0004, RFC-0005, RFC-0006 and RFC-0007 Accepted
 - Current increment: typed relay composition and lifecycle implementation
 - Next decision gate: provider profile required before a process binary
