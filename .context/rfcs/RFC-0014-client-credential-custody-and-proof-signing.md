@@ -1,14 +1,15 @@
 # RFC-0014: Client credential custody and proof signing
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #6
 - Governing architecture: RFC-0008, RFC-0009, RFC-0010 and RFC-0013
 
-The project owner authorized drafting this proposal on 2026-08-03. Drafting
-authorization is not acceptance. Until explicit acceptance, RFC-0013 and the
-merged client credential foundation remain authoritative.
+The project owner explicitly accepted this RFC on 2026-08-03 after reviewing
+and correcting the signer lifecycle. Acceptance authorizes only the neutral
+client-authentication refactor and conformance work described below. Concrete
+adapters and deployment remain separately gated.
 
 ## Decision requested
 
