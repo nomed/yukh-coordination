@@ -188,6 +188,16 @@ func (k *CloudKMS) KeyReference() string {
 	}
 	return k.signing.value
 }
+
+// Binding returns the exact immutable profile and key evidence used by the
+// composition boundary. Provider resource values remain redacted by all
+// formatting paths.
+func (k *CloudKMS) Binding() (string, KeyVersion, KeyVersion, kmspb.ProtectionLevel, [32]byte, bool) {
+	if k == nil || !validProfileName(k.profile) || !validKeyVersion(k.encryption) || !validKeyVersion(k.signing) || zero32(k.thumbprint) {
+		return "", KeyVersion{}, KeyVersion{}, kmspb.ProtectionLevel_PROTECTION_LEVEL_UNSPECIFIED, [32]byte{}, false
+	}
+	return k.profile, k.encryption, k.signing, k.protection, k.thumbprint, true
+}
 func (k *CloudKMS) PublicJWK() (clientauth.PublicP256JWK, error) {
 	if k == nil {
 		return clientauth.PublicP256JWK{}, clientauth.ErrProofSigner
