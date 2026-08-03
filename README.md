@@ -56,6 +56,13 @@ adapter, and NATS JetStream is the first distributed adapter. See
 [RFC-0003](.context/rfcs/RFC-0003-reference-relay-runtime.md) for the boundaries and
 delivery order.
 
+The qualified layers now have an internal typed composition and lifecycle
+boundary governed by
+[RFC-0007](.context/rfcs/RFC-0007-relay-composition-lifecycle.md). There is
+deliberately no public process binary yet: identity, ACL, channel provisioning,
+signing-key custody and operational configuration require an accepted provider
+profile rather than insecure demonstration defaults.
+
 Run the current relay contract tests with:
 
 ```sh
