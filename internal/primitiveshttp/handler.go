@@ -18,6 +18,8 @@ import (
 
 const MediaType = "application/yukh-coordination-primitives+json;version=1"
 
+const maxMessageBytes = 4096
+
 type Handler struct {
 	bridge   *Bridge
 	baseURI  string
@@ -36,7 +38,8 @@ func NewHandler(bridge *Bridge, baseURI string, epoch uint64, deadline time.Dura
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
-	if request.TLS == nil || request.Method != http.MethodPost || request.URL.RawQuery != "" || request.URL.Fragment != "" || len(request.Cookies()) != 0 || request.Header.Get("Content-Encoding") != "" || request.Header.Get("Content-Type") != MediaType {
+	action, knownRoute := actionForPath(request.URL.Path)
+	if request.TLS == nil || request.Method != http.MethodPost || !knownRoute || request.URL.RawQuery != "" || request.URL.Fragment != "" || len(request.Cookies()) != 0 || request.Header.Get("Content-Encoding") != "" || request.Header.Get("Content-Type") != MediaType {
 		writeProblem(writer, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -54,20 +57,31 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		writeProblem(writer, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	body, err := readCanonicalBody(request.Body)
-	if err != nil {
-		writeProblem(writer, http.StatusBadRequest, "invalid_request")
-		return
-	}
-	response, err := handler.dispatch(ctx, request.URL.Path, authentication, body)
+	identity, err := handler.bridge.Admit(ctx, authentication, action)
 	if err != nil {
 		writeMappedProblem(writer, err)
 		return
 	}
-	writeCanonical(writer, http.StatusOK, response)
+	body, err := readCanonicalBody(ctx, request.Body)
+	if err != nil {
+		if errors.Is(err, primitivesauth.ErrTemporarilyUnavailable) {
+			writeMappedProblem(writer, err)
+			return
+		}
+		writeProblem(writer, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	response, err := handler.dispatch(ctx, request.URL.Path, identity, body)
+	if err != nil {
+		writeMappedProblem(writer, err)
+		return
+	}
+	if !writeCanonical(writer, http.StatusOK, response) {
+		writeProblem(writer, http.StatusInternalServerError, "invariant_violation")
+	}
 }
 
-func (handler *Handler) dispatch(ctx context.Context, path string, authentication primitivesauth.RequestAuthentication, body map[string]any) (map[string]any, error) {
+func (handler *Handler) dispatch(ctx context.Context, path string, identity primitivesauth.Identity, body map[string]any) (map[string]any, error) {
 	stringValue := func(name string) (string, bool) { value, ok := body[name].(string); return value, ok && value != "" }
 	digest := func(name string) (coordination.Digest, bool) {
 		value, ok := stringValue(name)
@@ -93,7 +107,7 @@ func (handler *Handler) dispatch(ctx context.Context, path string, authenticatio
 		if !ok1 || !ok2 || !ok3 {
 			return nil, primitivesauth.ErrInvalidArgument
 		}
-		outcome, err := handler.bridge.Consume(ctx, authentication, scope, value, expires)
+		outcome, err := handler.bridge.ConsumeAdmitted(ctx, identity, scope, value, expires)
 		return map[string]any{"outcome": string(outcome), "specversion": "1"}, err
 	case "/coordination-primitives/v1/leases:acquire":
 		if !exactKeys(body, "epoch", "expires_at", "holder_digest", "scope_digest") || !epochOK || uint64(epoch) != handler.epoch || epoch != float64(uint64(epoch)) {
@@ -105,14 +119,14 @@ func (handler *Handler) dispatch(ctx context.Context, path string, authenticatio
 		if !ok1 || !ok2 || !ok3 {
 			return nil, primitivesauth.ErrInvalidArgument
 		}
-		result, err := handler.bridge.Acquire(ctx, authentication, scope, holder, expires)
+		result, err := handler.bridge.AcquireAdmitted(ctx, identity, scope, holder, expires)
 		return leaseResponse("acquired", result.Capability, result.FencingToken, result.ExpiresAt), err
 	case "/coordination-primitives/v1/leases:inspect":
 		capability, ok := stringValue("lease_capability")
 		if !ok || !exactKeys(body, "lease_capability") {
 			return nil, primitivesauth.ErrInvalidArgument
 		}
-		status, err := handler.bridge.Inspect(ctx, authentication, capability)
+		status, err := handler.bridge.InspectAdmitted(ctx, identity, capability)
 		return map[string]any{"outcome": string(status), "specversion": "1"}, err
 	case "/coordination-primitives/v1/leases:renew":
 		capability, ok1 := stringValue("lease_capability")
@@ -120,14 +134,14 @@ func (handler *Handler) dispatch(ctx context.Context, path string, authenticatio
 		if !ok1 || !ok2 || !exactKeys(body, "expires_at", "lease_capability") {
 			return nil, primitivesauth.ErrInvalidArgument
 		}
-		result, err := handler.bridge.Renew(ctx, authentication, capability, expires)
+		result, err := handler.bridge.RenewAdmitted(ctx, identity, capability, expires)
 		return leaseResponse("renewed", result.Capability, result.FencingToken, result.ExpiresAt), err
 	case "/coordination-primitives/v1/leases:release":
 		capability, ok := stringValue("lease_capability")
 		if !ok || !exactKeys(body, "lease_capability") {
 			return nil, primitivesauth.ErrInvalidArgument
 		}
-		err := handler.bridge.Release(ctx, authentication, capability)
+		err := handler.bridge.ReleaseAdmitted(ctx, identity, capability)
 		return map[string]any{"outcome": "released", "specversion": "1"}, err
 	default:
 		return nil, primitivesauth.ErrInvalidArgument
@@ -143,9 +157,32 @@ func requestAuthentication(request *http.Request, target string) (primitivesauth
 	return primitivesauth.NewRequestAuthentication(strings.TrimPrefix(authorization[0], "DPoP "), proofs[0], "POST", target)
 }
 
-func readCanonicalBody(reader io.Reader) (map[string]any, error) {
-	raw, err := io.ReadAll(io.LimitReader(reader, 4097))
-	if err != nil || len(raw) == 0 || len(raw) > 4096 {
+func readCanonicalBody(ctx context.Context, body io.ReadCloser) (map[string]any, error) {
+	type result struct {
+		raw []byte
+		err error
+	}
+	completed := make(chan result, 1)
+	go func() {
+		raw, err := io.ReadAll(io.LimitReader(body, maxMessageBytes+1))
+		completed <- result{raw: raw, err: err}
+	}()
+	var raw []byte
+	select {
+	case <-ctx.Done():
+		_ = body.Close()
+		<-completed
+		return nil, primitivesauth.ErrTemporarilyUnavailable
+	case observed := <-completed:
+		if ctx.Err() != nil {
+			return nil, primitivesauth.ErrTemporarilyUnavailable
+		}
+		raw = observed.raw
+		if observed.err != nil {
+			return nil, primitivesauth.ErrInvalidArgument
+		}
+	}
+	if len(raw) == 0 || len(raw) > maxMessageBytes {
 		return nil, primitivesauth.ErrInvalidArgument
 	}
 	canonical, err := jsoncanonicalizer.Transform(raw)
@@ -214,12 +251,33 @@ func writeMappedProblem(writer http.ResponseWriter, err error) {
 	}
 }
 func writeProblem(writer http.ResponseWriter, status int, code string) {
-	writeCanonical(writer, status, map[string]any{"code": code, "status": status, "title": code, "type": "urn:yukh:coordination-primitives:problem:" + code})
+	_ = writeCanonical(writer, status, map[string]any{"code": code, "status": status, "title": code, "type": "urn:yukh:coordination-primitives:problem:" + code})
 }
-func writeCanonical(writer http.ResponseWriter, status int, value map[string]any) {
+func writeCanonical(writer http.ResponseWriter, status int, value map[string]any) bool {
 	raw, _ := json.Marshal(value)
 	canonical, _ := jsoncanonicalizer.Transform(raw)
+	if len(canonical) == 0 || len(canonical) > maxMessageBytes {
+		return false
+	}
 	writer.Header().Set("Content-Type", MediaType)
 	writer.WriteHeader(status)
 	_, _ = writer.Write(canonical)
+	return true
+}
+
+func actionForPath(path string) (primitivesauth.Action, bool) {
+	switch path {
+	case "/coordination-primitives/v1/nonces:consume":
+		return primitivesauth.NonceConsume, true
+	case "/coordination-primitives/v1/leases:acquire":
+		return primitivesauth.LeaseAcquire, true
+	case "/coordination-primitives/v1/leases:inspect":
+		return primitivesauth.LeaseInspect, true
+	case "/coordination-primitives/v1/leases:renew":
+		return primitivesauth.LeaseRenew, true
+	case "/coordination-primitives/v1/leases:release":
+		return primitivesauth.LeaseRelease, true
+	default:
+		return "", false
+	}
 }

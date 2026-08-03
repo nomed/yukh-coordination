@@ -17,6 +17,39 @@ type Bridge struct {
 	service  *primitives.Service
 }
 
+func (bridge *Bridge) Admit(ctx context.Context, authentication primitivesauth.RequestAuthentication, action primitivesauth.Action) (primitivesauth.Identity, error) {
+	return bridge.pipeline.Admit(ctx, authentication, action)
+}
+
+func (bridge *Bridge) ConsumeAdmitted(ctx context.Context, identity primitivesauth.Identity, scope, value coordination.Digest, expires time.Time) (coordination.NonceOutcome, error) {
+	flow := &publicFlow{service: bridge.service, value: value, expires: expires}
+	err := bridge.pipeline.ExecutePublicAdmitted(ctx, identity, primitivesauth.NonceConsume, scope, flow)
+	return flow.nonce, err
+}
+
+func (bridge *Bridge) AcquireAdmitted(ctx context.Context, identity primitivesauth.Identity, scope, holder coordination.Digest, expires time.Time) (primitives.LeaseResult, error) {
+	flow := &publicFlow{service: bridge.service, holder: holder, expires: expires}
+	err := bridge.pipeline.ExecutePublicAdmitted(ctx, identity, primitivesauth.LeaseAcquire, scope, flow)
+	return flow.lease, err
+}
+
+func (bridge *Bridge) InspectAdmitted(ctx context.Context, identity primitivesauth.Identity, capability string) (coordination.LeaseStatus, error) {
+	flow := &sealedFlow{service: bridge.service, capability: capability}
+	err := bridge.pipeline.ExecuteSealedAdmitted(ctx, identity, primitivesauth.LeaseInspect, capability, flow, flow)
+	return flow.status, err
+}
+
+func (bridge *Bridge) RenewAdmitted(ctx context.Context, identity primitivesauth.Identity, capability string, expires time.Time) (primitives.LeaseResult, error) {
+	flow := &sealedFlow{service: bridge.service, capability: capability, expires: expires}
+	err := bridge.pipeline.ExecuteSealedAdmitted(ctx, identity, primitivesauth.LeaseRenew, capability, flow, flow)
+	return flow.lease, err
+}
+
+func (bridge *Bridge) ReleaseAdmitted(ctx context.Context, identity primitivesauth.Identity, capability string) error {
+	flow := &sealedFlow{service: bridge.service, capability: capability}
+	return bridge.pipeline.ExecuteSealedAdmitted(ctx, identity, primitivesauth.LeaseRelease, capability, flow, flow)
+}
+
 func NewBridge(pipeline *primitivesauth.Pipeline, service *primitives.Service) (*Bridge, error) {
 	if pipeline == nil || service == nil {
 		return nil, primitivesauth.ErrInvalidArgument
@@ -132,8 +165,11 @@ func mapCoreError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, primitives.ErrConflict) || errors.Is(err, primitives.ErrInvalidArgument) {
+	if errors.Is(err, primitives.ErrConflict) {
 		return primitivesauth.ErrInvalidCapability
+	}
+	if errors.Is(err, primitives.ErrInvalidArgument) {
+		return primitivesauth.ErrInvalidArgument
 	}
 	if errors.Is(err, primitives.ErrInvariant) {
 		return primitivesauth.ErrInvariantViolation

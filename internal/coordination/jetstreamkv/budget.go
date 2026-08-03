@@ -156,8 +156,11 @@ func (budget *CapabilityBudget) mutate(ctx context.Context, principal coordinati
 	}
 	if !missing {
 		revision = entry.Revision()
-		if err := decodeBudget(entry.Value(), &value, budget.epoch); err != nil {
+		if err := decodeBudget(entry.Value(), &value); err != nil {
 			return err
+		}
+		if value.Epoch != budget.epoch {
+			value = budgetValue{Schema: 1, Epoch: budget.epoch, Entries: []budgetSlot{}}
 		}
 	}
 	if err := change(&value); err != nil {
@@ -206,22 +209,24 @@ func (budget *CapabilityBudget) prune(value *budgetValue) {
 	value.Entries = kept
 }
 
-func decodeBudget(raw []byte, value *budgetValue, epoch uint64) error {
-	if len(raw) == 0 || len(raw) > int(maxBudgetValueBytes) || json.Unmarshal(raw, value) != nil || value.Schema != 1 || value.Epoch != epoch || len(value.Entries) > 32 {
-		return coordination.ErrUnavailable
+func decodeBudget(raw []byte, value *budgetValue) error {
+	if len(raw) == 0 || len(raw) > int(maxBudgetValueBytes) || json.Unmarshal(raw, value) != nil || value.Schema != 1 || value.Epoch == 0 || len(value.Entries) > 32 {
+		return coordination.ErrInvariant
 	}
 	for _, entry := range value.Entries {
 		if len(entry.Token) != 32 || (entry.Phase != "pending" && entry.Phase != "active") {
-			return coordination.ErrUnavailable
+			return coordination.ErrInvariant
 		}
 		if _, err := hex.DecodeString(entry.Token); err != nil {
-			return coordination.ErrUnavailable
+			return coordination.ErrInvariant
 		}
-		if _, err := time.Parse(time.RFC3339Nano, entry.ExpiresAt); err != nil {
-			return coordination.ErrUnavailable
+		expires, expiresErr := time.Parse(time.RFC3339Nano, entry.ExpiresAt)
+		leaseExpires, leaseErr := time.Parse(time.RFC3339Nano, entry.LeaseExpires)
+		if expiresErr != nil || leaseErr != nil || expires.Location() != time.UTC || leaseExpires.Location() != time.UTC || !expires.Equal(expires.Truncate(time.Millisecond)) || !leaseExpires.Equal(leaseExpires.Truncate(time.Millisecond)) {
+			return coordination.ErrInvariant
 		}
-		if _, err := time.Parse(time.RFC3339Nano, entry.LeaseExpires); err != nil {
-			return coordination.ErrUnavailable
+		if entry.Phase == "active" && !expires.Equal(leaseExpires) || entry.Phase == "pending" && expires.After(leaseExpires) {
+			return coordination.ErrInvariant
 		}
 	}
 	return nil

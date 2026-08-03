@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -32,9 +33,10 @@ type fixture struct {
 }
 
 type gatedReader struct {
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
+	started     chan struct{}
+	release     chan struct{}
+	once        sync.Once
+	releaseOnce sync.Once
 }
 
 func (reader *gatedReader) Read([]byte) (int, error) {
@@ -45,6 +47,7 @@ func (reader *gatedReader) Read([]byte) (int, error) {
 
 func (reader *gatedReader) Close() error {
 	reader.once.Do(func() { close(reader.started) })
+	reader.releaseOnce.Do(func() { close(reader.release) })
 	return nil
 }
 
@@ -56,7 +59,7 @@ func TestHandlerAdmitsCanonicalBoundedAcquire(t *testing.T) {
 	fixture := &fixture{identity: identity, key: key}
 	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 256)))
 	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
-	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1)
+	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1, time.Minute, func() time.Time { return now })
 	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
 	bridge, _ := NewBridge(pipeline, service)
 	handler, err := NewHandler(bridge, "https://coordination.invalid", 1, time.Second, 4)
@@ -186,9 +189,48 @@ func TestHandlerFailsClosedWhenConfiguredConcurrencyIsExhausted(t *testing.T) {
 
 	second := perform(t, handler, "/coordination-primitives/v1/leases:inspect", map[string]any{"lease_capability": "opaque"})
 	assertProblem(t, second, http.StatusServiceUnavailable, "temporarily_unavailable")
-	close(reader.release)
+	reader.releaseOnce.Do(func() { close(reader.release) })
 	first := <-firstDone
 	assertProblem(t, first, http.StatusBadRequest, "invalid_request")
+}
+
+func TestHandlerDeadlineCoversAuthenticationAndRequestBody(t *testing.T) {
+	handler, fixture, _ := newHandlerFixture(t)
+	handler.deadline = 10 * time.Millisecond
+	reader := &gatedReader{started: make(chan struct{}), release: make(chan struct{})}
+	request := authenticatedRequest("/coordination-primitives/v1/leases:inspect", reader)
+	response := httptest.NewRecorder()
+	started := time.Now()
+	handler.ServeHTTP(response, request)
+	if time.Since(started) > time.Second {
+		t.Fatal("request body ignored whole-request deadline")
+	}
+	assertProblem(t, response, http.StatusServiceUnavailable, "temporarily_unavailable")
+	if !reflect.DeepEqual(fixture.calls, []string{"authenticate", "action"}) {
+		t.Fatalf("deadline call order: %v", fixture.calls)
+	}
+}
+
+func TestHandlerAuthenticatesAndActionAuthorizesBeforeBodyValidation(t *testing.T) {
+	handler, fixture, _ := newHandlerFixture(t)
+	fixture.authErr = primitivesauth.ErrUnauthenticated
+	request := authenticatedRequest("/coordination-primitives/v1/leases:inspect", strings.NewReader("not-json"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	assertProblem(t, response, http.StatusUnauthorized, "unauthenticated")
+	if !reflect.DeepEqual(fixture.calls, []string{"authenticate"}) {
+		t.Fatalf("authentication order: %v", fixture.calls)
+	}
+
+	fixture.calls = nil
+	fixture.authErr = nil
+	fixture.actionErr = primitivesauth.ErrAccessDenied
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest("/coordination-primitives/v1/leases:inspect", strings.NewReader("not-json")))
+	assertProblem(t, response, http.StatusForbidden, "access_denied")
+	if !reflect.DeepEqual(fixture.calls, []string{"authenticate", "action"}) {
+		t.Fatalf("action order: %v", fixture.calls)
+	}
 }
 
 func newHandlerFixture(t *testing.T) (*Handler, *fixture, time.Time) {
@@ -203,7 +245,7 @@ func newHandlerFixture(t *testing.T) (*Handler, *fixture, time.Time) {
 	fixture := &fixture{identity: identity, key: key}
 	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 2048)))
 	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
-	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1)
+	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1, time.Minute, func() time.Time { return now })
 	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
 	bridge, _ := NewBridge(pipeline, service)
 	handler, err := NewHandler(bridge, "https://coordination.invalid", 1, time.Second, 4)
@@ -269,7 +311,7 @@ func TestBridgeComposesTwoPhaseSingleOpenLifecycle(t *testing.T) {
 	fixture := &fixture{identity: identity, key: key}
 	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 256)))
 	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
-	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1)
+	service, _ := primitives.NewService(store, store, budget, sealer, fixture, 1, time.Minute, func() time.Time { return now })
 	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
 	bridge, err := NewBridge(pipeline, service)
 	if err != nil {

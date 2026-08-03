@@ -12,6 +12,7 @@ var (
 	ErrInvalidArgument = errors.New("coordination: invalid argument")
 	ErrUnavailable     = errors.New("coordination: unavailable")
 	ErrConflict        = errors.New("coordination: conflict")
+	ErrInvariant       = errors.New("coordination: invariant violation")
 )
 
 type Digest string

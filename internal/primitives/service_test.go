@@ -46,6 +46,26 @@ func (source *tokenSource) NewTokenID() ([16]byte, error) {
 	return value, nil
 }
 
+type countingBudget struct {
+	coordination.CapabilityBudget
+	reserve int
+}
+
+func (budget *countingBudget) Reserve(ctx context.Context, principal coordination.Digest, token coordination.CapabilityTokenID, expires time.Time, epoch uint64) error {
+	budget.reserve++
+	return budget.CapabilityBudget.Reserve(ctx, principal, token, expires, epoch)
+}
+
+type countingLeaseStore struct {
+	coordination.FencedLeaseStore
+	resume int
+}
+
+func (store *countingLeaseStore) Resume(ctx context.Context, key coordination.Digest, value coordination.LeaseResumeValue) (coordination.Lease, error) {
+	store.resume++
+	return store.FencedLeaseStore.Resume(ctx, key, value)
+}
+
 func testService(t *testing.T, now *time.Time, keys *fixedKeys) (*Service, Identity) {
 	t.Helper()
 	store, err := memory.New(time.Minute, 1, func() time.Time { return *now })
@@ -60,7 +80,7 @@ func testService(t *testing.T, now *time.Time, keys *fixedKeys) (*Service, Ident
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(store, store, budget, sealer, &tokenSource{}, 1)
+	service, err := NewService(store, store, budget, sealer, &tokenSource{}, 1, time.Minute, func() time.Time { return *now })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,6 +166,25 @@ func TestCapabilityBindsIdentityAndSupportsBoundedRotation(t *testing.T) {
 	}
 }
 
+func TestCapabilityFromEarlierEpochFailsBeforeCoordinationLookup(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	store, _ := memory.New(time.Minute, 1, func() time.Time { return now })
+	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
+	key, _ := NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
+	keys := &fixedKeys{active: key, old: map[string]SealingKey{}}
+	sealer, _ := NewAEADSealer(keys, bytes.NewReader(bytes.Repeat([]byte{7}, 512)))
+	first, _ := NewService(store, store, budget, sealer, &tokenSource{}, 1, time.Minute, func() time.Time { return now })
+	identity, _ := NewIdentity("tenant-a", "principal-a")
+	acquired, err := first.Acquire(context.Background(), identity, testScope, testHolder, now.Add(30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _ := NewService(store, store, budget, sealer, &tokenSource{}, 2, time.Minute, func() time.Time { return now })
+	if _, err := second.Inspect(context.Background(), identity, acquired.Capability); !errors.Is(err, ErrConflict) {
+		t.Fatalf("earlier epoch capability: %v", err)
+	}
+}
+
 func TestNonceKeysAreTenantAndFamilySeparated(t *testing.T) {
 	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
 	key, _ := NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
@@ -182,7 +221,7 @@ func TestServiceEnforcesPerPrincipalCapabilityLimit(t *testing.T) {
 	key, _ := NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
 	keys := &fixedKeys{active: key, old: map[string]SealingKey{}}
 	sealer, _ := NewAEADSealer(keys, bytes.NewReader(bytes.Repeat([]byte{7}, 512)))
-	service, _ := NewService(store, store, budget, sealer, &tokenSource{}, 1)
+	service, _ := NewService(store, store, budget, sealer, &tokenSource{}, 1, time.Minute, func() time.Time { return now })
 	identity, _ := NewIdentity("tenant-a", "principal-a")
 	first, err := service.Acquire(context.Background(), identity, testScope, testHolder, now.Add(30*time.Second))
 	if err != nil {
@@ -197,5 +236,35 @@ func TestServiceEnforcesPerPrincipalCapabilityLimit(t *testing.T) {
 	}
 	if _, err := service.Acquire(context.Background(), identity, otherScope, testHolder, now.Add(30*time.Second)); err != nil {
 		t.Fatalf("budget not retired: %v", err)
+	}
+}
+
+func TestExpiryPolicyRejectsBeforeBudgetOrResumeProviderCalls(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	baseStore, _ := memory.New(time.Minute, 1, func() time.Time { return now })
+	baseBudget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
+	store := &countingLeaseStore{FencedLeaseStore: baseStore}
+	budget := &countingBudget{CapabilityBudget: baseBudget}
+	key, _ := NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
+	keys := &fixedKeys{active: key, old: map[string]SealingKey{}}
+	sealer, _ := NewAEADSealer(keys, bytes.NewReader(bytes.Repeat([]byte{7}, 512)))
+	service, _ := NewService(baseStore, store, budget, sealer, &tokenSource{}, 1, time.Minute, func() time.Time { return now })
+	identity, _ := NewIdentity("tenant-a", "principal-a")
+	if _, err := service.Acquire(context.Background(), identity, testScope, testHolder, now.Add(2*time.Minute)); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("overlong acquire: %v", err)
+	}
+	if budget.reserve != 0 {
+		t.Fatalf("invalid acquire reached budget: %d", budget.reserve)
+	}
+	acquired, err := service.Acquire(context.Background(), identity, testScope, testHolder, now.Add(30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := store.resume
+	if _, err := service.Renew(context.Background(), identity, acquired.Capability, now.Add(2*time.Minute)); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("overlong renew: %v", err)
+	}
+	if store.resume != before {
+		t.Fatalf("invalid renew reached resume: before=%d after=%d", before, store.resume)
 	}
 }

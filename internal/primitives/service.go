@@ -18,7 +18,10 @@ var (
 	ErrInvariant       = errors.New("primitives: invariant violation")
 )
 
-const maxSafeInteger = uint64(9_007_199_254_740_991)
+const (
+	maxSafeInteger    = uint64(9_007_199_254_740_991)
+	maxCapabilitySize = 3800
+)
 
 type Identity struct {
 	tenant    string
@@ -72,18 +75,20 @@ type Service struct {
 	tokens TokenIDSource
 	budget coordination.CapabilityBudget
 	epoch  uint64
+	maxTTL time.Duration
+	now    func() time.Time
 }
 
-func NewService(nonces coordination.NonceStore, leases coordination.FencedLeaseStore, budget coordination.CapabilityBudget, sealer CapabilitySealer, tokens TokenIDSource, epoch uint64) (*Service, error) {
-	if nonces == nil || leases == nil || budget == nil || sealer == nil || tokens == nil || epoch == 0 || epoch > maxSafeInteger {
+func NewService(nonces coordination.NonceStore, leases coordination.FencedLeaseStore, budget coordination.CapabilityBudget, sealer CapabilitySealer, tokens TokenIDSource, epoch uint64, maxTTL time.Duration, now func() time.Time) (*Service, error) {
+	if nonces == nil || leases == nil || budget == nil || sealer == nil || tokens == nil || epoch == 0 || epoch > maxSafeInteger || maxTTL <= 0 || now == nil {
 		return nil, ErrInvalidArgument
 	}
-	return &Service{nonces: nonces, leases: leases, budget: budget, sealer: sealer, tokens: tokens, epoch: epoch}, nil
+	return &Service{nonces: nonces, leases: leases, budget: budget, sealer: sealer, tokens: tokens, epoch: epoch, maxTTL: maxTTL, now: now}, nil
 }
 
 func (service *Service) ConsumeNonce(ctx context.Context, identity Identity, scope, value coordination.Digest, expiresAt time.Time) (coordination.NonceOutcome, error) {
 	key, err := deriveKey(identity, "nonce", scope)
-	if err != nil || !validDigest(value) {
+	if err != nil || !validDigest(value) || !service.validExpiry(expiresAt) {
 		return "", ErrInvalidArgument
 	}
 	outcome, err := service.nonces.Consume(ctx, key, coordination.NonceValue{ValueDigest: value, ExpiresAt: expiresAt, Epoch: service.epoch})
@@ -106,7 +111,7 @@ func (OpenedCapability) MarshalJSON() ([]byte, error)      { return nil, ErrInva
 func (opened OpenedCapability) Scope() coordination.Digest { return opened.state.key }
 
 func (service *Service) OpenCapability(ctx context.Context, identity Identity, capability string) (OpenedCapability, error) {
-	if capability == "" || len(capability) > 4096 {
+	if capability == "" || len(capability) > maxCapabilitySize {
 		return OpenedCapability{}, ErrInvalidArgument
 	}
 	state, err := service.sealer.Open(ctx, identity, capability)
@@ -121,7 +126,7 @@ func (service *Service) OpenCapability(ctx context.Context, identity Identity, c
 
 func (service *Service) Acquire(ctx context.Context, identity Identity, scope, holder coordination.Digest, expiresAt time.Time) (LeaseResult, error) {
 	key, err := deriveKey(identity, "lease", scope)
-	if err != nil || !validDigest(holder) {
+	if err != nil || !validDigest(holder) || !service.validExpiry(expiresAt) {
 		return LeaseResult{}, ErrInvalidArgument
 	}
 	token, budgetToken, principal, err := service.newBudgetToken(identity)
@@ -178,6 +183,9 @@ func (service *Service) Renew(ctx context.Context, identity Identity, capability
 }
 
 func (service *Service) RenewOpened(ctx context.Context, identity Identity, opened OpenedCapability, expiresAt time.Time) (LeaseResult, error) {
+	if !service.validExpiry(expiresAt) {
+		return LeaseResult{}, ErrInvalidArgument
+	}
 	held, err := service.resumeOpened(ctx, opened)
 	if err != nil {
 		return LeaseResult{}, err
@@ -198,6 +206,11 @@ func (service *Service) RenewOpened(ctx context.Context, identity Identity, open
 		return LeaseResult{}, mapBudgetError(err)
 	}
 	return result, nil
+}
+
+func (service *Service) validExpiry(expiresAt time.Time) bool {
+	now := service.now().UTC()
+	return expiresAt.Location() == time.UTC && expiresAt.Equal(expiresAt.Truncate(time.Millisecond)) && expiresAt.After(now) && !expiresAt.After(now.Add(service.maxTTL))
 }
 
 func (service *Service) Release(ctx context.Context, identity Identity, capability string) error {
@@ -246,7 +259,7 @@ func (service *Service) sealLease(ctx context.Context, identity Identity, key, h
 	if err != nil {
 		return LeaseResult{}, ErrUnavailable
 	}
-	if capability == "" || len(capability) > 4096 {
+	if capability == "" || len(capability) > maxCapabilitySize {
 		return LeaseResult{}, ErrInvariant
 	}
 	return LeaseResult{Capability: capability, FencingToken: fence, ExpiresAt: expiresAt}, nil
@@ -301,8 +314,10 @@ func mapBudgetError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, coordination.ErrUnavailable):
+	case errors.Is(err, coordination.ErrUnavailable), errors.Is(err, coordination.ErrConflict):
 		return ErrUnavailable
+	case errors.Is(err, coordination.ErrInvariant):
+		return ErrInvariant
 	default:
 		return ErrInvariant
 	}

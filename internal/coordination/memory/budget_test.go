@@ -60,3 +60,22 @@ func TestCapabilityBudgetCancelAndTenantSeparation(t *testing.T) {
 		t.Fatal("unsafe token formatting")
 	}
 }
+
+func TestCapabilityBudgetAcceptsExactlyThirtyTwoActiveSlots(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	budget, _ := NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
+	principal := coordination.Digest("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	for index := byte(1); index <= 32; index++ {
+		token, _ := coordination.NewCapabilityTokenID([16]byte{index})
+		if err := budget.Reserve(context.Background(), principal, token, now.Add(time.Minute), 1); err != nil {
+			t.Fatalf("reserve %d: %v", index, err)
+		}
+		if err := budget.Commit(context.Background(), principal, token, 1); err != nil {
+			t.Fatalf("commit %d: %v", index, err)
+		}
+	}
+	overflow, _ := coordination.NewCapabilityTokenID([16]byte{33})
+	if err := budget.Reserve(context.Background(), principal, overflow, now.Add(time.Minute), 1); !errors.Is(err, coordination.ErrUnavailable) {
+		t.Fatalf("slot 33: %v", err)
+	}
+}
