@@ -42,7 +42,11 @@ func NewAppendService(store relay.Store, signer Signer) (*AppendService, error) 
 // signature. A signing failure leaves the append recoverable by exact retry and
 // returns ErrSignaturePending rather than an unsigned success result.
 func (s *AppendService) Append(ctx context.Context, intent relay.AppendIntent, prepare PrepareRecord) (relay.AppendResult, error) {
-	if prepare == nil {
+	return s.AppendChecked(ctx, intent, func(relay.AdmissionView) error { return nil }, prepare)
+}
+
+func (s *AppendService) AppendChecked(ctx context.Context, intent relay.AppendIntent, admit relay.Admit, prepare PrepareRecord) (relay.AppendResult, error) {
+	if admit == nil || prepare == nil {
 		return relay.AppendResult{}, relay.ErrInvalidArgument
 	}
 	if err := relay.ValidateIntent(intent); err != nil {
@@ -68,7 +72,7 @@ func (s *AppendService) Append(ctx context.Context, intent relay.AppendIntent, p
 	if selection.KeyID == "" || selection.Algorithm == "" {
 		return relay.AppendResult{}, fmt.Errorf("%w: incomplete signing selection", relay.ErrInvalidArgument)
 	}
-	result, err := s.store.Append(ctx, intent, func(sequence uint64, digest string) (relay.AcceptedRecord, error) {
+	result, err := s.store.AppendChecked(ctx, intent, admit, func(sequence uint64, digest string) (relay.AcceptedRecord, error) {
 		record, err := prepare(sequence, digest, selection)
 		if err != nil {
 			return relay.AcceptedRecord{}, err

@@ -20,6 +20,8 @@ var (
 	ErrSignatureCollision  = errors.New("relay: receipt signature collision")
 	ErrEventNotFound       = errors.New("relay: event not found")
 	ErrSignaturePending    = errors.New("relay: durable signature pending")
+	ErrResourceLimit       = errors.New("relay: resource limit")
+	ErrTransitionConflict  = errors.New("relay: transition precondition failed")
 )
 
 // ChannelKey identifies one immutable transcript epoch.
@@ -76,6 +78,15 @@ type SignatureAttachment struct {
 // its sequence. It must be deterministic, side-effect free and bounded.
 type PrepareRecord func(sequence uint64, eventDigest string) (AcceptedRecord, error)
 
+// AdmissionView exposes only the candidate transcript while the adapter holds
+// the same write transaction that will allocate its next sequence.
+type AdmissionView interface {
+	Lookup(eventID string) (AcceptedRecord, error)
+	Read(after uint64, limit int) ([]AcceptedRecord, error)
+}
+
+type Admit func(AdmissionView) error
+
 type AppendOutcome string
 
 const (
@@ -94,6 +105,7 @@ type Store interface {
 	LookupChannel(context.Context, ChannelKey) (Channel, error)
 	Lookup(context.Context, ChannelKey, string) (AcceptedRecord, error)
 	Append(context.Context, AppendIntent, PrepareRecord) (AppendResult, error)
+	AppendChecked(context.Context, AppendIntent, Admit, PrepareRecord) (AppendResult, error)
 	AttachSignature(context.Context, SignatureAttachment) (AcceptedRecord, error)
 	Read(context.Context, ChannelKey, uint64, int) ([]AcceptedRecord, error)
 }
@@ -132,6 +144,13 @@ func ValidateAppendIntent(intent AppendIntent, prepare PrepareRecord) error {
 		return ErrInvalidArgument
 	}
 	return nil
+}
+
+func ValidateCheckedAppend(intent AppendIntent, admit Admit, prepare PrepareRecord) error {
+	if admit == nil {
+		return ErrInvalidArgument
+	}
+	return ValidateAppendIntent(intent, prepare)
 }
 
 // ValidateIntent enforces the stable client material independently from the

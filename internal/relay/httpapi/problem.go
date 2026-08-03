@@ -22,6 +22,10 @@ func writeApplicationProblem(w http.ResponseWriter, requestID string, err error)
 		writeProblem(w, requestID, http.StatusConflict, "conflict", "Conflict")
 	case errors.Is(err, relay.ErrInvalidArgument):
 		writeProblem(w, requestID, http.StatusUnprocessableEntity, "invalid_event", "Invalid event")
+	case errors.Is(err, relay.ErrResourceLimit):
+		writeProblem(w, requestID, http.StatusTooManyRequests, "resource_limit", "Resource limit")
+	case errors.Is(err, relay.ErrTransitionConflict):
+		writeProblem(w, requestID, http.StatusUnprocessableEntity, "transition_precondition_failed", "Transition precondition failed")
 	case errors.Is(err, relay.ErrSignaturePending), errors.Is(err, relay.ErrCommitIndeterminate):
 		w.Header().Set("Retry-After", "3")
 		writeProblem(w, requestID, http.StatusServiceUnavailable, "temporarily_unavailable", "Temporarily unavailable")
