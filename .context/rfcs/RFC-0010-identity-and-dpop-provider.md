@@ -1,6 +1,6 @@
 # RFC-0010: Identity and DPoP provider profile
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issues: #3 and #5

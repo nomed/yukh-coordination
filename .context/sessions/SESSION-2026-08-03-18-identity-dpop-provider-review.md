@@ -2,13 +2,13 @@
 
 - Date: 2026-08-03
 - Governing issues: #3 and #5
-- Proposed decision: RFC-0010
+- Accepted decision: RFC-0010
 - Pull request: #33
 - Branch: `agent/identity-dpop-provider-rfc`
 
 ## Outcome
 
-Proposed the complete identity-provider profile for the accepted single-node
+Accepted the complete identity-provider profile for the accepted single-node
 runtime. The design closes external JWT/JWKS validation, strict DPoP proof
 verification, persistent replay protection, opaque relay sessions, epoch
 allocation, revocation, clock rollback and restore fencing.
@@ -22,8 +22,8 @@ capture, so restored admission requires an external signed epoch checkpoint.
 ## Boundary
 
 This session changes documentation only. It adds no JOSE dependency, JWKS
-client, SQLite schema, audit port, provider, configuration or executable.
-Owner acceptance is required before the first strict JOSE verifier increment.
+client, SQLite schema, audit port, provider, configuration or executable. The
+first authorized implementation increment is the strict JOSE verifier.
 
 ## Proposed delivery
 
