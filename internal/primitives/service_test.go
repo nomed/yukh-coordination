@@ -20,10 +20,12 @@ const (
 type fixedKeys struct {
 	active SealingKey
 	old    map[string]SealingKey
+	opens  int
 }
 
 func (keys *fixedKeys) Active(context.Context) (SealingKey, error) { return keys.active, nil }
 func (keys *fixedKeys) Open(_ context.Context, id string) (SealingKey, error) {
+	keys.opens++
 	if id == keys.active.id {
 		return keys.active, nil
 	}
@@ -80,6 +82,19 @@ func TestLeaseLifecycleSurvivesServiceRestart(t *testing.T) {
 	}
 	if valid, err := service.Inspect(context.Background(), identity, result.Capability); err != nil || !valid {
 		t.Fatalf("inspect: %v %v", valid, err)
+	}
+	if keys.opens != 1 {
+		t.Fatalf("capability opens: %d", keys.opens)
+	}
+	opened, err := service.OpenCapability(context.Background(), identity, result.Capability)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid, err := service.InspectOpened(context.Background(), opened); err != nil || !valid {
+		t.Fatalf("opened inspect: %v %v", valid, err)
+	}
+	if keys.opens != 2 {
+		t.Fatalf("opened capability was reopened: %d", keys.opens)
 	}
 
 	// A new Service has no process-local lease registry and resumes only from

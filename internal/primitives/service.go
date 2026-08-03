@@ -95,6 +95,29 @@ type LeaseResult struct {
 	ExpiresAt    time.Time
 }
 
+// OpenedCapability is authenticated capability state held only between the
+// RFC-0017 action and scope authorization phases. It is never public output.
+type OpenedCapability struct{ state CapabilityState }
+
+func (OpenedCapability) String() string                    { return "OpenedCapability{REDACTED}" }
+func (OpenedCapability) GoString() string                  { return "OpenedCapability{REDACTED}" }
+func (OpenedCapability) MarshalJSON() ([]byte, error)      { return nil, ErrInvalidArgument }
+func (opened OpenedCapability) Scope() coordination.Digest { return opened.state.key }
+
+func (service *Service) OpenCapability(ctx context.Context, identity Identity, capability string) (OpenedCapability, error) {
+	if capability == "" || len(capability) > 4096 {
+		return OpenedCapability{}, ErrInvalidArgument
+	}
+	state, err := service.sealer.Open(ctx, identity, capability)
+	if errors.Is(err, ErrUnavailable) {
+		return OpenedCapability{}, ErrUnavailable
+	}
+	if err != nil || state.epoch != service.epoch {
+		return OpenedCapability{}, ErrConflict
+	}
+	return OpenedCapability{state: state}, nil
+}
+
 func (service *Service) Acquire(ctx context.Context, identity Identity, scope, holder coordination.Digest, expiresAt time.Time) (LeaseResult, error) {
 	key, err := deriveKey(identity, "lease", scope)
 	if err != nil || !validDigest(holder) {
@@ -108,7 +131,15 @@ func (service *Service) Acquire(ctx context.Context, identity Identity, scope, h
 }
 
 func (service *Service) Inspect(ctx context.Context, identity Identity, capability string) (bool, error) {
-	_, held, err := service.resume(ctx, identity, capability)
+	opened, err := service.OpenCapability(ctx, identity, capability)
+	if err != nil {
+		return false, err
+	}
+	return service.InspectOpened(ctx, opened)
+}
+
+func (service *Service) InspectOpened(ctx context.Context, opened OpenedCapability) (bool, error) {
+	held, err := service.resumeOpened(ctx, opened)
 	if err != nil {
 		return false, err
 	}
@@ -117,44 +148,51 @@ func (service *Service) Inspect(ctx context.Context, identity Identity, capabili
 }
 
 func (service *Service) Renew(ctx context.Context, identity Identity, capability string, expiresAt time.Time) (LeaseResult, error) {
-	state, held, err := service.resume(ctx, identity, capability)
+	opened, err := service.OpenCapability(ctx, identity, capability)
+	if err != nil {
+		return LeaseResult{}, err
+	}
+	return service.RenewOpened(ctx, identity, opened, expiresAt)
+}
+
+func (service *Service) RenewOpened(ctx context.Context, identity Identity, opened OpenedCapability, expiresAt time.Time) (LeaseResult, error) {
+	held, err := service.resumeOpened(ctx, opened)
 	if err != nil {
 		return LeaseResult{}, err
 	}
 	if err := held.Renew(ctx, expiresAt); err != nil {
 		return LeaseResult{}, mapStoreError(err)
 	}
-	return service.sealLease(ctx, identity, state.key, state.holder, expiresAt, held.FencingToken())
+	return service.sealLease(ctx, identity, opened.state.key, opened.state.holder, expiresAt, held.FencingToken())
 }
 
 func (service *Service) Release(ctx context.Context, identity Identity, capability string) error {
-	_, held, err := service.resume(ctx, identity, capability)
+	opened, err := service.OpenCapability(ctx, identity, capability)
+	if err != nil {
+		return err
+	}
+	return service.ReleaseOpened(ctx, opened)
+}
+
+func (service *Service) ReleaseOpened(ctx context.Context, opened OpenedCapability) error {
+	held, err := service.resumeOpened(ctx, opened)
 	if err != nil {
 		return err
 	}
 	return mapStoreError(held.Release(ctx))
 }
 
-func (service *Service) resume(ctx context.Context, identity Identity, capability string) (CapabilityState, coordination.Lease, error) {
-	if capability == "" || len(capability) > 4096 {
-		return CapabilityState{}, nil, ErrInvalidArgument
-	}
-	state, err := service.sealer.Open(ctx, identity, capability)
-	if errors.Is(err, ErrUnavailable) {
-		return CapabilityState{}, nil, ErrUnavailable
-	}
-	if err != nil || state.epoch != service.epoch {
-		return CapabilityState{}, nil, ErrConflict
-	}
+func (service *Service) resumeOpened(ctx context.Context, opened OpenedCapability) (coordination.Lease, error) {
+	state := opened.state
 	value, err := coordination.NewLeaseResumeValue(state.holder, state.expiresAt, state.epoch, state.fencingToken)
 	if err != nil {
-		return CapabilityState{}, nil, ErrInvariant
+		return nil, ErrInvariant
 	}
 	held, err := service.leases.Resume(ctx, state.key, value)
 	if err != nil {
-		return CapabilityState{}, nil, mapStoreError(err)
+		return nil, mapStoreError(err)
 	}
-	return state, held, nil
+	return held, nil
 }
 
 func (service *Service) sealLease(ctx context.Context, identity Identity, key, holder coordination.Digest, expiresAt time.Time, fence uint64) (LeaseResult, error) {
