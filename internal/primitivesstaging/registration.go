@@ -14,6 +14,7 @@ import (
 	"time"
 
 	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
+	"github.com/nomed/yukh-coordination/internal/coordination"
 	"github.com/nomed/yukh-coordination/internal/primitivesauth"
 )
 
@@ -116,6 +117,21 @@ func (r *Registration) AuthorizeAction(_ context.Context, identity primitivesaut
 		}
 	}
 	return primitivesauth.ErrAccessDenied
+}
+
+func (r *Registration) AuthorizeScope(ctx context.Context, identity primitivesauth.Identity, action primitivesauth.Action, scope coordination.Digest) error {
+	if err := r.AuthorizeAction(ctx, identity, action); err != nil {
+		return err
+	}
+	if len(scope) != sha256.Size*2 {
+		return primitivesauth.ErrAccessDenied
+	}
+	for _, char := range scope {
+		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+			return primitivesauth.ErrAccessDenied
+		}
+	}
+	return nil
 }
 
 func exactActions(values []string) bool {

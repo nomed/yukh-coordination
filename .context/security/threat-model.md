@@ -280,6 +280,31 @@ TLS runtime, operations endpoint, JetStream adapter, capability key, audit
 composition, deployment or MCP traffic exists in #95. Those controls require a
 separate reviewed increment before any connection can be exercised.
 
+### RFC-0022 listener implementation review — 2026-08-03
+
+Issue #99 composes the existing RFC-0015 HTTP handler behind a direct TLS 1.3
+runtime. The server certificate and private key must form one pair, the leaf
+must verify to the explicit configured trust bundle for the exact public URI
+host, file identity is rechecked across bounded reads to reject replacement or
+symlink races, dynamic TLS callbacks and client-certificate identity are disabled, and
+the listener addresses must equal the closed configuration. Request authority
+continues to derive only from the configured public base URI: `Host`,
+`Forwarded` and `X-Forwarded-*` values do not affect DPoP target binding.
+
+The independent operations listener is constrained to the configured loopback
+address and exposes only bounded `livez`, `readyz` and low-cardinality readiness
+metrics. Readiness is the conjunction of explicit injected probes and is
+removed before bounded shutdown; a failed probe also denies public requests
+before authentication or replay reservation. Both servers use fixed header, read, write
+and idle bounds. Hermetic tests generate a private root and workload material,
+exercise a real TLS primitive request, reject TLS 1.2, test hostile forwarding
+headers and prove readiness removal.
+
+This increment does not claim deployable readiness. Mandatory audit,
+capability-key custody and exact JetStream configuration/epoch probes are not
+yet concretely composed; infrastructure, credential minting, listener exposure
+and MCP traffic remain gated.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
