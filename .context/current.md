@@ -2,11 +2,11 @@
 
 - Updated: 2026-08-03
 - Governing implementation issue: #5
-- Last merged pull request: #16
-- Active pull request: #17
+- Last merged pull request: #17
+- Active pull request: #18
 - Runtime decision: RFC-0003 Accepted
-- Current increment: SQLite durable adapter with crash, restart and replay evidence
-- Next qualified increment: HTTP/SSE application edge
+- Current increment: durable receipt signing and ACK-recovery service
+- Next qualified increment: HTTP/SSE binding RFC and application edge
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.

@@ -12,13 +12,15 @@ or production topology.
 - referential integrity: foreign keys enabled;
 - writer contention bound: 5-second SQLite busy timeout;
 - process model: one database connection, serializing sequence allocation;
-- schema: STRICT tables with `PRAGMA user_version=1`;
+- schema: STRICT tables with `PRAGMA user_version=2`;
 - tenant/channel predicates on every identity, append and replay query.
 
 Channel identity is immutable across transcript epochs. Event IDs are unique
 within a tenant/channel identity across all epochs. Receipt IDs are globally
 unique. Event material, bindings, sequence, digest, receipt identity and
-unsigned receipt preimage commit in one `BEGIN IMMEDIATE` transaction.
+unsigned receipt preimage commit in one `BEGIN IMMEDIATE` transaction. Receipt
+signatures are produced outside the database and attached in a second exact,
+idempotent transaction; a different signature or preimage is a collision.
 
 Any failed `COMMIT` is reported as `relay.ErrCommitIndeterminate`; callers must
 not manufacture a replacement append. An exact retry resolves the outcome by

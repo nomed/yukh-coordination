@@ -23,7 +23,7 @@ func TestOpenAppliesDurabilityProfile(t *testing.T) {
 		{"synchronous", "2"},
 		{"foreign_keys", "1"},
 		{"busy_timeout", "5000"},
-		{"user_version", "1"},
+		{"user_version", "2"},
 	}
 	for _, check := range checks {
 		t.Run(check.pragma, func(t *testing.T) {
@@ -45,6 +45,62 @@ func TestOpenAppliesDurabilityProfile(t *testing.T) {
 	}
 	if foreignKeys != "1" {
 		t.Fatalf("replacement connection lost foreign-key enforcement: %q", foreignKeys)
+	}
+}
+
+func TestOpenMigratesSchemaVersionOne(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "version-one.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE accepted_records (id INTEGER) STRICT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA user_version=1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var version int
+	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 2 {
+		t.Fatalf("schema version: got %d, want 2", version)
+	}
+	rows, err := store.db.Query("PRAGMA table_info(accepted_records)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	foundColumns := map[string]bool{
+		"signing_key_id":      false,
+		"signature_algorithm": false,
+		"signature":           false,
+	}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, dataType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, tracked := foundColumns[name]; tracked {
+			foundColumns[name] = true
+		}
+	}
+	for name, found := range foundColumns {
+		if !found {
+			t.Fatalf("version-one migration did not add %s column", name)
+		}
 	}
 }
 

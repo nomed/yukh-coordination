@@ -16,6 +16,10 @@ var (
 	ErrEventIDCollision    = errors.New("relay: event ID collision")
 	ErrInvalidArgument     = errors.New("relay: invalid argument")
 	ErrCommitIndeterminate = errors.New("relay: commit outcome indeterminate")
+	ErrReceiptNotFound     = errors.New("relay: receipt not found")
+	ErrSignatureCollision  = errors.New("relay: receipt signature collision")
+	ErrEventNotFound       = errors.New("relay: event not found")
+	ErrSignaturePending    = errors.New("relay: durable signature pending")
 )
 
 // ChannelKey identifies one immutable transcript epoch.
@@ -50,7 +54,19 @@ type AcceptedRecord struct {
 	AuthenticatedBinding    []byte
 	AuthorizationBinding    []byte
 	ReceiptID               string
+	SigningKeyID            string
+	SignatureAlgorithm      string
 	UnsignedReceiptPreimage []byte
+	Signature               []byte
+}
+
+// SignatureAttachment identifies the exact persisted receipt preimage whose
+// externally produced signature must be attached.
+type SignatureAttachment struct {
+	Channel                 ChannelKey
+	ReceiptID               string
+	UnsignedReceiptPreimage []byte
+	Signature               []byte
 }
 
 // PrepareRecord finishes an accepted record after the adapter has allocated
@@ -72,7 +88,9 @@ type AppendResult struct {
 // Store is the transport-neutral append and replay persistence port.
 type Store interface {
 	CreateChannel(context.Context, Channel) error
+	Lookup(context.Context, ChannelKey, string) (AcceptedRecord, error)
 	Append(context.Context, AppendIntent, PrepareRecord) (AppendResult, error)
+	AttachSignature(context.Context, SignatureAttachment) (AcceptedRecord, error)
 	Read(context.Context, ChannelKey, uint64, int) ([]AcceptedRecord, error)
 }
 
@@ -91,7 +109,19 @@ func ValidateChannel(channel Channel) error {
 
 // ValidateAppendIntent enforces the adapter-independent append input contract.
 func ValidateAppendIntent(intent AppendIntent, prepare PrepareRecord) error {
-	if intent.Channel.TenantID == "" || intent.Channel.ChannelID == "" || intent.Channel.TranscriptEpoch == "" || intent.EventID == "" || len(intent.CanonicalEvent) == 0 || prepare == nil {
+	if err := ValidateIntent(intent); err != nil {
+		return err
+	}
+	if prepare == nil {
+		return ErrInvalidArgument
+	}
+	return nil
+}
+
+// ValidateIntent enforces the stable client material independently from the
+// adapter-specific preparation callback.
+func ValidateIntent(intent AppendIntent) error {
+	if intent.Channel.TenantID == "" || intent.Channel.ChannelID == "" || intent.Channel.TranscriptEpoch == "" || intent.EventID == "" || len(intent.CanonicalEvent) == 0 {
 		return ErrInvalidArgument
 	}
 	return nil
@@ -109,7 +139,7 @@ func ValidatePreparedRecord(intent AppendIntent, sequence uint64, digest string,
 	if record.Channel != intent.Channel || record.Sequence != sequence || record.EventID != intent.EventID || !bytes.Equal(record.CanonicalEvent, intent.CanonicalEvent) || record.EventDigest != digest {
 		return fmt.Errorf("%w: prepared record does not match append intent", ErrInvalidArgument)
 	}
-	if record.ReceiptID == "" || len(record.AuthenticatedBinding) == 0 || len(record.AuthorizationBinding) == 0 || len(record.UnsignedReceiptPreimage) == 0 {
+	if record.ReceiptID == "" || record.SigningKeyID == "" || record.SignatureAlgorithm == "" || len(record.AuthenticatedBinding) == 0 || len(record.AuthorizationBinding) == 0 || len(record.UnsignedReceiptPreimage) == 0 {
 		return fmt.Errorf("%w: prepared record is incomplete", ErrInvalidArgument)
 	}
 	return nil
@@ -121,5 +151,15 @@ func CloneRecord(record AcceptedRecord) AcceptedRecord {
 	record.AuthenticatedBinding = bytes.Clone(record.AuthenticatedBinding)
 	record.AuthorizationBinding = bytes.Clone(record.AuthorizationBinding)
 	record.UnsignedReceiptPreimage = bytes.Clone(record.UnsignedReceiptPreimage)
+	record.Signature = bytes.Clone(record.Signature)
 	return record
+}
+
+// ValidateSignatureAttachment enforces the adapter-independent attachment
+// contract. Signing remains outside the Store failure domain.
+func ValidateSignatureAttachment(attachment SignatureAttachment) error {
+	if attachment.Channel.TenantID == "" || attachment.Channel.ChannelID == "" || attachment.Channel.TranscriptEpoch == "" || attachment.ReceiptID == "" || len(attachment.UnsignedReceiptPreimage) == 0 || len(attachment.Signature) == 0 {
+		return ErrInvalidArgument
+	}
+	return nil
 }

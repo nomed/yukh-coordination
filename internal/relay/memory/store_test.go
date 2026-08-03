@@ -169,6 +169,42 @@ func TestReadReturnsOrderedDefensiveCopies(t *testing.T) {
 	}
 }
 
+func TestAttachSignatureIsIdempotentAndExact(t *testing.T) {
+	store := newStore(t)
+	appendIntent := relay.AppendIntent{Channel: testChannel.Key, EventID: "event-1", CanonicalEvent: []byte(`{"id":"event-1"}`)}
+	result, err := store.Append(context.Background(), appendIntent, prepare(appendIntent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachment := relay.SignatureAttachment{
+		Channel: testChannel.Key, ReceiptID: result.Record.ReceiptID,
+		UnsignedReceiptPreimage: result.Record.UnsignedReceiptPreimage,
+		Signature:               []byte("signature-1"),
+	}
+	signed, err := store.AttachSignature(context.Background(), attachment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(signed.Signature) != "signature-1" {
+		t.Fatalf("signature not attached: %#v", signed)
+	}
+	if _, err := store.AttachSignature(context.Background(), attachment); err != nil {
+		t.Fatalf("exact signature retry failed: %v", err)
+	}
+	attachment.Signature = []byte("signature-2")
+	if _, err := store.AttachSignature(context.Background(), attachment); !errors.Is(err, relay.ErrSignatureCollision) {
+		t.Fatalf("expected signature collision, got %v", err)
+	}
+
+	records, err := store.Read(context.Background(), testChannel.Key, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(records[0].Signature) != "signature-1" {
+		t.Fatalf("replay lost signature: %#v", records[0])
+	}
+}
+
 func newStore(t *testing.T) *memory.Store {
 	t.Helper()
 	store := memory.New()
@@ -186,6 +222,8 @@ func prepare(intent relay.AppendIntent) relay.PrepareRecord {
 			AuthenticatedBinding:    []byte(`{"principal_id":"principal:test"}`),
 			AuthorizationBinding:    []byte(`{"decision":"allow"}`),
 			ReceiptID:               fmt.Sprintf("receipt-%d", sequence),
+			SigningKeyID:            "key-1",
+			SignatureAlgorithm:      "Ed25519",
 			UnsignedReceiptPreimage: []byte(fmt.Sprintf(`{"server_sequence":"%d"}`, sequence)),
 		}, nil
 	}
