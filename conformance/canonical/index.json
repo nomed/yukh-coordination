@@ -84,5 +84,13 @@
     "domain_prefix": "yukh-coordination:audit-checkpoint:v1\n",
     "input": "conformance/canonical/audit-checkpoint.input.json",
     "name": "audit-checkpoint"
+  },
+  {
+    "canonical": "conformance/canonical/audit-recovery-manifest.canonical.json",
+    "digest": "sha-256:e5a74e647ca41048654a3f0d24554e80f0ec91626647dac138ca5c4d68a900af",
+    "domain_digest": "sha-256:1e9b1c11614579bd3de6df7f6e5a484adda51fa85e67841509134fcc4ed78b8f",
+    "domain_prefix": "yukh-coordination:audit-recovery-manifest:v1\n",
+    "input": "conformance/canonical/audit-recovery-manifest.input.json",
+    "name": "audit-recovery-manifest"
   }
 ]

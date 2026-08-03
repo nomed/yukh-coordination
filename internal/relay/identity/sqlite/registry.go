@@ -266,6 +266,47 @@ func (r *Registry) Status(ctx context.Context) (identity.RegistryStatus, error) 
 	return result, nil
 }
 
+// RecoverySnapshot returns the complete deterministic epoch high-water set
+// required by RFC-0010 recovery manifests. It never returns a partial set or
+// admits a fenced registry.
+func (r *Registry) RecoverySnapshot(ctx context.Context) (identity.RecoverySnapshot, error) {
+	if err := contextError(ctx); err != nil {
+		return identity.RecoverySnapshot{}, err
+	}
+	tx, err := beginImmediate(ctx, r.db)
+	if err != nil {
+		return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
+	}
+	defer tx.rollback()
+	var databaseID, fence string
+	var high int64
+	if err := tx.conn.QueryRowContext(ctx, `SELECT database_id, fence_state, wall_high_water_ms FROM identity_metadata WHERE singleton = 1`).Scan(&databaseID, &fence, &high); err != nil {
+		return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
+	}
+	if fence != "admitted" {
+		return identity.RecoverySnapshot{}, identity.ErrRegistryFenced
+	}
+	rows, err := tx.conn.QueryContext(ctx, `SELECT tenant_id, principal_id, last_epoch FROM principal_epochs ORDER BY tenant_id, principal_id`)
+	if err != nil {
+		return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
+	}
+	result := identity.RecoverySnapshot{DatabaseID: databaseID, WallHighWater: time.UnixMilli(high).UTC()}
+	for rows.Next() {
+		var floor identity.EpochFloor
+		if rows.Scan(&floor.TenantID, &floor.PrincipalID, &floor.Epoch) != nil || len(result.EpochFloors) >= 100_000 {
+			return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
+		}
+		result.EpochFloors = append(result.EpochFloors, floor)
+	}
+	if rows.Err() != nil {
+		return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
+	}
+	if rows.Close() != nil || tx.commit(ctx) != nil {
+		return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
+	}
+	return result, nil
+}
+
 func (r *Registry) ReserveBootstrap(ctx context.Context, request identity.BootstrapReservation) (identity.PendingSession, error) {
 	if err := validateBootstrap(request); err != nil {
 		return identity.PendingSession{}, err

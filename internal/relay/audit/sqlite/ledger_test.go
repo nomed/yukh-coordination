@@ -104,7 +104,7 @@ func TestSchemaIsStrictImmutableAndConfigured(t *testing.T) {
 	}
 	var version int
 	var journal, synchronous string
-	if err := ledger.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+	if err := ledger.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 4 {
 		t.Fatalf("schema version = %d, %v", version, err)
 	}
 	if err := ledger.db.QueryRow("PRAGMA journal_mode").Scan(&journal); err != nil || journal != "wal" {
@@ -242,6 +242,8 @@ func TestVersionOneLedgerMigratesAndRebuildsMerkleState(t *testing.T) {
 	}
 	db := rawDB(t, path)
 	statements := []string{
+		"DROP TRIGGER audit_recovery_manifests_no_update", "DROP TRIGGER audit_recovery_manifests_no_delete", "DROP TRIGGER audit_operational_state_transition", "DROP TRIGGER audit_operational_state_no_delete",
+		"DROP TABLE audit_recovery_manifests", "DROP TABLE audit_operational_state",
 		"DROP TRIGGER audit_witnesses_no_update", "DROP TRIGGER audit_witnesses_no_delete",
 		"DROP TRIGGER audit_checkpoints_no_update", "DROP TRIGGER audit_checkpoints_no_delete",
 		"DROP TRIGGER audit_checkpoint_authority_no_update", "DROP TRIGGER audit_checkpoint_authority_no_delete",

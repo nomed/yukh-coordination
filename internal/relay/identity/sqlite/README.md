@@ -12,10 +12,13 @@ Its narrow operations implement:
 - authentication proof reservation in the same immediate transaction;
 - exact expected-state revocation and race-free inactive signals;
 - bounded expiry scheduling and proof cleanup;
-- persistent wall-clock and restore fencing with monotonic epoch floors.
+- persistent wall-clock and restore fencing with monotonic epoch floors;
+- one atomic, complete and sorted recovery snapshot of database identity,
+  wall-clock high-water and every principal epoch floor.
 
 The adapter stores digests, derived identities and closed references only. It
 never stores a token, proof, JWT, JWK, external subject, arbitrary claims or
-audit payload. Checkpoint signature verification and audit durability remain
-separate security-domain work; `ApplyRestoreFloors` accepts only their
-already-verified closed result.
+audit payload. Checkpoint and recovery verification belong to the separate
+audit security domain; `ApplyRestoreFloors` accepts only its already-verified
+closed plan and durable receipt. Runtime ordering and the restore audit record
+remain RFC-0011 step 5.
