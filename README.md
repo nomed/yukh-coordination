@@ -10,6 +10,8 @@
 
 Yukh Coordination is an open, client-neutral coordination protocol for people and agents working across isolated sessions.
 
+[Documentation](https://nomed.github.io/yukh-coordination/) · [First replay](https://nomed.github.io/yukh-coordination/tutorials/first-replay/)
+
 It is not a supervisor, an agent runtime, or a source of authority. It provides shared rooms, durable signals, explicit ownership, evidence references, and observable handoffs. The project remains responsible for deciding who may act and what constitutes acceptance.
 
 ## Status
@@ -58,10 +60,10 @@ delivery order.
 
 The qualified layers now have an internal typed composition and lifecycle
 boundary governed by
-[RFC-0007](.context/rfcs/RFC-0007-relay-composition-lifecycle.md). There is
-deliberately no public process binary yet: identity, ACL, channel provisioning,
-signing-key custody and operational configuration require an accepted provider
-profile rather than insecure demonstration defaults.
+[RFC-0007](.context/rfcs/RFC-0007-relay-composition-lifecycle.md). The relay and
+private primitives process are unreleased implementation candidates. They
+require an explicitly qualified deployment profile and are not a public
+installation path.
 
 Run the current relay contract tests with:
 

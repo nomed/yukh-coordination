@@ -29,6 +29,7 @@ Every top-level directory has exactly one current responsibility:
 | `.context/` | Durable engineering memory and decisions |
 | `.github/` | GitHub automation, templates and repository presentation assets |
 | `conformance/` | Executable protocol qualification corpus and independent runners |
+| `documentation/` | Task-oriented public component documentation |
 | `internal/` | Private Go reference-relay implementation |
 | `js/` | Independent JavaScript replay implementation and its tests |
 | `schema/` | Public, machine-readable protocol contracts |

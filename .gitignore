@@ -8,6 +8,7 @@ dist/
 !js/dist/primitives-client.mjs
 !js/dist/SHA256SUMS
 coverage/
+site/
 *.log
 __pycache__/
 **/__pycache__/

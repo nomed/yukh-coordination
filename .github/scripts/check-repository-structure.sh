@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly allowed_directories=(.context .github conformance internal js schema)
+readonly allowed_directories=(.context .github conformance documentation internal js schema)
 readonly required_context=(
   .context/README.md
   .context/current.md

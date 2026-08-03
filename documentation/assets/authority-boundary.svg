@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" role="img" aria-labelledby="title desc">
+  <title id="title">Coordination and authority boundary</title>
+  <desc id="desc">Two sessions exchange durable statements through Coordination. External governance independently grants authority.</desc>
+  <rect width="760" height="250" rx="18" fill="#071f25"/>
+  <g font-family="system-ui,sans-serif" text-anchor="middle">
+    <rect x="35" y="86" width="150" height="76" rx="12" fill="#123b45" stroke="#54d6df" stroke-width="2"/>
+    <text x="110" y="130" fill="#fff" font-size="20">Session A</text>
+    <rect x="305" y="65" width="150" height="118" rx="12" fill="#0d6673" stroke="#8cf1f5" stroke-width="2"/>
+    <text x="380" y="116" fill="#fff" font-size="20">Coordination</text>
+    <text x="380" y="143" fill="#d8fbfc" font-size="14">statements + receipts</text>
+    <rect x="575" y="86" width="150" height="76" rx="12" fill="#123b45" stroke="#54d6df" stroke-width="2"/>
+    <text x="650" y="130" fill="#fff" font-size="20">Session B</text>
+    <path d="M185 124h105m180 0h105" stroke="#fff" stroke-width="4"/>
+    <path d="m290 124-12-7v14zm180 0 12-7v14z" fill="#fff"/>
+    <path d="M110 176v40h540v-40" fill="none" stroke="#f0b35b" stroke-width="3" stroke-dasharray="8 7"/>
+    <text x="380" y="236" fill="#ffd89d" font-size="15">authority remains external</text>
+  </g>
+</svg>
