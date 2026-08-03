@@ -4,6 +4,7 @@
 - Governing issue: #5
 - Governing decision: RFC-0009
 - Pull request: #32
+- Status: Accepted
 - Branch: `agent/session-bootstrap-implementation`
 
 ## Outcome

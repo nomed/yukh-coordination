@@ -5,8 +5,8 @@
 - Last merged pull request: #31
 - Active pull request: #32 for the session bootstrap implementation
 - Runtime decisions: RFC-0003 through RFC-0009 Accepted
-- Current increment: session bootstrap contract implementation
-- Next decision gate: identity and DPoP provider design after implementation acceptance
+- Current increment: accepted session bootstrap contract implementation
+- Next decision gate: identity and DPoP provider design
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
