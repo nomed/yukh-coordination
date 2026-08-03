@@ -3,7 +3,7 @@
 - Updated: 2026-08-03
 - Governing implementation issue: #5
 - Last merged pull request: #23
-- Active pull request: pending for JetStream layout
+- Active pull request: #24 for JetStream layout
 - Runtime decisions: RFC-0003, RFC-0004 and RFC-0005 Accepted
 - Current increment: freeze the JetStream adapter layout
 - Next qualified increment: implement RFC-0006 after owner acceptance

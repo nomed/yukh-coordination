@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-09: JetStream adapter layout
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #24
 - Status: Active
 
 ## Objective
