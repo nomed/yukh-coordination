@@ -2,9 +2,9 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #123
-- Active increment: #117 implements the separate accountable RFC-0022
-  three-bucket bootstrap operation
+- Last delivery pull request: #128
+- Active increment: #129 reconciles the RFC-0022 immutable candidate and
+  execution-forbidden deployment plan after executable/bootstrap delivery
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -29,17 +29,18 @@
   immutable record and redacted, execution-forbidden deployment plan were
   published in #112; the closed, reproducibly qualified staging executable
   assembly was delivered in #121; task-first component documentation was
-  published in #123
+  published in #123; the accountable three-bucket bootstrap executable was
+  delivered in #127; the canonical documentation header was aligned in #128
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next action: deliver and review #117 without running it against real
-  infrastructure, then supersede the immutable candidate and reconcile the
-  deployment plan in a separate record-only increment. Provisioning approval
-  is premature until that reviewed bootstrap artifact and reconciled packet
-  exist. Live
+- Next action: deliver and review record-only #129. After it merges,
+  `nomed/yukh-mcp#50` may continue disabled-by-default implementation and
+  hermetic qualification against the immutable contract. Any provisioning
+  decision still requires a separate complete operator packet and explicit
+  owner approval; live
   infrastructure, credentials, listener exposure, MCP traffic, protected
   mutations and production use remain separately gated
 

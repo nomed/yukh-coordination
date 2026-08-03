@@ -467,6 +467,28 @@ credential minting, provisioning, listener, MCP traffic, provider execution,
 protected mutation or production authority. A superseding immutable record and
 deployment-plan reconciliation remain prerequisites to a provisioning request.
 
+### RFC-0022 immutable candidate reconciliation — 2026-08-03
+
+Issue #129 supersedes the earlier source candidate with commit
+`d122f31ce6a74dcec97dfcf8095a4447e23ee593` and tree
+`a59ba3f7ad6018d96f7329710eb593766acda676`. That identity contains both the
+closed staging service executable from #121 and the separate accountable
+bootstrap executable from #127. Post-merge run `30851387901` qualifies the
+complete race/disposable-JetStream suite and byte-reproducible builds of both
+executables at that exact revision.
+
+The reconciliation closes the two implementation gaps recorded by #110 but
+creates no distribution artifact or operator packet. Provisioning remains
+fail-closed until separately reviewed evidence binds concrete artifact,
+trust, policy, credential-policy, limit, epoch, filesystem and rollback
+digests/outcomes to the immutable candidate and the owner explicitly approves
+that packet. A live synthetic MCP window remains a second later approval.
+
+MCP #50 may rely on the immutable contract only for disabled-by-default code
+and hermetic qualification. No endpoint, credential, bootstrap execution,
+listener exposure, MCP request, provider execution, protected mutation or
+production authority crosses from this record.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
