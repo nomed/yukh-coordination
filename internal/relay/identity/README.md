@@ -17,7 +17,9 @@ The boundary is intentionally layered:
 - DPoP signatures are checked before claims are trusted, and `ath`, public URI,
   method, time and JWK thumbprint are verified explicitly.
 
-The provider generates opaque session tokens, but the directory has no audit
-store, checkpoint signer, policy implementation, process wiring or external
-configuration. The mandatory `Auditor` is a port: production composition
-cannot claim readiness until a durable implementation is supplied explicitly.
+The provider generates opaque session tokens, but this directory does not own
+their audit storage, checkpoint signing, policy, process wiring or external
+configuration. The mandatory `Auditor` remains a port. RFC-0011 step 1 supplies
+a durable adapter under `internal/relay/audit/sqlite`, but production
+composition cannot claim audit readiness until the later checkpoint, recovery
+and explicit wiring increments are qualified.
