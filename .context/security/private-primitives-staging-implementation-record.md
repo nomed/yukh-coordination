@@ -1,10 +1,10 @@
 # RFC-0022 private primitives staging implementation record
 
-- Status: immutable implementation candidate
+- Status: superseding immutable implementation candidate
 - Recorded: 2026-08-03
 - Governing RFC: RFC-0022
 - Governing issue: #90
-- Publication issue: #110
+- Reconciliation issue: #129
 
 ## Immutable identity
 
@@ -13,16 +13,22 @@ The reviewed implementation candidate is exactly:
 | Field | Value |
 |---|---|
 | Repository | `nomed/yukh-coordination` |
-| Commit | `1af3ddb61f48539b7b2d426fb1d169db0b3cef21` |
-| Git tree | `507a2358fdb17bc48b31e9af68f8d18296754bd8` |
-| Profile | `yukh-coordination/private-primitives-staging-v1` |
-| Qualification check | GitHub Actions run `30844534198`, job `91789486897`, success at 2026-08-03T19:10:16Z |
+| Commit | `d122f31ce6a74dcec97dfcf8095a4447e23ee593` |
+| Git tree | `a59ba3f7ad6018d96f7329710eb593766acda676` |
+| Service profile | `yukh-coordination/private-primitives-staging-v1` |
+| Bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` |
+| Qualification check | GitHub Actions run `30851387901`, job `91811981779`, success at 2026-08-03T20:43:05Z |
 
-Commit and tree are the complete content identity. A later commit, rebuilt
-archive, branch name or mutable tag is not this candidate. Deployment evidence
-must record both values before installation and again from the installed source
-or artifact provenance. This record does not designate a binary artifact:
-none is published by the repository at this point.
+Commit and tree are the complete source identity. A later commit, rebuilt
+archive, branch or mutable tag is not this candidate. Deployment evidence must
+record both values before building and again through artifact provenance. This
+repository does not publish a binary or container distribution at this point;
+an operator packet must therefore bind reproducibly built artifact digests to
+this exact source identity before provisioning can be reviewed.
+
+This record supersedes the earlier candidate
+`1af3ddb61f48539b7b2d426fb1d169db0b3cef21` recorded by #110. That commit
+remains historical evidence and is not the deployable candidate.
 
 ## Reviewed delivery chain
 
@@ -34,48 +40,62 @@ none is published by the repository at this point.
 | Mandatory audit gate | #103 | `b18942e42e3642bb269473d9bf85f6a3ee9ac8a8` |
 | Capability-key descriptor custody | #106 | `90b0909111b70baabf41c5663769d9b1b29c1b91` |
 | JetStream stores and restore epoch | #109 | `1af3ddb61f48539b7b2d426fb1d169db0b3cef21` |
+| Closed staging service executable | #121 | `6c47920135ad29e36b7e591fc6f401f9eec2fa34` |
+| Accountable three-bucket bootstrap executable | #127 | `d122f31ce6a74dcec97dfcf8095a4447e23ee593` |
 
-The final commit contains all earlier boundaries. The chain is listed for
-review traceability, not as a set of independently deployable artifacts.
+The final candidate contains every earlier implementation boundary. The chain
+is traceability evidence, not a set of independently substitutable artifacts.
+
+## Qualified executable boundaries
+
+The service executable accepts exactly one absolute, non-secret closed config
+path. It receives the NATS runtime credential and capability keyring only
+through fixed inherited descriptors, composes the accepted TLS, registration,
+replay, audit, capability, JetStream and RFC-0015 boundaries, never enables
+bucket bootstrap, and owns bounded readiness and shutdown.
+
+The separate one-shot bootstrap executable accepts its own absolute,
+non-secret closed config and one narrower inherited NATS credential descriptor.
+It can create missing or exactly verify only the nonce, lease and
+capability-budget buckets. It has no listener, service runtime, update, delete,
+purge, migration, repair or provider path. Success emits only the closed
+revision/epoch/bucket-profile receipt; failure emits no private detail.
+
+Both executables embed the candidate revision. The qualification script builds
+each twice with `CGO_ENABLED=0`, trimmed paths, disabled VCS stamping and no
+build ID, then requires byte equality and the exact embedded revision.
 
 ## Qualification claim
 
-At the recorded tree, the repository workflow installs its pinned disposable
-NATS server and runs the complete Go suite with the race detector, followed by
-the dependency-free Node qualification. The successful check covers generated
-TLS roots and workload material, descriptor custody, replay and audit restart,
-exact JetStream bucket configuration and epoch fencing, readiness loss,
-shutdown and negative ambiguity cases.
+At the recorded tree, the repository workflow installs pinned disposable NATS,
+runs the complete Go suite with the race detector, exercises bootstrap
+create-then-verify against exactly three buckets, qualifies TLS, registration,
+descriptor custody, replay, audit, readiness, shutdown and negative ambiguity
+cases, proves reproducible executable builds, and runs the dependency-free
+Node qualification offline.
 
-This is hermetic implementation evidence only. It does not prove a packaged
-executable, host hardening, real private-network routing, provisioned bucket,
-live credential, exposed listener or MCP traffic.
+This is hermetic implementation evidence. It does not prove a hardened host,
+private routing, concrete trust or policy digests, a provisioned real bucket,
+live credential, exposed listener, MCP request or production suitability.
 
-## Known delivery gaps
+## Remaining delivery gate
 
-The immutable candidate contains no `package main` executable entrypoint and
-publishes no binary or container artifact. Normal staging composition also
-forces JetStream bootstrap off, while RFC-0022 requires bucket creation to be a
-separately reviewed accountable operation. Therefore the candidate is not yet
-installable and provisioning approval must not be requested solely on this
-record.
+The executable and bootstrap implementation gaps identified by #110 are
+closed. Provisioning nevertheless remains forbidden until a separately
+reviewed operator packet supplies the exact reproducible artifact digests,
+redacted trust/policy/credential-policy evidence, fixed limits, positive epoch,
+filesystem outcomes, rollback identifiers and bounded synthetic-window expiry
+required by the deployment plan.
 
-The next implementation increments must add, without changing the RFC-0015
-wire contract:
-
-1. a closed executable assembly that reads the one absolute non-secret config
-   path, receives explicit inherited descriptors and owns bounded shutdown;
-2. a separate, one-shot bootstrap operation for the exact nonce, lease and
-   capability-budget buckets, with narrower credentials and redacted evidence;
-3. reproducible artifact provenance tied back to this record or to a new
-   explicitly reviewed superseding implementation commit.
-
-Any code change produces a new implementation commit and requires this record
-to be superseded. It cannot be treated as a harmless deployment substitution.
+`nomed/yukh-mcp#50` may use this immutable contract only to continue its
+disabled-by-default adapter implementation and hermetic qualification. It gains
+no endpoint, trust material, credential, provisioning or live-request authority
+from this record.
 
 ## Authorization boundary
 
-Publishing this record completes only the recording portion of RFC-0022 step
-4. It grants no permission to provision, mint credentials or keys, expose a
-listener, connect MCP, send traffic, execute a provider, mutate a protected
-target or use the profile in production.
+Publishing this record completes only RFC-0022 step 4. It grants no permission
+to provision infrastructure, mint credentials or keys, run the bootstrap
+against real NATS, expose a listener, connect MCP to a live endpoint, send
+traffic, execute a provider, mutate a protected target or use the profile in
+production.

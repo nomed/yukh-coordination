@@ -1,10 +1,10 @@
 # RFC-0022 private staging redacted deployment plan
 
-- Status: review candidate; execution forbidden
+- Status: reconciled review candidate; execution forbidden
 - Recorded: 2026-08-03
 - Governing RFC: RFC-0022
 - Governing issue: #90
-- Publication issue: #110
+- Reconciliation issue: #129
 - Implementation record: `private-primitives-staging-implementation-record.md`
 
 This public plan intentionally contains no endpoint, address, account,
@@ -15,11 +15,14 @@ public evidence.
 
 ## Stop condition before provisioning approval
 
-Provisioning is not yet ready for owner approval. The immutable candidate has
-no executable assembly or published artifact, and there is no separately
-reviewed accountable bootstrap operation for the three fixed JetStream
-buckets. No infrastructure or credential work may begin until both gaps are
-delivered at a new immutable commit and this plan is reconciled to it.
+The immutable source candidate now contains both reproducibly qualified
+executables and the separately reviewed accountable three-bucket bootstrap.
+That closes the implementation prerequisites but does not itself authorize
+provisioning. No infrastructure or credential work may begin until a concrete,
+redacted operator packet binds reproducible artifact digests and every item
+below to commit `d122f31ce6a74dcec97dfcf8095a4447e23ee593` and tree
+`a59ba3f7ad6018d96f7329710eb593766acda676`, and the owner explicitly approves
+that complete packet.
 
 ## Accountable roles
 
@@ -60,8 +63,8 @@ descriptor boundary. It receives no NATS information or credential.
 
 ## Required pre-provisioning package
 
-After the executable and bootstrap gaps are resolved, the operator must prepare
-one review packet containing only these redacted fields:
+The operator must prepare one review packet containing only these redacted
+fields:
 
 - implementation commit, Git tree and reproducible artifact digest;
 - closed executable and bootstrap operation versions;
@@ -153,6 +156,6 @@ state to make a retry appear safe.
 
 ## Authorization boundary
 
-Merging this plan does not authorize step 5. The next owner decision may occur
-only after the executable, bootstrap operation, artifact provenance and updated
-review packet exist. Step 7 always remains a second independent approval.
+Merging this reconciled plan does not authorize step 5. The next owner decision
+may occur only after the complete candidate-bound operator packet exists and is
+reviewed. Step 7 always remains a second independent approval.
