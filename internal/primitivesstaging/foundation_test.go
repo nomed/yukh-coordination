@@ -124,6 +124,7 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 		Profile: Profile, PublicBaseURI: "https://coordination.staging.example", PublicBind: "10.0.0.8:8443", OperationsBind: "127.0.0.1:9090",
 		TLSCertificatePath: filepath.Join(dir, "tls.crt"), TLSPrivateKeyPath: filepath.Join(dir, "tls.key"), TLSTrustBundlePath: filepath.Join(dir, "ca.crt"),
 		RegistrationPath: filepath.Join(dir, "registration.json"), RegistrationSignaturePath: filepath.Join(dir, "registration.sig"), ReplayDatabasePath: filepath.Join(dir, "replays.db"),
+		AuditDatabasePath: filepath.Join(dir, "audit.db"),
 		RegistrationKeyID: "coordination-staging-1", RegistrationPublicKey: base64.RawURLEncoding.EncodeToString(make([]byte, 32)),
 		RequestDeadlineMS: 1000, MaxConcurrentRequests: 16, MaxReplayEntries: 1024, Epoch: 1,
 	}

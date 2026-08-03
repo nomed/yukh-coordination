@@ -9,13 +9,16 @@ import (
 type AuditOperation string
 
 const (
-	AuditBootstrap      AuditOperation = "bootstrap"
-	AuditAuthentication AuditOperation = "session_authentication"
-	AuditRevocation     AuditOperation = "revocation"
-	AuditJWKSRefresh    AuditOperation = "jwks_refresh"
-	AuditRestoreFence   AuditOperation = "restore_fence"
-	AuditCheckpoint     AuditOperation = "audit_checkpoint"
-	AuditKeyLifecycle   AuditOperation = "audit_key_lifecycle"
+	AuditBootstrap             AuditOperation = "bootstrap"
+	AuditAuthentication        AuditOperation = "session_authentication"
+	AuditRevocation            AuditOperation = "revocation"
+	AuditJWKSRefresh           AuditOperation = "jwks_refresh"
+	AuditRestoreFence          AuditOperation = "restore_fence"
+	AuditCheckpoint            AuditOperation = "audit_checkpoint"
+	AuditKeyLifecycle          AuditOperation = "audit_key_lifecycle"
+	AuditStagingAuthentication AuditOperation = "staging_authentication"
+	AuditStagingAuthorization  AuditOperation = "staging_authorization"
+	AuditStagingLifecycle      AuditOperation = "staging_lifecycle"
 )
 
 type AuditOutcome string
@@ -42,6 +45,13 @@ const (
 	AuditReasonCheckpointCommitted     AuditReason = "checkpoint_committed"
 	AuditReasonKeyLifecycleCommitted   AuditReason = "key_lifecycle_committed"
 	AuditReasonOperationUnavailable    AuditReason = "operation_unavailable"
+	AuditReasonAccessDenied            AuditReason = "access_denied"
+	AuditReasonDependencyUnavailable   AuditReason = "dependency_unavailable"
+	AuditReasonCredentialExpired       AuditReason = "credential_expired"
+	AuditReasonRegistrationLoaded      AuditReason = "registration_loaded"
+	AuditReasonTLSReady                AuditReason = "tls_ready"
+	AuditReasonStarted                 AuditReason = "started"
+	AuditReasonStopped                 AuditReason = "stopped"
 )
 
 type AuditRecord struct {
@@ -63,6 +73,9 @@ type AuditRecord struct {
 	CheckpointReference   string
 	SigningKeyReference   string
 	RecoveryReference     string
+	ServiceProfile        string
+	Action                string
+	IdentityReference     string
 }
 
 type Auditor interface {

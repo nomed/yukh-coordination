@@ -305,6 +305,33 @@ capability-key custody and exact JetStream configuration/epoch probes are not
 yet concretely composed; infrastructure, credential minting, listener exposure
 and MCP traffic remain gated.
 
+### RFC-0022 mandatory audit-gate implementation review — 2026-08-03
+
+Issue #102 reuses the RFC-0011 canonical receipt, append-only chain, Merkle and
+STRICT SQLite ledger. Its closed v1 record schema gains only the RFC-0022
+staging authentication, authorization and lifecycle operations plus profile,
+action and derived identity-reference fields. Legacy record shapes explicitly
+reject those new fields, so they cannot be smuggled into an unrelated audit
+operation.
+
+The staging gate appends the registration-load event at construction, records
+credential expiry with its own closed denial reason, latches append uncertainty
+until restart and wraps
+authentication plus action/scope authorization. Allow, deny and dependency
+unavailable results are returned only after the corresponding append commits;
+append uncertainty becomes temporary unavailability. Runtime TLS-ready,
+startup, unready admission and shutdown events use the same gate, and ledger
+verification participates in conjunctive readiness.
+
+Identity references are domain-separated hashes. Records exclude token, proof,
+JTI, JWK, capability, request/response body, tenant/principal plaintext,
+scope/value/holder digest, endpoint, path, NATS details and arbitrary errors.
+Hermetic tests inspect persisted canonical bytes, verify restart continuity and
+prove append-failure denial.
+
+Capability-key custody, JetStream/epoch composition, provisioning and MCP
+traffic remain separate gates.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nomed/yukh-coordination/internal/primitiveshttp"
+	"github.com/nomed/yukh-coordination/internal/relay/identity"
 )
 
 const maxTLSFileBytes = 1 << 20
@@ -24,6 +25,12 @@ const maxTLSFileBytes = 1 << 20
 const unavailableProblem = `{"code":"temporarily_unavailable","status":503,"title":"temporarily_unavailable","type":"urn:yukh:coordination-primitives:problem:temporarily_unavailable"}`
 
 type Readiness interface {
+	Ready() bool
+}
+
+type LifecycleAuditor interface {
+	RecordLifecycle(context.Context, identity.AuditReason) error
+	RecordDependencyUnavailable(context.Context) error
 	Ready() bool
 }
 
@@ -60,6 +67,7 @@ type Runtime struct {
 	handler    *primitiveshttp.Handler
 	dependency Readiness
 	tlsConfig  *tls.Config
+	audit      LifecycleAuditor
 	running    atomic.Bool
 	stopping   atomic.Bool
 	mu         sync.Mutex
@@ -119,11 +127,11 @@ func LoadServerTLSConfig(config *Config) (*tls.Config, error) {
 	}, nil
 }
 
-func NewRuntime(config *Config, handler *primitiveshttp.Handler, dependency Readiness, tlsConfig *tls.Config) (*Runtime, error) {
-	if config == nil || handler == nil || dependency == nil || !validServerTLS(tlsConfig) {
+func NewRuntime(config *Config, handler *primitiveshttp.Handler, dependency Readiness, tlsConfig *tls.Config, audit LifecycleAuditor) (*Runtime, error) {
+	if config == nil || handler == nil || dependency == nil || audit == nil || !validServerTLS(tlsConfig) {
 		return nil, ErrInvalid
 	}
-	return &Runtime{config: config, handler: handler, dependency: dependency, tlsConfig: tlsConfig.Clone()}, nil
+	return &Runtime{config: config, handler: handler, dependency: dependency, tlsConfig: tlsConfig.Clone(), audit: audit}, nil
 }
 
 func (r *Runtime) Ready() bool {
@@ -158,6 +166,12 @@ func (r *Runtime) Serve(ctx context.Context, publicListener, operationsListener 
 		r.mu.Unlock()
 		return ErrInvalid
 	}
+	if !r.audit.Ready() || r.audit.RecordLifecycle(ctx, identity.AuditReasonTLSReady) != nil || r.audit.RecordLifecycle(ctx, identity.AuditReasonStarted) != nil {
+		r.mu.Unlock()
+		_ = publicListener.Close()
+		_ = operationsListener.Close()
+		return ErrUnavailable
+	}
 	publicServer := boundedServer(r.config.PublicBind(), r.publicHandler())
 	operationsServer := boundedServer(r.config.OperationsBind(), r.operationsHandler())
 	r.public, r.operations = publicServer, operationsServer
@@ -188,12 +202,18 @@ func (r *Runtime) Serve(ctx context.Context, publicListener, operationsListener 
 		_ = operationsServer.Close()
 		result = ErrUnavailable
 	}
+	auditCtx, auditCancel := context.WithTimeout(context.Background(), r.config.RequestDeadline())
+	defer auditCancel()
+	if err := r.audit.RecordLifecycle(auditCtx, identity.AuditReasonStopped); err != nil {
+		result = ErrUnavailable
+	}
 	return result
 }
 
 func (r *Runtime) publicHandler() http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !r.Ready() {
+			_ = r.audit.RecordDependencyUnavailable(request.Context())
 			writer.Header().Set("Cache-Control", "no-store")
 			writer.Header().Set("Content-Type", primitiveshttp.MediaType)
 			writer.WriteHeader(http.StatusServiceUnavailable)
