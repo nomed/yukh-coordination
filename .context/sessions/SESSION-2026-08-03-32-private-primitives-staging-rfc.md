@@ -1,7 +1,7 @@
 # Session: Private primitives staging profile proposal
 
 - Governing issue: #90
-- Pull request: pending
+- Pull request: #92
 - Status: proposal ready for owner review
 
 ## Objective
