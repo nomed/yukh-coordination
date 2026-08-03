@@ -161,6 +161,14 @@ func TestCapabilityBudgetReplacesOlderEpochAndRejectsMalformedLedger(t *testing.
 	if err := budget.Reserve(ctx, malformedPrincipal, token, now.Add(30*time.Second), 2); !errors.Is(err, coordination.ErrInvariant) {
 		t.Fatalf("malformed ledger: %v", err)
 	}
+
+	futurePrincipal := coordination.Digest("efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef")
+	if _, err := budget.kv.Create(ctx, string(futurePrincipal), []byte(`{"schema":1,"epoch":3,"entries":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := budget.Reserve(ctx, futurePrincipal, token, now.Add(30*time.Second), 2); !errors.Is(err, coordination.ErrInvariant) {
+		t.Fatalf("epoch rollback: %v", err)
+	}
 }
 
 func TestPrimitivesServiceLifecycleRestartConcurrencyAndFailureAgainstDisposableNATS(t *testing.T) {

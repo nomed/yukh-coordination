@@ -159,7 +159,10 @@ func (budget *CapabilityBudget) mutate(ctx context.Context, principal coordinati
 		if err := decodeBudget(entry.Value(), &value); err != nil {
 			return err
 		}
-		if value.Epoch != budget.epoch {
+		if value.Epoch > budget.epoch {
+			return coordination.ErrInvariant
+		}
+		if value.Epoch < budget.epoch {
 			value = budgetValue{Schema: 1, Epoch: budget.epoch, Entries: []budgetSlot{}}
 		}
 	}
