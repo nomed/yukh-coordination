@@ -73,7 +73,8 @@ func TestRuntimeComposesRealRequestAndStopsInReverseOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer runtime-test")
+	request.Header.Set("Authorization", "DPoP AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	request.Header.Set("DPoP", "a.b.c")
 	request.Header.Set("Content-Type", "application/yukh-event+json;version=0.1")
 	response, err := fixture.client.Do(request)
 	if err != nil {
@@ -90,7 +91,8 @@ func TestRuntimeComposesRealRequestAndStopsInReverseOrder(t *testing.T) {
 	}
 
 	streamRequest, _ := http.NewRequest(http.MethodGet, fixture.baseURL+"/coordination/v1/channels/channel:release/transcripts/0/stream", nil)
-	streamRequest.Header.Set("Authorization", "Bearer runtime-test")
+	streamRequest.Header.Set("Authorization", "DPoP AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	streamRequest.Header.Set("DPoP", "a.b.c")
 	streamRequest.Header.Set("Accept", "text/event-stream")
 	streamRequest.Header.Set("Last-Event-ID", "1")
 	streamResponse, err := fixture.client.Do(streamRequest)
@@ -144,7 +146,8 @@ func TestRuntimeForcesBlockedRequestAtDeadline(t *testing.T) {
 	go func() { runResult <- runtime.Run(ctx) }()
 	waitReady(t, runtime)
 	request, _ := http.NewRequest(http.MethodGet, fixture.baseURL+"/coordination/v1/channels/channel:release/transcripts/0/records", nil)
-	request.Header.Set("Authorization", "Bearer runtime-test")
+	request.Header.Set("Authorization", "DPoP AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	request.Header.Set("DPoP", "a.b.c")
 	request.Header.Set("Accept", httpapi.TranscriptMediaType)
 	clientResult := make(chan error, 1)
 	go func() {
@@ -267,9 +270,11 @@ func TestNewRejectsIncompleteOrAmbiguousComposition(t *testing.T) {
 	tests := map[string]func(*Config){
 		"store": func(c *Config) { c.Store = nil }, "subscriptions": func(c *Config) { c.Subscriptions = nil },
 		"typed-nil-store": func(c *Config) { c.Store = (*memory.Store)(nil) },
+		"bootstrapper":    func(c *Config) { c.Bootstrapper = nil },
 		"authenticator":   func(c *Config) { c.Authenticator = nil }, "authorizer": func(c *Config) { c.Authorizer = nil },
 		"signer": func(c *Config) { c.Signer = nil }, "validator": func(c *Config) { c.Validator = nil },
 		"listener":            func(c *Config) { c.Listener = nil },
+		"public-base":         func(c *Config) { c.Server.HTTP.PublicBaseURI = "" },
 		"heartbeat":           func(c *Config) { c.Server.HTTP.HeartbeatInterval = 0 },
 		"stream-lifetime":     func(c *Config) { c.Server.HTTP.MaxStreamLifetime = 16 * time.Minute },
 		"write-timeout":       func(c *Config) { c.Server.HTTP.WriteTimeout = 0 },
@@ -343,12 +348,19 @@ func newRuntimeFixtureWithListener(t *testing.T, listener net.Listener) runtimeF
 		t.Fatal(err)
 	}
 	authenticator := &testAuthenticator{}
+	bootstrapper := &testBootstrapper{}
 	authorizer := &testAuthorizer{}
 	signer := &testSigner{}
 	return runtimeFixture{store: store, channel: channel, authenticator: authenticator, authorizer: authorizer, signer: signer, config: Config{
-		Store: store, Subscriptions: service.NewLiveChanges(), Authenticator: authenticator, Authorizer: authorizer, Signer: signer, Validator: validator, Listener: listener,
-		Server: ServerConfig{HTTP: httpapi.Config{HeartbeatInterval: 50 * time.Millisecond, MaxStreamLifetime: time.Minute, WriteTimeout: time.Second}, ReadHeaderTimeout: time.Second, IdleTimeout: time.Second, MaxHeaderBytes: 16_384, ShutdownTimeout: time.Second},
+		Store: store, Subscriptions: service.NewLiveChanges(), Bootstrapper: bootstrapper, Authenticator: authenticator, Authorizer: authorizer, Signer: signer, Validator: validator, Listener: listener,
+		Server: ServerConfig{HTTP: httpapi.Config{PublicBaseURI: "https://coord.example", HeartbeatInterval: 50 * time.Millisecond, MaxStreamLifetime: time.Minute, WriteTimeout: time.Second}, ReadHeaderTimeout: time.Second, IdleTimeout: time.Second, MaxHeaderBytes: 16_384, ShutdownTimeout: time.Second},
 	}}
+}
+
+type testBootstrapper struct{}
+
+func (*testBootstrapper) Bootstrap(context.Context, httpapi.BootstrapAuthentication) (httpapi.IssuedSession, error) {
+	return httpapi.IssuedSession{}, httpapi.ErrUnauthenticated
 }
 
 type testAuthenticator struct {
@@ -357,7 +369,7 @@ type testAuthenticator struct {
 	entered chan<- struct{}
 }
 
-func (a *testAuthenticator) Authenticate(context.Context, string) (httpapi.Identity, error) {
+func (a *testAuthenticator) Authenticate(context.Context, httpapi.SessionAuthentication) (httpapi.Identity, error) {
 	a.calls.Add(1)
 	if a.entered != nil {
 		close(a.entered)

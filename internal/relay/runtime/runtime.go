@@ -52,6 +52,7 @@ type ServerConfig struct {
 type Config struct {
 	Store         relay.Store
 	Subscriptions service.SubscriptionSource
+	Bootstrapper  httpapi.SessionBootstrapper
 	Authenticator httpapi.Authenticator
 	Authorizer    httpapi.Authorizer
 	Signer        service.Signer
@@ -74,7 +75,7 @@ type Runtime struct {
 }
 
 func New(config Config) (*Runtime, error) {
-	if isNil(config.Store) || isNil(config.Subscriptions) || isNil(config.Authenticator) ||
+	if isNil(config.Store) || isNil(config.Subscriptions) || isNil(config.Bootstrapper) || isNil(config.Authenticator) ||
 		isNil(config.Authorizer) || isNil(config.Signer) || config.Validator == nil || isNil(config.Listener) {
 		return nil, relay.ErrInvalidArgument
 	}
@@ -93,7 +94,7 @@ func New(config Config) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler, err := httpapi.New(config.Authenticator, config.Authorizer, application, config.Server.HTTP)
+	handler, err := httpapi.New(config.Bootstrapper, config.Authenticator, config.Authorizer, application, config.Server.HTTP)
 	if err != nil {
 		return nil, err
 	}

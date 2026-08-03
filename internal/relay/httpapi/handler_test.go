@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,9 +18,11 @@ import (
 )
 
 const routeBase = "https://coord.example/coordination/v1/channels/channel:test/transcripts/1"
+const testProof = "eyJhbGciOiJFUzI1NiJ9.eyJqdGkiOiJ0ZXN0In0.c2lnbmF0dXJl"
+const testSessionToken = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 func TestAuthenticationAndAdmissionPrecedeApplication(t *testing.T) {
-	authenticator := &fakeAuthenticator{err: errors.New("invalid token")}
+	authenticator := &fakeAuthenticator{err: httpapi.ErrUnauthenticated}
 	authorizer := &fakeAuthorizer{decision: allowedDecision()}
 	application := &fakeApplication{}
 	handler := newHandler(t, authenticator, authorizer, application)
@@ -55,7 +59,8 @@ func TestDeniedResourceUsesNonEnumeratingResponse(t *testing.T) {
 func TestTenantComesOnlyFromAuthenticatedIdentity(t *testing.T) {
 	authorizer := &fakeAuthorizer{decision: allowedDecision()}
 	application := &fakeApplication{replayPage: []byte(`{"complete":true}`)}
-	handler := newHandler(t, &fakeAuthenticator{}, authorizer, application)
+	authenticator := &fakeAuthenticator{}
+	handler := newHandler(t, authenticator, authorizer, application)
 	request := request(http.MethodGet, routeBase+"/records?after=4&limit=7", "")
 	request.Header.Set("Accept", httpapi.TranscriptMediaType)
 	request.Header.Set("X-Tenant-ID", "tenant:attacker")
@@ -71,6 +76,9 @@ func TestTenantComesOnlyFromAuthenticatedIdentity(t *testing.T) {
 	}
 	if application.lastReplay.After != 4 || application.lastReplay.Limit != 7 {
 		t.Fatalf("cursor not propagated: %#v", application.lastReplay)
+	}
+	if authenticator.last.TargetURI() != "https://public.coord.example/coordination/v1/channels/channel:test/transcripts/1/records" {
+		t.Fatalf("provider saw non-public or query-bearing target: %q", authenticator.last.TargetURI())
 	}
 }
 
@@ -171,19 +179,19 @@ func TestSSERevocationTerminatesWithoutDelivery(t *testing.T) {
 	}
 }
 
-func TestTLSAndBearerAreMandatory(t *testing.T) {
+func TestTLSIsMandatory(t *testing.T) {
 	handler := newHandler(t, &fakeAuthenticator{}, &fakeAuthorizer{decision: allowedDecision()}, &fakeApplication{})
 	request := request(http.MethodGet, routeBase+"/records", "")
 	request.TLS = nil
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest || problemCode(t, response) != "tls_required" {
-		t.Fatalf("plaintext bearer request accepted: %d %s", response.Code, response.Body.String())
+		t.Fatalf("plaintext authenticated request accepted: %d %s", response.Code, response.Body.String())
 	}
 }
 
-func TestMalformedBearerNeverReachesAuthenticator(t *testing.T) {
-	for _, credential := range []string{"Bearer", "Basic abc", "Bearer abc,def", "Bearer abc=def", "Bearer abc token"} {
+func TestMalformedDPoPNeverReachesAuthenticator(t *testing.T) {
+	for _, credential := range []string{"DPoP", "Basic abc", "Bearer abc", "DPoP abc,def", "DPoP abc token"} {
 		t.Run(credential, func(t *testing.T) {
 			authenticator := &fakeAuthenticator{}
 			handler := newHandler(t, authenticator, &fakeAuthorizer{decision: allowedDecision()}, &fakeApplication{})
@@ -193,7 +201,157 @@ func TestMalformedBearerNeverReachesAuthenticator(t *testing.T) {
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, request)
 			if response.Code != http.StatusUnauthorized || authenticator.calls != 0 {
-				t.Fatalf("malformed bearer crossed authenticator: %d calls=%d", response.Code, authenticator.calls)
+				t.Fatalf("malformed DPoP authorization crossed authenticator: %d calls=%d", response.Code, authenticator.calls)
+			}
+		})
+	}
+}
+
+func TestMalformedProofNeverReachesAuthenticator(t *testing.T) {
+	for _, proof := range []string{"", "a.b", "a.b.c.d", "a..c", "a.b.c=", "a.b.c d", strings.Repeat("a", 16_385)} {
+		t.Run(fmt.Sprintf("length-%d", len(proof)), func(t *testing.T) {
+			authenticator := &fakeAuthenticator{}
+			handler := newHandler(t, authenticator, &fakeAuthorizer{decision: allowedDecision()}, &fakeApplication{})
+			request := request(http.MethodGet, routeBase+"/records", "")
+			request.Header.Set("Accept", httpapi.TranscriptMediaType)
+			request.Header.Set("DPoP", proof)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusUnauthorized || authenticator.calls != 0 {
+				t.Fatalf("malformed proof crossed authenticator: %d calls=%d", response.Code, authenticator.calls)
+			}
+		})
+	}
+
+	authenticator := &fakeAuthenticator{}
+	handler := newHandler(t, authenticator, &fakeAuthorizer{decision: allowedDecision()}, &fakeApplication{})
+	request := request(http.MethodGet, routeBase+"/records", "")
+	request.Header.Add("DPoP", "d.e.f")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || authenticator.calls != 0 {
+		t.Fatalf("duplicate proof crossed authenticator: %d calls=%d", response.Code, authenticator.calls)
+	}
+}
+
+func TestNewRequiresClosedPublicBaseAndBootstrapper(t *testing.T) {
+	for name, base := range map[string]string{
+		"empty": "", "http": "http://coord.example", "userinfo": "https://user@coord.example",
+		"query": "https://coord.example?x=1", "fragment": "https://coord.example/#x", "trailing-slash": "https://coord.example/prefix/",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := httpapi.New(&fakeBootstrapper{}, &fakeAuthenticator{}, &fakeAuthorizer{}, &fakeApplication{}, httpapi.Config{
+				PublicBaseURI: base, HeartbeatInterval: time.Hour, MaxStreamLifetime: time.Minute, WriteTimeout: time.Second,
+			})
+			if !errors.Is(err, relay.ErrInvalidArgument) {
+				t.Fatalf("invalid public base accepted: %q: %v", base, err)
+			}
+		})
+	}
+	_, err := httpapi.New(nil, &fakeAuthenticator{}, &fakeAuthorizer{}, &fakeApplication{}, httpapi.Config{
+		PublicBaseURI: "https://coord.example", HeartbeatInterval: time.Hour, MaxStreamLifetime: time.Minute, WriteTimeout: time.Second,
+	})
+	if !errors.Is(err, relay.ErrInvalidArgument) {
+		t.Fatalf("nil bootstrapper accepted: %v", err)
+	}
+}
+
+func TestBootstrapProducesClosedCanonicalSession(t *testing.T) {
+	issuedAt := time.Date(2026, 8, 3, 5, 15, 0, 0, time.UTC)
+	bootstrapper := &fakeBootstrapper{issued: httpapi.IssuedSession{
+		SessionToken: testSessionToken, ParticipantInstanceID: "01989f0e-56b7-7e01-915e-a7748f7f6204",
+		SessionEpoch: 7, IssuedAt: issuedAt, ExpiresAt: issuedAt.Add(15 * time.Minute),
+	}}
+	handler := newFullHandler(t, bootstrapper, &fakeAuthenticator{}, &fakeAuthorizer{}, &fakeApplication{})
+	request := httptest.NewRequest(http.MethodPost, "https://hostile.invalid/coordination/v1/sessions", nil)
+	request.TLS = &tls.ConnectionState{}
+	request.Header.Set("Authorization", "DPoP external-token")
+	request.Header.Set("DPoP", testProof)
+	request.Header.Set("Forwarded", "host=attacker.invalid;proto=http")
+	request.Header.Set("X-Forwarded-Host", "attacker.invalid")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	expected := `{"expires_at":"2026-08-03T05:30:00.000Z","participant_instance_id":"01989f0e-56b7-7e01-915e-a7748f7f6204","session_epoch":7,"session_token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","specversion":"0.1","token_type":"DPoP"}`
+	if response.Code != http.StatusCreated || response.Body.String() != expected || response.Header().Get("Content-Type") != httpapi.SessionMediaType || response.Header().Get("Pragma") != "no-cache" {
+		t.Fatalf("unexpected bootstrap response: %d %q %#v", response.Code, response.Body.String(), response.Header())
+	}
+	if bootstrapper.calls != 1 || bootstrapper.last.Credential() != "external-token" || bootstrapper.last.Proof() != testProof || bootstrapper.last.Method() != http.MethodPost || bootstrapper.last.TargetURI() != "https://public.coord.example/coordination/v1/sessions" {
+		t.Fatalf("unexpected bootstrap material: calls=%d material=%#v", bootstrapper.calls, bootstrapper.last)
+	}
+}
+
+func TestBootstrapFramingFailsBeforeProvider(t *testing.T) {
+	cases := map[string]func(*http.Request){
+		"query":        func(r *http.Request) { r.URL.RawQuery = "x=1" },
+		"body":         func(r *http.Request) { r.Body = io.NopCloser(strings.NewReader("x")); r.ContentLength = 1 },
+		"content-type": func(r *http.Request) { r.Header.Set("Content-Type", "application/json") },
+		"encoding":     func(r *http.Request) { r.Header.Set("Content-Encoding", "identity") },
+		"cookie":       func(r *http.Request) { r.Header.Set("Cookie", "session=bad") },
+		"chunked":      func(r *http.Request) { r.TransferEncoding = []string{"chunked"} },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			bootstrapper := &fakeBootstrapper{}
+			handler := newFullHandler(t, bootstrapper, &fakeAuthenticator{}, &fakeAuthorizer{}, &fakeApplication{})
+			request := httptest.NewRequest(http.MethodPost, "https://coord.example/coordination/v1/sessions", nil)
+			request.TLS = &tls.ConnectionState{}
+			request.Header.Set("Authorization", "DPoP external-token")
+			request.Header.Set("DPoP", testProof)
+			mutate(request)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || bootstrapper.calls != 0 {
+				t.Fatalf("framing crossed provider: status=%d calls=%d", response.Code, bootstrapper.calls)
+			}
+		})
+	}
+}
+
+func TestAuthenticationMaterialIsSeparatedAndRedacted(t *testing.T) {
+	bootstrapper := &fakeBootstrapper{err: httpapi.ErrUnauthenticated}
+	authenticator := &fakeAuthenticator{err: httpapi.ErrUnauthenticated}
+	handler := newFullHandler(t, bootstrapper, authenticator, &fakeAuthorizer{}, &fakeApplication{})
+
+	bootstrap := httptest.NewRequest(http.MethodPost, "https://coord.example/coordination/v1/sessions", nil)
+	bootstrap.TLS = &tls.ConnectionState{}
+	bootstrap.Header.Set("Authorization", "DPoP external-secret")
+	bootstrap.Header.Set("DPoP", testProof)
+	bootstrapResponse := httptest.NewRecorder()
+	handler.ServeHTTP(bootstrapResponse, bootstrap)
+	if bootstrapResponse.Code != http.StatusUnauthorized || bootstrapper.calls != 1 || authenticator.calls != 0 || bootstrapResponse.Header().Get("WWW-Authenticate") != `DPoP algs="ES256"` {
+		t.Fatalf("bootstrap trust boundary failed: %d %d %d", bootstrapResponse.Code, bootstrapper.calls, authenticator.calls)
+	}
+
+	resource := request(http.MethodGet, routeBase+"/records", "")
+	resource.Header.Set("Accept", httpapi.TranscriptMediaType)
+	resourceResponse := httptest.NewRecorder()
+	handler.ServeHTTP(resourceResponse, resource)
+	if resourceResponse.Code != http.StatusUnauthorized || bootstrapper.calls != 1 || authenticator.calls != 1 {
+		t.Fatalf("resource trust boundary failed: %d %d %d", resourceResponse.Code, bootstrapper.calls, authenticator.calls)
+	}
+	for _, formatted := range []string{fmt.Sprint(bootstrapper.last), fmt.Sprintf("%#v", bootstrapper.last), fmt.Sprint(authenticator.last), fmt.Sprintf("%#v", authenticator.last)} {
+		if strings.Contains(formatted, "secret") || strings.Contains(formatted, testProof) || !strings.Contains(formatted, "REDACTED") {
+			t.Fatalf("authentication material leaked through formatting: %q", formatted)
+		}
+	}
+}
+
+func TestMalformedProviderSuccessAndUnknownErrorAreUnavailable(t *testing.T) {
+	for name, bootstrapper := range map[string]*fakeBootstrapper{
+		"malformed-success": {},
+		"unknown-error":     {err: errors.New("provider secret detail")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			handler := newFullHandler(t, bootstrapper, &fakeAuthenticator{}, &fakeAuthorizer{}, &fakeApplication{})
+			request := httptest.NewRequest(http.MethodPost, "https://coord.example/coordination/v1/sessions", nil)
+			request.TLS = &tls.ConnectionState{}
+			request.Header.Set("Authorization", "DPoP external-token")
+			request.Header.Set("DPoP", testProof)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusServiceUnavailable || problemCode(t, response) != "temporarily_unavailable" || strings.Contains(response.Body.String(), "secret") || response.Header().Get("Retry-After") != "3" {
+				t.Fatalf("provider failure leaked: %d %s", response.Code, response.Body.String())
 			}
 		})
 	}
@@ -202,17 +360,32 @@ func TestMalformedBearerNeverReachesAuthenticator(t *testing.T) {
 type fakeAuthenticator struct {
 	calls int
 	err   error
+	last  httpapi.SessionAuthentication
 }
 
-func (a *fakeAuthenticator) Authenticate(_ context.Context, token string) (httpapi.Identity, error) {
+func (a *fakeAuthenticator) Authenticate(_ context.Context, authentication httpapi.SessionAuthentication) (httpapi.Identity, error) {
 	a.calls++
-	if token != "test-token" && a.err == nil {
+	a.last = authentication
+	if authentication.Credential() != testSessionToken && a.err == nil {
 		return httpapi.Identity{}, errors.New("unexpected token")
 	}
 	return httpapi.Identity{
 		TenantID: "tenant:trusted", PrincipalID: "principal:trusted",
-		ParticipantInstanceID: "participant:1", SessionEpoch: 1,
+		ParticipantInstanceID: "01989f0e-56b7-7e01-915e-a7748f7f6204", SessionEpoch: 1,
 	}, a.err
+}
+
+type fakeBootstrapper struct {
+	calls  int
+	err    error
+	issued httpapi.IssuedSession
+	last   httpapi.BootstrapAuthentication
+}
+
+func (b *fakeBootstrapper) Bootstrap(_ context.Context, authentication httpapi.BootstrapAuthentication) (httpapi.IssuedSession, error) {
+	b.calls++
+	b.last = authentication
+	return b.issued, b.err
 }
 
 type fakeAuthorizer struct {
@@ -256,9 +429,13 @@ func (a *fakeApplication) Stream(_ context.Context, request httpapi.ReplayReques
 }
 
 func newHandler(t *testing.T, authenticator httpapi.Authenticator, authorizer httpapi.Authorizer, application httpapi.Application) *httpapi.Handler {
+	return newFullHandler(t, &fakeBootstrapper{}, authenticator, authorizer, application)
+}
+
+func newFullHandler(t *testing.T, bootstrapper httpapi.SessionBootstrapper, authenticator httpapi.Authenticator, authorizer httpapi.Authorizer, application httpapi.Application) *httpapi.Handler {
 	t.Helper()
-	handler, err := httpapi.New(authenticator, authorizer, application, httpapi.Config{
-		HeartbeatInterval: time.Hour, MaxStreamLifetime: time.Second, WriteTimeout: time.Second,
+	handler, err := httpapi.New(bootstrapper, authenticator, authorizer, application, httpapi.Config{
+		PublicBaseURI: "https://public.coord.example", HeartbeatInterval: time.Hour, MaxStreamLifetime: time.Second, WriteTimeout: time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -273,7 +450,8 @@ func allowedDecision() httpapi.Decision {
 func request(method, target, body string) *http.Request {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.TLS = &tls.ConnectionState{}
-	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Authorization", "DPoP "+testSessionToken)
+	request.Header.Set("DPoP", testProof)
 	return request
 }
 

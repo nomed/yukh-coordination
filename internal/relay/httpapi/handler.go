@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,19 +18,22 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/nomed/yukh-coordination/internal/relay"
 )
 
 const (
 	EventMediaType          = "application/yukh-event+json"
 	ReceiptMediaType        = "application/yukh-receipt+json;version=0.1"
+	SessionMediaType        = "application/yukh-session+json;version=0.1"
 	TranscriptBaseMediaType = "application/yukh-transcript+json"
 	TranscriptMediaType     = "application/yukh-transcript+json;version=0.1"
 	ProblemMediaType        = "application/problem+json"
 	maxEventBytes           = 65_536
 	maxRequestTarget        = 4_096
 	maxHeaders              = 64
-	maxBearerBytes          = 4_096
+	maxAuthorizationBytes   = 8_192
+	maxDPoPProofBytes       = 16_384
 	maxSafeInteger          = 9_007_199_254_740_991
 )
 
@@ -61,10 +65,6 @@ type Decision struct {
 	ACLPolicyDigest   string
 	DecisionReceiptID string
 	Revoked           <-chan struct{}
-}
-
-type Authenticator interface {
-	Authenticate(context.Context, string) (Identity, error)
 }
 
 type Authorizer interface {
@@ -109,20 +109,27 @@ type Application interface {
 }
 
 type Config struct {
+	PublicBaseURI     string
 	HeartbeatInterval time.Duration
 	MaxStreamLifetime time.Duration
 	WriteTimeout      time.Duration
 }
 
 type Handler struct {
+	bootstrapper  SessionBootstrapper
 	authenticator Authenticator
 	authorizer    Authorizer
 	application   Application
 	config        Config
+	publicBase    *url.URL
 }
 
-func New(authenticator Authenticator, authorizer Authorizer, application Application, config Config) (*Handler, error) {
-	if authenticator == nil || authorizer == nil || application == nil {
+func New(bootstrapper SessionBootstrapper, authenticator Authenticator, authorizer Authorizer, application Application, config Config) (*Handler, error) {
+	if bootstrapper == nil || authenticator == nil || authorizer == nil || application == nil {
+		return nil, relay.ErrInvalidArgument
+	}
+	publicBase, err := parsePublicBaseURI(config.PublicBaseURI)
+	if err != nil {
 		return nil, relay.ErrInvalidArgument
 	}
 	if config.HeartbeatInterval <= 0 {
@@ -134,7 +141,7 @@ func New(authenticator Authenticator, authorizer Authorizer, application Applica
 	if config.WriteTimeout <= 0 {
 		config.WriteTimeout = 5 * time.Second
 	}
-	return &Handler{authenticator: authenticator, authorizer: authorizer, application: application, config: config}, nil
+	return &Handler{bootstrapper: bootstrapper, authenticator: authenticator, authorizer: authorizer, application: application, config: config, publicBase: publicBase}, nil
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +158,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, requestID, http.StatusBadRequest, "invalid_request", "Invalid request")
 		return
 	}
-	if encoding := r.Header.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+	if route.bootstrap {
+		if err := checkBootstrapFraming(r); err != nil {
+			writeProblem(w, requestID, http.StatusBadRequest, "invalid_request", "Invalid request")
+			return
+		}
+	} else if encoding := r.Header.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
 		writeProblem(w, requestID, http.StatusUnsupportedMediaType, "unsupported_content_encoding", "Unsupported content encoding")
 		return
 	}
@@ -163,16 +175,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, requestID, http.StatusBadRequest, "tls_required", "TLS required")
 		return
 	}
-	token, err := bearerToken(r.Header.Values("Authorization"))
+	targetURI, err := h.publicTarget(r.URL.EscapedPath())
 	if err != nil {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="yukh-coordination"`)
+		writeProblem(w, requestID, http.StatusBadRequest, "invalid_request", "Invalid request")
+		return
+	}
+	credential, proof, err := dpopAuthentication(r.Header.Values("Authorization"), r.Header.Values("DPoP"))
+	if err != nil {
+		setDPoPChallenge(w)
 		writeProblem(w, requestID, http.StatusUnauthorized, "unauthenticated", "Authentication required")
 		return
 	}
-	identity, err := h.authenticator.Authenticate(r.Context(), token)
+	if route.bootstrap {
+		h.bootstrap(w, r, requestID, newBootstrapAuthentication(credential, proof, r.Method, targetURI))
+		return
+	}
+	identity, err := h.authenticator.Authenticate(r.Context(), newSessionAuthentication(credential, proof, r.Method, targetURI))
 	if err != nil || !validIdentity(identity) {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="yukh-coordination"`)
-		writeProblem(w, requestID, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+		writeAuthenticationProblem(w, requestID, err)
 		return
 	}
 	route.channel.TenantID = identity.TenantID
@@ -196,6 +216,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case ActionWatch:
 		h.stream(w, r, requestID, admitted, route.after, decision.Revoked)
 	}
+}
+
+func (h *Handler) bootstrap(w http.ResponseWriter, r *http.Request, requestID string, authentication BootstrapAuthentication) {
+	issued, err := h.bootstrapper.Bootstrap(r.Context(), authentication)
+	if err != nil {
+		writeAuthenticationProblem(w, requestID, err)
+		return
+	}
+	response, err := sessionResponse(issued)
+	if err != nil {
+		w.Header().Set("Retry-After", "3")
+		writeProblem(w, requestID, http.StatusServiceUnavailable, "temporarily_unavailable", "Temporarily unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", SessionMediaType)
+	w.Header().Set("Pragma", "no-cache")
+	w.WriteHeader(http.StatusCreated)
+	_, _ = w.Write(response)
 }
 
 func (h *Handler) append(w http.ResponseWriter, r *http.Request, requestID string, admitted AdmittedRequest) {
@@ -357,10 +395,11 @@ func (h *Handler) writeStream(w http.ResponseWriter, payload []byte) bool {
 }
 
 type parsedRoute struct {
-	channel relay.ChannelKey
-	action  Action
-	after   uint64
-	limit   int
+	channel   relay.ChannelKey
+	action    Action
+	after     uint64
+	limit     int
+	bootstrap bool
 }
 
 func parseRoute(r *http.Request) (parsedRoute, error) {
@@ -368,6 +407,12 @@ func parseRoute(r *http.Request) (parsedRoute, error) {
 		return parsedRoute{}, relay.ErrInvalidArgument
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
+	if len(parts) == 3 && parts[0] == "coordination" && parts[1] == "v1" && parts[2] == "sessions" {
+		if r.Method != http.MethodPost || r.URL.RawQuery != "" {
+			return parsedRoute{}, relay.ErrInvalidArgument
+		}
+		return parsedRoute{bootstrap: true}, nil
+	}
 	if len(parts) != 7 || parts[0] != "coordination" || parts[1] != "v1" || parts[2] != "channels" || parts[4] != "transcripts" {
 		return parsedRoute{}, relay.ErrInvalidArgument
 	}
@@ -479,22 +524,22 @@ func checkFraming(r *http.Request) error {
 	return nil
 }
 
-func bearerToken(values []string) (string, error) {
-	if len(values) != 1 || len(values[0]) > maxBearerBytes {
-		return "", relay.ErrInvalidArgument
+func dpopAuthentication(authorizationValues, proofValues []string) (string, string, error) {
+	if len(authorizationValues) != 1 || len(authorizationValues[0]) > maxAuthorizationBytes || len(proofValues) != 1 || len(proofValues[0]) > maxDPoPProofBytes {
+		return "", "", relay.ErrInvalidArgument
 	}
-	separator := strings.IndexByte(values[0], ' ')
-	if separator < 1 || !strings.EqualFold(values[0][:separator], "Bearer") {
-		return "", relay.ErrInvalidArgument
+	separator := strings.IndexByte(authorizationValues[0], ' ')
+	if separator < 1 || !strings.EqualFold(authorizationValues[0][:separator], "DPoP") {
+		return "", "", relay.ErrInvalidArgument
 	}
-	token := strings.TrimLeft(values[0][separator:], " ")
-	if token == "" || !validBearerToken(token) {
-		return "", relay.ErrInvalidArgument
+	credential := authorizationValues[0][separator+1:]
+	if credential == "" || strings.TrimSpace(credential) != credential || !validAuthorizationCredential(credential) || !validCompactProof(proofValues[0]) {
+		return "", "", relay.ErrInvalidArgument
 	}
-	return token, nil
+	return credential, proofValues[0], nil
 }
 
-func validBearerToken(token string) bool {
+func validAuthorizationCredential(token string) bool {
 	padding := false
 	for _, character := range token {
 		if character == '=' {
@@ -508,8 +553,120 @@ func validBearerToken(token string) bool {
 	return true
 }
 
+func validCompactProof(proof string) bool {
+	parts := strings.Split(proof, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for _, character := range part {
+			if !((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '-' || character == '_') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func checkBootstrapFraming(r *http.Request) error {
+	if r.ContentLength != 0 || len(r.TransferEncoding) != 0 || len(r.Header.Values("Content-Type")) != 0 || len(r.Header.Values("Content-Encoding")) != 0 || len(r.Header.Values("Cookie")) != 0 {
+		return relay.ErrInvalidArgument
+	}
+	return nil
+}
+
+func parsePublicBaseURI(value string) (*url.URL, error) {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Opaque != "" || parsed.RawPath != "" {
+		return nil, relay.ErrInvalidArgument
+	}
+	if parsed.Path != "" && (parsed.Path[0] != '/' || strings.HasSuffix(parsed.Path, "/") || pathHasDotSegment(parsed.Path)) {
+		return nil, relay.ErrInvalidArgument
+	}
+	return parsed, nil
+}
+
+func pathHasDotSegment(path string) bool {
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Handler) publicTarget(escapedPath string) (string, error) {
+	if escapedPath == "" || escapedPath[0] != '/' {
+		return "", relay.ErrInvalidArgument
+	}
+	decodedPath, err := url.PathUnescape(escapedPath)
+	if err != nil {
+		return "", relay.ErrInvalidArgument
+	}
+	target := *h.publicBase
+	target.Path = strings.TrimSuffix(h.publicBase.Path, "/") + decodedPath
+	target.RawPath = strings.TrimSuffix(h.publicBase.EscapedPath(), "/") + escapedPath
+	if h.publicBase.Path == "" {
+		target.RawPath = escapedPath
+	}
+	target.RawQuery = ""
+	target.Fragment = ""
+	return target.String(), nil
+}
+
+func setDPoPChallenge(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `DPoP algs="ES256"`)
+}
+
+func writeAuthenticationProblem(w http.ResponseWriter, requestID string, err error) {
+	if errors.Is(err, ErrUnauthenticated) {
+		setDPoPChallenge(w)
+		writeProblem(w, requestID, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+		return
+	}
+	w.Header().Set("Retry-After", "3")
+	writeProblem(w, requestID, http.StatusServiceUnavailable, "temporarily_unavailable", "Temporarily unavailable")
+}
+
+type sessionDocument struct {
+	ExpiresAt             string `json:"expires_at"`
+	ParticipantInstanceID string `json:"participant_instance_id"`
+	SessionEpoch          uint64 `json:"session_epoch"`
+	SessionToken          string `json:"session_token"`
+	SpecVersion           string `json:"specversion"`
+	TokenType             string `json:"token_type"`
+}
+
+func sessionResponse(issued IssuedSession) ([]byte, error) {
+	participant, err := uuid.Parse(issued.ParticipantInstanceID)
+	if err != nil || participant.Version() != 7 || participant.String() != issued.ParticipantInstanceID || issued.SessionEpoch == 0 || issued.SessionEpoch > maxSafeInteger || !validSessionToken(issued.SessionToken) || issued.IssuedAt.Location() != time.UTC || issued.ExpiresAt.Location() != time.UTC || !issued.IssuedAt.Equal(issued.IssuedAt.Truncate(time.Millisecond)) || !issued.ExpiresAt.Equal(issued.ExpiresAt.Truncate(time.Millisecond)) || !issued.ExpiresAt.After(issued.IssuedAt) || issued.ExpiresAt.Sub(issued.IssuedAt) > 15*time.Minute {
+		return nil, relay.ErrInvalidArgument
+	}
+	return json.Marshal(sessionDocument{
+		ExpiresAt: issued.ExpiresAt.Format("2006-01-02T15:04:05.000Z"), ParticipantInstanceID: issued.ParticipantInstanceID,
+		SessionEpoch: issued.SessionEpoch, SessionToken: issued.SessionToken, SpecVersion: "0.1", TokenType: "DPoP",
+	})
+}
+
+func validSessionToken(token string) bool {
+	if len(token) != 43 {
+		return false
+	}
+	for _, character := range token {
+		if !((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '-' || character == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 func validIdentity(identity Identity) bool {
-	return identity.TenantID != "" && identity.PrincipalID != "" && identity.ParticipantInstanceID != ""
+	participant, err := uuid.Parse(identity.ParticipantInstanceID)
+	return err == nil && participant.Version() == 7 && participant.String() == identity.ParticipantInstanceID &&
+		identity.TenantID != "" && identity.PrincipalID != "" && identity.SessionEpoch > 0 && identity.SessionEpoch <= maxSafeInteger
 }
 
 func validDecision(decision Decision) bool {
