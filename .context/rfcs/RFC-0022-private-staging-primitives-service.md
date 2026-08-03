@@ -1,10 +1,18 @@
 # RFC-0022: Private staging Coordination primitives service
 
-- Status: Draft
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
+- Accepted: 2026-08-03
+- Decider: project owner
 - Governing issue: #90
 - Governing architecture: RFC-0002, RFC-0011, RFC-0012, RFC-0015, RFC-0016, RFC-0017, RFC-0019 and RFC-0021
+
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes only the separately reviewed implementation and hermetic
+qualification described here. Infrastructure provisioning, credential minting,
+listener exposure, live traffic, MCP connection, provider execution, mutation
+and production use retain their explicit later gates.
 
 ## Summary
 

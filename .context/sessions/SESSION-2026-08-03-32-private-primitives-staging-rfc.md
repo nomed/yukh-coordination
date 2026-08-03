@@ -1,8 +1,8 @@
-# Session: Private primitives staging profile proposal
+# Session: Private primitives staging profile decision
 
 - Governing issue: #90
 - Pull request: #92
-- Status: proposal ready for owner review
+- Status: RFC-0022 accepted by project owner
 
 ## Objective
 
@@ -18,7 +18,7 @@ JetStream KV stores, capability sealing and mandatory security audit.
 
 ## Evidence and validation
 
-The proposal preserves the immutable RFC-0015 wire surface and RFC-0021
+The accepted profile preserves the immutable RFC-0015 wire surface and RFC-0021
 contention semantics. It uses no relay session or transcript component and
 introduces no endpoint, credential, infrastructure or executable source.
 
@@ -31,11 +31,12 @@ operations must first be composed under an accepted profile.
 
 ## Context impact
 
-Adds draft RFC-0022 and its proposed threat-model impact. No accepted record is
-modified.
+Adds accepted RFC-0022 and its threat-model impact. No earlier accepted record
+is modified.
 
 ## Risks and unresolved work
 
-Owner acceptance is required before implementation. Provisioning and live
-qualification retain two later explicit approval gates. Production remains out
-of scope and requires a superseding profile.
+RFC-0022 acceptance authorizes separately reviewed implementation and hermetic
+qualification. Provisioning and live qualification retain two later explicit
+approval gates. Production remains out of scope and requires a superseding
+profile.
