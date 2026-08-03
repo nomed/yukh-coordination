@@ -136,6 +136,23 @@ func TestExpirySchedulerClosesInactiveSignal(t *testing.T) {
 	}
 }
 
+func TestIdleExpirySchedulerDoesNotAdvanceDurableClock(t *testing.T) {
+	registry, clock := openTestRegistry(t)
+	before, err := registry.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.set(clock.read().Add(10 * time.Second))
+	time.Sleep(1100 * time.Millisecond)
+	after, err := registry.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.WallHighWater.Equal(before.WallHighWater) {
+		t.Fatalf("idle scheduler wrote high-water: before=%s after=%s", before.WallHighWater, after.WallHighWater)
+	}
+}
+
 func TestConcurrentProofReservationCommitsOnce(t *testing.T) {
 	registry, clock := openTestRegistry(t)
 	pending, err := registry.ReserveBootstrap(context.Background(), bootstrapRequest(t, clock.read(), 1))
@@ -320,6 +337,13 @@ func TestSchemaContainsNoSecretBearingColumns(t *testing.T) {
 		if err := rows.Close(); err != nil {
 			t.Fatal(err)
 		}
+	}
+	request := bootstrapRequest(t, time.Date(2026, 8, 3, 8, 0, 0, 0, time.UTC), 1)
+	if _, err := registry.ReserveBootstrap(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.db.Exec("UPDATE sessions SET state = 'active' WHERE bootstrap_operation_id = ?", request.Session.BootstrapOperationID); err == nil {
+		t.Fatal("schema admitted active state without activation receipt")
 	}
 }
 

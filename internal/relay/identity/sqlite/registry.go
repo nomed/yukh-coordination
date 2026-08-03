@@ -167,6 +167,11 @@ func (r *Registry) migrate(ctx context.Context) error {
 			revoked_at_ms INTEGER CHECK (revoked_at_ms IS NULL OR (revoked_at_ms >= issued_at_ms AND revoked_at_ms <= 9007199254740991)),
 			revocation_reason TEXT CHECK (revocation_reason IS NULL OR (length(revocation_reason) BETWEEN 1 AND 128 AND revocation_reason NOT GLOB '*[^a-z0-9._:-]*')),
 			revocation_authority TEXT CHECK (revocation_authority IS NULL OR (length(revocation_authority) BETWEEN 1 AND 256 AND revocation_authority NOT GLOB '*[^A-Za-z0-9._:/-]*')),
+			CHECK (
+				(state IN ('pending', 'abandoned') AND activation_receipt IS NULL AND revoked_at_ms IS NULL AND revocation_reason IS NULL AND revocation_authority IS NULL) OR
+				(state IN ('active', 'expired') AND activation_receipt IS NOT NULL AND revoked_at_ms IS NULL AND revocation_reason IS NULL AND revocation_authority IS NULL) OR
+				(state = 'revoked' AND activation_receipt IS NOT NULL AND revoked_at_ms IS NOT NULL AND revocation_reason IS NOT NULL AND revocation_authority IS NOT NULL)
+			),
 			PRIMARY KEY (tenant_id, participant_instance_id),
 			UNIQUE (participant_instance_id),
 			UNIQUE (token_digest),
@@ -415,6 +420,7 @@ func (r *Registry) Revoke(ctx context.Context, request identity.Revocation) erro
 		return err
 	}
 	r.notifyInactive(request.Key)
+	r.wakeScheduler()
 	return nil
 }
 
@@ -615,26 +621,67 @@ func (r *Registry) CleanupProofs(ctx context.Context) (int64, error) {
 
 func (r *Registry) expiryLoop() {
 	defer close(r.closed)
-	timer := time.NewTimer(time.Second)
-	defer timer.Stop()
+	var timer *time.Timer
+	var timerSignal <-chan time.Time
+	reset := func() {
+		if timer != nil && !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		delay, exists := r.nextExpiryDelay(context.Background())
+		if !exists {
+			timerSignal = nil
+			return
+		}
+		if timer == nil {
+			timer = time.NewTimer(delay)
+		} else {
+			timer.Reset(delay)
+		}
+		timerSignal = timer.C
+	}
+	reset()
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 	for {
 		select {
-		case <-timer.C:
+		case <-timerSignal:
 			r.expireDue(context.Background())
-			timer.Reset(time.Second)
+			reset()
 		case <-r.wakeExpiry:
-			r.expireDue(context.Background())
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(time.Second)
+			reset()
 		case <-r.stopExpiry:
 			return
 		}
 	}
+}
+
+func (r *Registry) nextExpiryDelay(ctx context.Context) (time.Duration, bool) {
+	var expiry sql.NullInt64
+	if err := r.db.QueryRowContext(ctx, "SELECT MIN(expires_at_ms) FROM sessions WHERE state = 'active'").Scan(&expiry); err != nil {
+		return time.Second, true
+	}
+	if !expiry.Valid {
+		return 0, false
+	}
+	nowMS, ok := unixMillis(r.now())
+	if !ok {
+		return time.Second, true
+	}
+	if expiry.Int64 <= nowMS {
+		return 0, true
+	}
+	deltaMS := expiry.Int64 - nowMS
+	maxDelayMS := int64((24 * time.Hour) / time.Millisecond)
+	if deltaMS > maxDelayMS {
+		deltaMS = maxDelayMS
+	}
+	return time.Duration(deltaMS) * time.Millisecond, true
 }
 
 func (r *Registry) expireDue(ctx context.Context) {
