@@ -4,6 +4,7 @@
 - Governing issue: #6
 - Last delivery pull request: #52
 - Active increment: RFC-0013 DPoP and credential-store foundation under review
+  in PR #53
 - Runtime decisions: RFC-0003 through RFC-0013 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, and the RFC-0013
   read-only client foundation in #52
