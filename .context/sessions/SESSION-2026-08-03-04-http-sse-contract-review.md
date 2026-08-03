@@ -2,7 +2,7 @@
 
 - Governing issue: #5
 - Pull request: #19
-- Status: Active
+- Status: Completed
 
 ## Objective
 
@@ -32,8 +32,8 @@ clients need explicit Authorization headers.
 
 ## Context impact
 
-RFC-0004 is Proposed and therefore non-authoritative. RFC-0001 through RFC-0003
-and the threat model continue to govern.
+RFC-0004 was accepted by the project owner on 2026-08-03. RFC-0001 through
+RFC-0003 and the threat model remain jointly governing.
 
 ## Risks and unresolved work
 

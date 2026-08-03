@@ -1,6 +1,6 @@
 # RFC-0004: HTTP/SSE binding v1
 
-- Status: Proposed
+- Status: Accepted
 - Author: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #5
@@ -12,9 +12,11 @@ Accept the first public transport binding for the Yukh Coordination relay:
 versioned HTTP commands and bounded replay plus an SSE live stream, without
 exposing SQLite, JetStream, Matrix or an authentication provider.
 
-This RFC does not authorize deployment, public admission or production use.
-Implementation may proceed as an internal candidate, but the routes and wire
-behavior below are not a compatibility commitment until this RFC is Accepted.
+The project owner accepted this binding on 2026-08-03 after contract review in
+PR #19. The routes and wire behavior below are now binding for the component.
+
+Acceptance authorizes implementation and qualification only. It does not
+authorize deployment, public admission, production use or a readiness claim.
 
 ## Goals
 
