@@ -12,10 +12,10 @@
   RFC-0018 encrypted custody foundation in #73, and the accepted RFC-0019
   bounded capability-accounting design in #76; the RFC-0020 Google Cloud
   workload custody profile was accepted in #79
-- Accepted design: RFC-0014 client credential custody and proof signing in #56
-  RFC-0018 Linux Secret Service custody composition in #70, and RFC-0019
-  bounded capability accounting and terminal inspection in #76, and RFC-0020
-  Google Cloud workload custody in #79
+- Accepted design: RFC-0014 client credential custody and proof signing in #56,
+  RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
+  capability accounting and terminal inspection in #76, and RFC-0020 Google
+  Cloud workload custody in #79
 - Next action: open the first bounded RFC-0020 implementation increment for
   provider-neutral fakes and canonical envelope codecs; Cloud Storage, Cloud
   KMS, composition, live qualification, external-token selection, bootstrap,
