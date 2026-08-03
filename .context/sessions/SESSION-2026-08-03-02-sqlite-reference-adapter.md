@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-02: SQLite reference adapter
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #17
 - Status: Active
 
 ## Objective
