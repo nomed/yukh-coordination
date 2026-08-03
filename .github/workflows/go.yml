@@ -23,3 +23,13 @@ jobs:
         run: go install github.com/nats-io/nats-server/v2@v2.12.0
       - name: Run race and JetStream qualification tests
         run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: false
+      - name: Run dependency-free Node 24 qualification offline
+        env:
+          npm_config_offline: "true"
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+        run: npm test

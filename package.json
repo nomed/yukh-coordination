@@ -9,6 +9,6 @@
     "canonical-vectors": "python3 conformance/cross-runtime/run.py"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }
