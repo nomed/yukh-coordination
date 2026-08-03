@@ -87,6 +87,13 @@ func (c *jwksCache) close() {
 	}
 }
 
+func (c *jwksCache) ready() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	age := c.now().UTC().Sub(c.fetchedAt)
+	return age >= 0 && age < c.hardMaxAge && len(c.keys) > 0
+}
+
 func (c *jwksCache) key(ctx context.Context, kid string, algorithm jose.SignatureAlgorithm) (jose.JSONWebKey, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

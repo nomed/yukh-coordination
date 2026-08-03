@@ -144,6 +144,17 @@ func TestVerifyBootstrapWithIndependentSignatures(t *testing.T) {
 	}
 }
 
+func TestVerifierReadinessExpiresWithJWKS(t *testing.T) {
+	fixture := newVerifierFixture(t)
+	if !fixture.verifier.Ready() {
+		t.Fatal("fresh JWKS reported unready")
+	}
+	fixture.now = fixture.now.Add(5 * time.Minute)
+	if fixture.verifier.Ready() {
+		t.Fatal("hard-stale JWKS reported ready")
+	}
+}
+
 func TestDPoPProfileRejectsMismatchesAndExtensions(t *testing.T) {
 	fixture := newVerifierFixture(t)
 	tests := map[string]func(map[string]any, map[string]any){

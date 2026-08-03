@@ -74,6 +74,10 @@ func (v *Verifier) Close() {
 	}
 }
 
+func (v *Verifier) Ready() bool {
+	return v != nil && v.jwks != nil && v.jwks.ready()
+}
+
 func (v *Verifier) VerifyBootstrap(ctx context.Context, token, proof, method, targetURI string) (BootstrapIdentity, error) {
 	if v == nil || ctx == nil {
 		return BootstrapIdentity{}, errUnavailable
