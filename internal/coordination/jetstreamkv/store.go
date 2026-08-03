@@ -7,6 +7,7 @@ import (
 	"errors"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,16 +25,23 @@ const (
 var digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Config struct {
-	Replicas    int
-	Bootstrap   bool
-	MaxLifetime time.Duration
-	Retention   time.Duration
-	Epoch       uint64
+	Replicas           int
+	Bootstrap          bool
+	MaxLifetime        time.Duration
+	ReplaySafetyWindow time.Duration
+	Retention          time.Duration
+	Epoch              uint64
+}
+
+type atomicKV interface {
+	Create(context.Context, string, []byte, ...natsjs.KVCreateOpt) (uint64, error)
+	Get(context.Context, string) (natsjs.KeyValueEntry, error)
+	Update(context.Context, string, []byte, uint64) (uint64, error)
 }
 
 type Store struct {
-	nonces natsjs.KeyValue
-	leases natsjs.KeyValue
+	nonces atomicKV
+	leases atomicKV
 	config Config
 	now    func() time.Time
 }
@@ -65,7 +73,7 @@ func expected(bucket, description string, config Config) natsjs.KeyValueConfig {
 }
 
 func Open(ctx context.Context, connection *nats.Conn, config Config) (*Store, error) {
-	if connection == nil || config.Replicas < 1 || config.Replicas > 5 || config.MaxLifetime <= 0 || config.Retention < config.MaxLifetime || config.Epoch == 0 {
+	if connection == nil || config.Replicas < 1 || config.Replicas > 5 || config.MaxLifetime <= 0 || config.ReplaySafetyWindow <= 0 || config.Retention <= config.MaxLifetime || config.Retention-config.MaxLifetime <= config.ReplaySafetyWindow || config.Epoch == 0 {
 		return nil, coordination.ErrInvalidArgument
 	}
 	js, err := natsjs.New(connection)
@@ -102,7 +110,7 @@ func Open(ctx context.Context, connection *nats.Conn, config Config) (*Store, er
 
 func matchingStatus(status natsjs.KeyValueStatus, expectedConfig natsjs.KeyValueConfig) bool {
 	metadata := status.Metadata()
-	if status.Bucket() != expectedConfig.Bucket ||
+	if status.Bucket() != expectedConfig.Bucket || !matchingMetadata(metadata, expectedConfig.Metadata) ||
 		status.History() != int64(expectedConfig.History) ||
 		status.TTL() != expectedConfig.TTL ||
 		metadata["yukh.adapter"] != expectedConfig.Metadata["yukh.adapter"] ||
@@ -115,12 +123,33 @@ func matchingStatus(status natsjs.KeyValueStatus, expectedConfig natsjs.KeyValue
 		return false
 	}
 	config := withInfo.StreamInfo().Config
-	return config.MaxMsgsPerSubject == int64(expectedConfig.History) &&
+	return config.Name == "KV_"+expectedConfig.Bucket &&
+		config.Description == expectedConfig.Description &&
+		len(config.Subjects) == 1 && config.Subjects[0] == "$KV."+expectedConfig.Bucket+".>" &&
+		config.Retention == natsjs.LimitsPolicy && config.Discard == natsjs.DiscardNew &&
+		config.MaxConsumers == -1 && config.MaxMsgs == -1 && config.MaxBytes == -1 &&
+		config.MaxMsgsPerSubject == int64(expectedConfig.History) &&
 		config.MaxAge == expectedConfig.TTL &&
 		config.MaxMsgSize == expectedConfig.MaxValueSize &&
 		config.Storage == expectedConfig.Storage &&
 		config.Replicas == expectedConfig.Replicas &&
-		config.Mirror == nil && len(config.Sources) == 0 && config.RePublish == nil
+		!config.NoAck && config.DenyDelete && !config.DenyPurge && config.AllowRollup && config.AllowDirect &&
+		config.Placement == nil && config.Mirror == nil && len(config.Sources) == 0 && config.RePublish == nil &&
+		!config.Sealed && !config.MirrorDirect && config.SubjectTransform == nil && !config.AllowMsgTTL && config.SubjectDeleteMarkerTTL == 0
+}
+
+func matchingMetadata(observed, expected map[string]string) bool {
+	for key, value := range expected {
+		if observed[key] != value {
+			return false
+		}
+	}
+	for key := range observed {
+		if _, owned := expected[key]; !owned && !strings.HasPrefix(key, "_nats.") {
+			return false
+		}
+	}
+	return true
 }
 
 func validDigest(candidate coordination.Digest) bool {
@@ -222,9 +251,23 @@ func (store *Store) Acquire(ctx context.Context, key coordination.Digest, candid
 	}
 	revision, err = store.leases.Update(ctx, string(key), raw, entry.Revision())
 	if err != nil {
-		return nil, coordination.ErrConflict
+		revision, err = store.reconcileLeaseMutation(ctx, key, raw, entry.Revision())
+		if err != nil {
+			return nil, err
+		}
 	}
 	return store.newLease(key, candidate, revision), nil
+}
+
+func (store *Store) reconcileLeaseMutation(ctx context.Context, key coordination.Digest, expectedRaw []byte, previousRevision uint64) (uint64, error) {
+	entry, err := store.leases.Get(ctx, string(key))
+	if err != nil {
+		return 0, coordination.ErrUnavailable
+	}
+	if entry.Revision() <= previousRevision || string(entry.Value()) != string(expectedRaw) {
+		return 0, coordination.ErrConflict
+	}
+	return entry.Revision(), nil
 }
 
 func (store *Store) newLease(key coordination.Digest, candidate coordination.LeaseValue, revision uint64) *lease {
@@ -249,7 +292,10 @@ func (held *lease) Renew(ctx context.Context, expires time.Time) error {
 	}
 	revision, err := held.store.leases.Update(ctx, string(held.key), raw, held.revision)
 	if err != nil {
-		return coordination.ErrConflict
+		revision, err = held.store.reconcileLeaseMutation(ctx, held.key, raw, held.revision)
+		if err != nil {
+			return err
+		}
 	}
 	held.revision, held.expires = revision, expires
 	return nil
@@ -280,7 +326,10 @@ func (held *lease) Release(ctx context.Context) error {
 	}
 	revision, err := held.store.leases.Update(ctx, string(held.key), raw, held.revision)
 	if err != nil {
-		return coordination.ErrConflict
+		revision, err = held.store.reconcileLeaseMutation(ctx, held.key, raw, held.revision)
+		if err != nil {
+			return err
+		}
 	}
 	held.revision, held.released = revision, true
 	return nil

@@ -20,3 +20,20 @@ until an accountable operator explicitly rotates or migrates both buckets.
 NATS credentials should grant only the JetStream API and subjects required by
 these two KV buckets. Deployment, bucket rotation, backup retention and live
 apply authorization remain outside this package.
+
+For the default JetStream API prefix, the runtime credential allowlist is:
+
+- publish `$KV.YUKH_COORDINATION_NONCES_V1.>` and
+  `$KV.YUKH_COORDINATION_LEASES_V1.>` for CAS writes;
+- request `$JS.API.STREAM.INFO.KV_YUKH_COORDINATION_NONCES_V1` and the matching
+  leases subject for open/status validation;
+- request `$JS.API.DIRECT.GET.KV_YUKH_COORDINATION_NONCES_V1.>` and the matching
+  leases subject for exact reconciliation reads;
+- subscribe only to the request inbox subjects generated for those calls.
+
+The bootstrap credential is separate and additionally permits only the two
+corresponding `$JS.API.STREAM.CREATE.KV_...` requests. Runtime credentials do
+not receive stream update/delete, consumer, mirror, source, purge or wildcard
+JetStream administration permissions. Deployments using an account domain or
+custom API prefix must prefix these same exact suffixes and verify the effective
+permissions before admission.
