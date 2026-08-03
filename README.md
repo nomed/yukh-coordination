@@ -14,7 +14,7 @@ It is not a supervisor, an agent runtime, or a source of authority. It provides 
 
 ## Status
 
-**Foundation / protocol design. Not production-ready.**
+**Foundation / reference implementation. Not production-ready.**
 
 The first milestone proves one bounded flow:
 
@@ -45,6 +45,20 @@ The MVP succeeds when two real isolated sessions, with at least four agents in t
 8. release the claim with a replayable transcript.
 
 See [CHARTER.md](CHARTER.md), [PROTOCOL.md](PROTOCOL.md), and [ADR-0001](docs/adr/0001-protocol-not-control-plane.md).
+
+## Reference relay
+
+The reference relay is being built in Go behind a transport-neutral append
+port. HTTP/SSE is the public edge, SQLite is the first durable single-node
+adapter, and NATS JetStream is the first distributed adapter. See
+[RFC-0003](docs/rfc/0003-reference-relay-runtime.md) for the boundaries and
+delivery order.
+
+Run the current relay contract tests with:
+
+```sh
+go test ./...
+```
 
 ## License
 
