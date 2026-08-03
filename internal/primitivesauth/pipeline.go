@@ -76,6 +76,8 @@ func NewIdentity(tenant, principal string) (Identity, error) {
 func (Identity) String() string               { return "Identity{REDACTED}" }
 func (Identity) GoString() string             { return "Identity{REDACTED}" }
 func (Identity) MarshalJSON() ([]byte, error) { return nil, ErrInvalidArgument }
+func (value Identity) Tenant() string         { return value.tenant }
+func (value Identity) Principal() string      { return value.principal }
 
 type Authenticator interface {
 	Authenticate(context.Context, RequestAuthentication) (Identity, error)
