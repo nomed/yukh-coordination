@@ -2,9 +2,9 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #100
-- Active increment: #102 composes the mandatory RFC-0022 audit gate over the
-  merged authentication and TLS runtime foundations
+- Last delivery pull request: #103
+- Active increment: #104 implements the bounded RFC-0022 descriptor-delivered
+  capability-key custody contract
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -22,18 +22,18 @@
   synthetic end-to-end qualification were delivered in #98; RFC-0022 selects
   the private staging primitives service profile in #92, its configuration,
   DPoP authentication and durable replay foundation was delivered in #96, and
-  its private TLS listener and primitives pipeline composition in #100
+  its private TLS listener and primitives pipeline composition in #100, and
+  its mandatory fail-closed audit gate in #103
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next actions ready for separate ownership: after review of #102, the bounded
-  RFC-0022 capability-key custody and exact JetStream/epoch composition
-  increments; any RFC-0020 WIF and isolated-cloud qualification must be a new,
-  separately owned increment. Live infrastructure, credentials, external-token
-  selection, bootstrap, protected mutations and production use remain
-  separately gated
+- Next actions ready for separate ownership: after review of #104, exact
+  RFC-0022 JetStream/epoch composition; any RFC-0020 WIF and isolated-cloud
+  qualification must be a new, separately owned increment. Live
+  infrastructure, credentials, external-token selection, bootstrap, protected
+  mutations and production use remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
