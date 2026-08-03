@@ -3,7 +3,7 @@
 - Date: 2026-08-03
 - Governing issue: #37
 - Accepted decision: RFC-0011
-- Pull request: pending
+- Pull request: #40
 - Branch: `agent/security-audit-ledger-step-1`
 
 ## Outcome
