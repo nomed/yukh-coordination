@@ -3,6 +3,8 @@
 .gitignore
 conformance/CHANGES.md
 conformance/README.md
+conformance/canonical/audit-merkle.canonical.json
+conformance/canonical/audit-merkle.input.json
 conformance/canonical/audit-receipt.canonical.json
 conformance/canonical/audit-receipt.input.json
 conformance/canonical/audit-record.canonical.json

@@ -16,11 +16,24 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
+
+const metadataAppendTriggerV2 = `CREATE TRIGGER audit_metadata_append_only BEFORE UPDATE ON audit_metadata
+	WHEN NEW.singleton != OLD.singleton OR NEW.profile_version != OLD.profile_version OR NEW.ledger_id != OLD.ledger_id
+		OR NEW.last_sequence != OLD.last_sequence + 1 OR NEW.chain_head = OLD.chain_head
+		OR NEW.merkle_size != OLD.merkle_size + 1 OR NEW.merkle_size != NEW.last_sequence OR NEW.merkle_root = OLD.merkle_root
+	BEGIN SELECT RAISE(ABORT, 'audit metadata transition is invalid'); END`
+
+const merkleNodesNoDeleteTrigger = `CREATE TRIGGER merkle_nodes_no_delete BEFORE DELETE ON merkle_nodes BEGIN SELECT RAISE(ABORT, 'merkle nodes are immutable'); END`
+const merkleNodesNoUpdateTrigger = `CREATE TRIGGER merkle_nodes_no_update BEFORE UPDATE ON merkle_nodes BEGIN SELECT RAISE(ABORT, 'merkle nodes are immutable'); END`
 
 type Ledger struct{ db *sql.DB }
 
 func Open(path string) (*Ledger, error) {
+	return open(path, true)
+}
+
+func open(path string, verify bool) (*Ledger, error) {
 	if path == "" {
 		return nil, audit.ErrUnavailable
 	}
@@ -44,9 +57,11 @@ func Open(path string) (*Ledger, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	if err := ledger.Verify(context.Background()); err != nil {
-		_ = db.Close()
-		return nil, err
+	if verify {
+		if err := ledger.Verify(context.Background()); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
 	}
 	return ledger, nil
 }
@@ -92,13 +107,16 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 	}
 
 	var ledgerID string
-	var lastSequence uint64
-	var previousBytes []byte
-	if err := tx.conn.QueryRowContext(ctx, "SELECT ledger_id, last_sequence, chain_head FROM audit_metadata WHERE singleton = 1").Scan(&ledgerID, &lastSequence, &previousBytes); err != nil || len(previousBytes) != sha256.Size || lastSequence >= audit.MaxJSONSafeSequence {
+	var lastSequence, merkleSize uint64
+	var previousBytes, merkleRootBytes []byte
+	if err := tx.conn.QueryRowContext(ctx, "SELECT ledger_id, last_sequence, chain_head, merkle_size, merkle_root FROM audit_metadata WHERE singleton = 1").Scan(&ledgerID, &lastSequence, &previousBytes, &merkleSize, &merkleRootBytes); err != nil || len(previousBytes) != sha256.Size || len(merkleRootBytes) != sha256.Size || lastSequence >= audit.MaxJSONSafeSequence || merkleSize != lastSequence {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
 	if err := verifyHead(ctx, tx.conn, ledgerID, lastSequence, previousBytes); err != nil {
 		return audit.Receipt{}, err
+	}
+	if root, err := subtreeHash(ctx, tx.conn, 0, merkleSize); err != nil || !bytes.Equal(root[:], merkleRootBytes) {
+		return audit.Receipt{}, audit.ErrUnavailable
 	}
 	sequence := lastSequence + 1
 	var previous [sha256.Size]byte
@@ -121,7 +139,17 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sequence, record.OperationID, canonical, recordDigest[:], previous[:], chainDigest[:], canonicalReceipt); err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
-	result, err := tx.conn.ExecContext(ctx, "UPDATE audit_metadata SET last_sequence = ?, chain_head = ? WHERE singleton = 1 AND last_sequence = ? AND chain_head = ?", sequence, chainDigest[:], lastSequence, previous[:])
+	leafHash, err := audit.MerkleLeafHash(sequence, chainDigest)
+	if err != nil || insertMerkleLeaf(ctx, tx.conn, sequence-1, leafHash) != nil {
+		return audit.Receipt{}, audit.ErrUnavailable
+	}
+	merkleRoot, err := subtreeHash(ctx, tx.conn, 0, sequence)
+	if err != nil {
+		return audit.Receipt{}, audit.ErrUnavailable
+	}
+	result, err := tx.conn.ExecContext(ctx, `UPDATE audit_metadata SET last_sequence = ?, chain_head = ?, merkle_size = ?, merkle_root = ?
+		WHERE singleton = 1 AND last_sequence = ? AND chain_head = ? AND merkle_size = ? AND merkle_root = ?`,
+		sequence, chainDigest[:], sequence, merkleRoot[:], lastSequence, previous[:], merkleSize, merkleRootBytes)
 	if err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
@@ -139,56 +167,84 @@ func (l *Ledger) Verify(ctx context.Context) error {
 	if l == nil || l.db == nil || ctx == nil {
 		return audit.ErrUnavailable
 	}
+	lastSequence, expectedNodes, err := verifiedChainState(ctx, l.db)
+	if err != nil {
+		return audit.ErrUnavailable
+	}
+	var merkleSize uint64
+	var storedMerkleRoot []byte
+	if err := l.db.QueryRowContext(ctx, "SELECT merkle_size, merkle_root FROM audit_metadata WHERE singleton = 1").Scan(&merkleSize, &storedMerkleRoot); err != nil || len(storedMerkleRoot) != sha256.Size || merkleSize != lastSequence {
+		return audit.ErrUnavailable
+	}
+	expectedRoot := rootFromExpected(expectedNodes, lastSequence)
+	if !bytes.Equal(storedMerkleRoot, expectedRoot[:]) {
+		return audit.ErrUnavailable
+	}
+	return verifyStoredNodes(ctx, l.db, expectedNodes)
+}
+
+type chainReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func verifiedChainState(ctx context.Context, query chainReader) (uint64, map[nodeCoordinate]audit.Hash, error) {
 	var ledgerID string
 	var lastSequence uint64
 	var head []byte
-	if err := l.db.QueryRowContext(ctx, "SELECT ledger_id, last_sequence, chain_head FROM audit_metadata WHERE singleton = 1").Scan(&ledgerID, &lastSequence, &head); err != nil || len(head) != sha256.Size {
-		return audit.ErrUnavailable
+	if err := query.QueryRowContext(ctx, "SELECT ledger_id, last_sequence, chain_head FROM audit_metadata WHERE singleton = 1").Scan(&ledgerID, &lastSequence, &head); err != nil || len(head) != sha256.Size {
+		return 0, nil, audit.ErrUnavailable
 	}
 	genesis, err := audit.GenesisDigest(ledgerID)
 	if err != nil {
-		return audit.ErrUnavailable
+		return 0, nil, audit.ErrUnavailable
 	}
 	previous := genesis
-	rows, err := l.db.QueryContext(ctx, `SELECT sequence, operation_id, canonical_record, record_digest, previous_chain_digest, chain_digest, canonical_receipt FROM audit_entries ORDER BY sequence`)
+	rows, err := query.QueryContext(ctx, `SELECT sequence, operation_id, canonical_record, record_digest, previous_chain_digest, chain_digest, canonical_receipt FROM audit_entries ORDER BY sequence`)
 	if err != nil {
-		return audit.ErrUnavailable
+		return 0, nil, audit.ErrUnavailable
 	}
 	defer rows.Close()
 	var count uint64
+	expectedNodes := make(map[nodeCoordinate]audit.Hash)
 	for rows.Next() {
 		count++
 		var sequence uint64
 		var operationID string
 		var canonical, recordBytes, previousBytes, chainBytes, receiptBytes []byte
 		if err := rows.Scan(&sequence, &operationID, &canonical, &recordBytes, &previousBytes, &chainBytes, &receiptBytes); err != nil || sequence != count || len(recordBytes) != sha256.Size || len(previousBytes) != sha256.Size || len(chainBytes) != sha256.Size {
-			return audit.ErrUnavailable
+			return 0, nil, audit.ErrUnavailable
 		}
 		if err := audit.ValidateCanonicalRecord(canonical); err != nil {
-			return audit.ErrUnavailable
+			return 0, nil, audit.ErrUnavailable
 		}
 		recordDigest := audit.RecordDigest(canonical)
 		if !bytes.Equal(recordBytes, recordDigest[:]) || !bytes.Equal(previousBytes, previous[:]) {
-			return audit.ErrUnavailable
+			return 0, nil, audit.ErrUnavailable
 		}
 		chainDigest, err := audit.ChainDigest(sequence, previous, recordDigest)
 		if err != nil || !bytes.Equal(chainBytes, chainDigest[:]) {
-			return audit.ErrUnavailable
+			return 0, nil, audit.ErrUnavailable
 		}
 		receipt, err := audit.NewReceipt(ledgerID, sequence, operationID, recordDigest, previous, chainDigest)
 		if err != nil {
-			return audit.ErrUnavailable
+			return 0, nil, audit.ErrUnavailable
 		}
 		expectedReceipt, err := audit.CanonicalReceipt(receipt)
 		if err != nil || !bytes.Equal(receiptBytes, expectedReceipt) {
-			return audit.ErrUnavailable
+			return 0, nil, audit.ErrUnavailable
 		}
+		leafHash, err := audit.MerkleLeafHash(sequence, chainDigest)
+		if err != nil {
+			return 0, nil, audit.ErrUnavailable
+		}
+		addExpectedLeaf(expectedNodes, sequence-1, leafHash)
 		previous = chainDigest
 	}
-	if rows.Err() != nil || count != lastSequence || !bytes.Equal(head, previous[:]) {
-		return audit.ErrUnavailable
+	if rows.Err() != nil || rows.Close() != nil || count != lastSequence || !bytes.Equal(head, previous[:]) {
+		return 0, nil, audit.ErrUnavailable
 	}
-	return nil
+	return count, expectedNodes, nil
 }
 
 func (l *Ledger) configure(ctx context.Context) error {
@@ -214,9 +270,28 @@ func (l *Ledger) migrate(ctx context.Context) error {
 	if err := tx.conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version < 0 || version > schemaVersion {
 		return audit.ErrUnavailable
 	}
-	if version == schemaVersion {
-		return tx.commit(ctx)
+	if version == 0 {
+		if err := migrateV1(ctx, tx.conn); err != nil {
+			return audit.ErrUnavailable
+		}
+		version = 1
 	}
+	if version == 1 {
+		if err := migrateV2(ctx, tx.conn); err != nil {
+			return audit.ErrUnavailable
+		}
+		version = 2
+	}
+	if version != schemaVersion {
+		return audit.ErrUnavailable
+	}
+	if _, err := tx.conn.ExecContext(ctx, "PRAGMA user_version=2"); err != nil {
+		return audit.ErrUnavailable
+	}
+	return tx.commit(ctx)
+}
+
+func migrateV1(ctx context.Context, conn *sql.Conn) error {
 	statements := []string{
 		`CREATE TABLE audit_metadata (
 			singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -243,7 +318,7 @@ func (l *Ledger) migrate(ctx context.Context) error {
 		`CREATE TRIGGER audit_metadata_no_delete BEFORE DELETE ON audit_metadata BEGIN SELECT RAISE(ABORT, 'audit metadata is immutable'); END`,
 	}
 	for _, statement := range statements {
-		if _, err := tx.conn.ExecContext(ctx, statement); err != nil {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return audit.ErrUnavailable
 		}
 	}
@@ -255,13 +330,76 @@ func (l *Ledger) migrate(ctx context.Context) error {
 	if err != nil {
 		return audit.ErrUnavailable
 	}
-	if _, err := tx.conn.ExecContext(ctx, "INSERT INTO audit_metadata VALUES (1, 1, ?, 0, ?)", ledgerID.String(), genesis[:]); err != nil {
+	if _, err := conn.ExecContext(ctx, "INSERT INTO audit_metadata VALUES (1, 1, ?, 0, ?)", ledgerID.String(), genesis[:]); err != nil {
 		return audit.ErrUnavailable
 	}
-	if _, err := tx.conn.ExecContext(ctx, "PRAGMA user_version=1"); err != nil {
+	return nil
+}
+
+func migrateV2(ctx context.Context, conn *sql.Conn) error {
+	emptyRoot := audit.EmptyMerkleRoot()
+	statements := []string{
+		`DROP TRIGGER audit_metadata_append_only`,
+		`DROP TRIGGER audit_metadata_no_delete`,
+		`ALTER TABLE audit_metadata ADD COLUMN merkle_size INTEGER NOT NULL DEFAULT 0 CHECK (merkle_size >= 0 AND merkle_size <= 9007199254740991)`,
+		`ALTER TABLE audit_metadata ADD COLUMN merkle_root BLOB NOT NULL DEFAULT X'E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855' CHECK (length(merkle_root) = 32)`,
+		`CREATE TABLE merkle_nodes (
+			level INTEGER NOT NULL CHECK (level BETWEEN 0 AND 52),
+			node_index INTEGER NOT NULL CHECK (node_index >= 0 AND node_index <= 9007199254740991),
+			node_hash BLOB NOT NULL UNIQUE CHECK (length(node_hash) = 32),
+			PRIMARY KEY (level, node_index)
+		) STRICT`,
+		merkleNodesNoUpdateTrigger,
+		merkleNodesNoDeleteTrigger,
+	}
+	for _, statement := range statements {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return audit.ErrUnavailable
+		}
+	}
+	rows, err := conn.QueryContext(ctx, "SELECT sequence, chain_digest FROM audit_entries ORDER BY sequence")
+	if err != nil {
 		return audit.ErrUnavailable
 	}
-	return tx.commit(ctx)
+	var size uint64
+	for rows.Next() {
+		var sequence uint64
+		var chainBytes []byte
+		if err := rows.Scan(&sequence, &chainBytes); err != nil || sequence != size+1 || len(chainBytes) != sha256.Size {
+			_ = rows.Close()
+			return audit.ErrUnavailable
+		}
+		var chainDigest [sha256.Size]byte
+		copy(chainDigest[:], chainBytes)
+		leafHash, err := audit.MerkleLeafHash(sequence, chainDigest)
+		if err != nil || insertMerkleLeaf(ctx, conn, size, leafHash) != nil {
+			_ = rows.Close()
+			return audit.ErrUnavailable
+		}
+		size++
+	}
+	if rows.Err() != nil || rows.Close() != nil {
+		return audit.ErrUnavailable
+	}
+	root := emptyRoot
+	if size > 0 {
+		root, err = subtreeHash(ctx, conn, 0, size)
+		if err != nil {
+			return audit.ErrUnavailable
+		}
+	}
+	if _, err := conn.ExecContext(ctx, "UPDATE audit_metadata SET merkle_size = ?, merkle_root = ? WHERE singleton = 1", size, root[:]); err != nil {
+		return audit.ErrUnavailable
+	}
+	for _, statement := range []string{
+		metadataAppendTriggerV2,
+		`CREATE TRIGGER audit_metadata_no_delete BEFORE DELETE ON audit_metadata BEGIN SELECT RAISE(ABORT, 'audit metadata is immutable'); END`,
+	} {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return audit.ErrUnavailable
+		}
+	}
+	return nil
 }
 
 type storedOperation struct {
