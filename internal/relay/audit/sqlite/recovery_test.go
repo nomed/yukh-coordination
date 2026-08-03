@@ -33,7 +33,7 @@ func TestRecoveryManifestRestoreFenceAndOperationalReadiness(t *testing.T) {
 	statement := audit.VerificationKeyStatement{Version: 1, KeyID: "recovery-key-2", Algorithm: audit.CheckpointAlgorithm, PublicKey: key.Public().(ed25519.PublicKey), ActiveFrom: captured.Add(-time.Hour), IssuedAt: captured.Add(-time.Hour)}
 	installStatement(t, ledger, authority, statement)
 	checkpointSigner := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: key}
-	checkpoint, err := ledger.CreateCheckpoint(ctx, captured, authority.Public().(ed25519.PublicKey), checkpointSigner)
+	checkpoint, err := ledger.CreateCheckpoint(ctx, captured, authority.Public().(ed25519.PublicKey), checkpointSigner, mustV7(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestRecoveryManifestRestoreFenceAndOperationalReadiness(t *testing.T) {
 	if _, err := restored.Append(ctx, testRecord(t, 4)); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("fenced append = %v", err)
 	}
-	if err := restored.InstallVerificationKey(ctx, audit.SignedVerificationKeyStatement{}, authority.Public().(ed25519.PublicKey)); !errors.Is(err, audit.ErrUnavailable) {
+	if err := restored.InstallVerificationKey(ctx, audit.SignedVerificationKeyStatement{}, authority.Public().(ed25519.PublicKey), mustV7(t), captured, "authority:key-lifecycle:1"); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("fenced key install = %v", err)
 	}
 	policy := audit.ReadinessPolicy{MaximumCheckpointAge: time.Hour, ClockRollbackTolerance: time.Minute, MaximumEntries: 10_000, MaximumDatabaseBytes: 64 << 20}
@@ -98,11 +98,29 @@ func TestRecoveryManifestRestoreFenceAndOperationalReadiness(t *testing.T) {
 		t.Fatalf("fenced restore did not verify on restart: %v", err)
 	}
 	t.Cleanup(func() { _ = restored.Close() })
-	if _, err := restored.ValidateRestore(ctx, manifest, authority.Public().(ed25519.PublicKey)); err != nil {
+	plan, err = restored.ValidateRestore(ctx, manifest, authority.Public().(ed25519.PublicKey))
+	if err != nil {
 		t.Fatalf("restore validation after restart = %v", err)
 	}
 	if err := restored.OperationalReady(ctx, captured.Add(2*time.Minute), authority.Public().(ed25519.PublicKey), policy, checkpointSigner, testSignerProbe{}, nil); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("restore fence bypassed after restart = %v", err)
+	}
+	receipt, err := restored.CommitRestore(ctx, plan, mustV7(t), captured.Add(2*time.Minute))
+	if err != nil || receipt == "" {
+		t.Fatalf("commit restore = %q, %v", receipt, err)
+	}
+	resumed, err := restored.ValidateRestore(ctx, manifest, authority.Public().(ed25519.PublicKey))
+	if err != nil {
+		t.Fatalf("accepted restore validation = %v", err)
+	}
+	if replay, err := restored.CommitRestore(ctx, resumed, mustV7(t), captured.Add(2*time.Minute)); err != nil || replay != receipt {
+		t.Fatalf("commit restore retry = %q, %v", replay, err)
+	}
+	if accepted, ok, err := restored.AcceptedRestore(ctx, resumed); err != nil || !ok || accepted != receipt {
+		t.Fatalf("accepted restore = %q, %v, %v", accepted, ok, err)
+	}
+	if err := restored.Verify(ctx); err != nil {
+		t.Fatalf("completed restore verification = %v", err)
 	}
 }
 
@@ -156,7 +174,7 @@ func TestOperationalReadyReverifiesWitness(t *testing.T) {
 	statement := audit.VerificationKeyStatement{Version: 1, KeyID: "readiness-key-1", Algorithm: audit.CheckpointAlgorithm, PublicKey: key.Public().(ed25519.PublicKey), ActiveFrom: now.Add(-time.Hour), IssuedAt: now.Add(-time.Hour)}
 	installStatement(t, ledger, authority, statement)
 	signer := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: key}
-	checkpoint, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), signer)
+	checkpoint, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), signer, mustV7(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +184,10 @@ func TestOperationalReadyReverifiesWitness(t *testing.T) {
 	policy := audit.ReadinessPolicy{MaximumCheckpointAge: time.Hour, ClockRollbackTolerance: time.Minute, RequireWitness: true, MaximumEntries: 100, MaximumDatabaseBytes: 64 << 20}
 	if err := ledger.OperationalReady(ctx, now, authority.Public().(ed25519.PublicKey), policy, signer, testSignerProbe{}, testWitnessVerifier{}); err != nil {
 		t.Fatalf("witnessed readiness = %v", err)
+	}
+	provider, err := NewOperationalProvider(ledger, authority.Public().(ed25519.PublicKey), policy, signer, testSignerProbe{}, testWitnessVerifier{}, func() time.Time { return now })
+	if err != nil || provider.Ready(ctx) != nil {
+		t.Fatalf("operational provider = %v", err)
 	}
 	if err := ledger.OperationalReady(ctx, now, authority.Public().(ed25519.PublicKey), policy, signer, testSignerProbe{}, rejectingWitnessVerifier{}); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("unverified witness = %v", err)

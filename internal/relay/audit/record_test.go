@@ -70,6 +70,74 @@ func TestValidateCanonicalRecordRejectsStoredShapeDamage(t *testing.T) {
 	}
 }
 
+func TestCanonicalRestoreFenceRecordFixture(t *testing.T) {
+	record := identity.AuditRecord{ProfileVersion: 1, OperationID: "0198f56b-0c00-7000-8000-000000000014", Operation: identity.AuditRestoreFence, Outcome: identity.AuditAllow, Reason: identity.AuditReasonRestoreVerified, DecisionTime: time.Date(2026, 8, 3, 9, 2, 0, 0, time.UTC), CheckpointReference: "audit-checkpoint:ciLVHmYlmHAylKq0SHZ1cmWijlvuMBCaXGRuOrV3VYE", RecoveryReference: "audit-recovery:mNlOuRruflqKK7uFDCLYVkiC_xXm6cw3Ev-Hn7pd6ps"}
+	canonical, err := CanonicalRecord(record)
+	if err != nil || !bytes.Equal(canonical, readFixture(t, "audit-record-restore-fence.canonical.json")) {
+		t.Fatalf("canonical restore fence = %q, %v", canonical, err)
+	}
+	if err := ValidateCanonicalRecord(canonical); err != nil {
+		t.Fatal(err)
+	}
+	record.CheckpointReference = "audit-checkpoint:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	record.RecoveryReference = ""
+	if _, err := CanonicalRecord(record); err == nil {
+		t.Fatal("restore record without manifest binding accepted")
+	}
+}
+
+func TestAdministrativeAuditVocabularyIsClosed(t *testing.T) {
+	jwks := sha256.Sum256([]byte("jwks"))
+	base := identity.AuditRecord{ProfileVersion: 1, OperationID: fixtureOperationID, Outcome: identity.AuditAllow, DecisionTime: time.Date(2026, 8, 3, 9, 3, 0, 0, time.UTC)}
+	records := []identity.AuditRecord{
+		func() identity.AuditRecord {
+			v := base
+			v.Operation = identity.AuditRevocation
+			v.Reason = identity.AuditReasonRevoked
+			v.TenantID = "tenant-a"
+			v.ParticipantInstanceID = fixtureParticipant
+			v.SessionEpoch = 7
+			v.AuthorityReference = "authority:revocation:1"
+			return v
+		}(),
+		func() identity.AuditRecord {
+			v := base
+			v.Operation = identity.AuditJWKSRefresh
+			v.Reason = identity.AuditReasonRefreshed
+			v.AuthorityReference = "issuer:key-set:1"
+			v.JWKSSetDigest = jwks
+			v.HasJWKSSetDigest = true
+			return v
+		}(),
+		func() identity.AuditRecord {
+			v := base
+			v.Operation = identity.AuditCheckpoint
+			v.Reason = identity.AuditReasonCheckpointCommitted
+			v.SigningKeyReference = "signing-key:key-1:1"
+			return v
+		}(),
+		func() identity.AuditRecord {
+			v := base
+			v.Operation = identity.AuditKeyLifecycle
+			v.Reason = identity.AuditReasonKeyLifecycleCommitted
+			v.AuthorityReference = "authority:key-statement:1"
+			v.SigningKeyReference = "signing-key:key-1:1"
+			return v
+		}(),
+	}
+	for _, record := range records {
+		canonical, err := CanonicalRecord(record)
+		if err != nil || ValidateCanonicalRecord(canonical) != nil {
+			t.Fatalf("%s record = %q, %v", record.Operation, canonical, err)
+		}
+		damaged := record
+		damaged.RecoveryReference = "audit-recovery:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+		if _, err := CanonicalRecord(damaged); err == nil {
+			t.Fatalf("%s accepted an inapplicable field", record.Operation)
+		}
+	}
+}
+
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	value, err := os.ReadFile(filepath.Join("..", "..", "..", "conformance", "canonical", name))

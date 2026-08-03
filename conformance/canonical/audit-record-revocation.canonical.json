@@ -1,0 +1,1 @@
+{"authority_reference":"authority:revocation:1","decision_time":"2026-08-03T09:03:00.000Z","operation_id":"0198f56b-0c00-7000-8000-000000000015","operation_kind":"revocation","outcome":"allow","participant_instance_id":"0198f56b-0c00-7000-8000-000000000002","profile":"yukh-security-audit/v1","reason":"revoked","session_epoch":7,"tenant_id":"tenant-a"}

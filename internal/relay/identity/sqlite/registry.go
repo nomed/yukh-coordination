@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	schemaVersion   = 1
+	schemaVersion   = 2
 	maxJSONSafeInt  = uint64(9_007_199_254_740_991)
 	clockTolerance  = 5 * time.Second
 	proofPastWindow = 60 * time.Second
@@ -137,8 +137,9 @@ func (r *Registry) migrate(ctx context.Context) error {
 	if version == schemaVersion {
 		return tx.commit(ctx)
 	}
-	statements := []string{
-		`CREATE TABLE identity_metadata (
+	if version == 0 {
+		statements := []string{
+			`CREATE TABLE identity_metadata (
 			singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
 			profile_version INTEGER NOT NULL CHECK (profile_version = 1),
 			database_id TEXT NOT NULL CHECK (length(database_id) = 36),
@@ -146,13 +147,13 @@ func (r *Registry) migrate(ctx context.Context) error {
 			fence_state TEXT NOT NULL CHECK (fence_state IN ('admitted', 'restore_fenced', 'clock_fenced')),
 			fence_receipt TEXT CHECK (fence_receipt IS NULL OR (length(fence_receipt) BETWEEN 1 AND 256 AND fence_receipt NOT GLOB '*[^A-Za-z0-9._:/-]*'))
 		) STRICT`,
-		`CREATE TABLE principal_epochs (
+			`CREATE TABLE principal_epochs (
 			tenant_id TEXT NOT NULL CHECK (length(tenant_id) BETWEEN 1 AND 256 AND tenant_id GLOB '[a-z0-9]*' AND tenant_id NOT GLOB '*[^a-z0-9._:-]*'),
 			principal_id TEXT NOT NULL CHECK (length(principal_id) = 43 AND principal_id NOT GLOB '*[^A-Za-z0-9_-]*'),
 			last_epoch INTEGER NOT NULL CHECK (last_epoch > 0 AND last_epoch <= 9007199254740991),
 			PRIMARY KEY (tenant_id, principal_id)
 		) STRICT`,
-		`CREATE TABLE sessions (
+			`CREATE TABLE sessions (
 			tenant_id TEXT NOT NULL CHECK (length(tenant_id) BETWEEN 1 AND 256 AND tenant_id GLOB '[a-z0-9]*' AND tenant_id NOT GLOB '*[^a-z0-9._:-]*'),
 			principal_id TEXT NOT NULL CHECK (length(principal_id) = 43 AND principal_id NOT GLOB '*[^A-Za-z0-9_-]*'),
 			participant_instance_id TEXT NOT NULL CHECK (participant_instance_id GLOB '????????-????-7???-[89ab]???-????????????' AND participant_instance_id NOT GLOB '*[^0-9a-f-]*'),
@@ -178,7 +179,7 @@ func (r *Registry) migrate(ctx context.Context) error {
 			UNIQUE (bootstrap_operation_id),
 			UNIQUE (tenant_id, principal_id, session_epoch)
 		) STRICT`,
-		`CREATE TABLE proof_replays (
+			`CREATE TABLE proof_replays (
 			jwk_thumbprint BLOB NOT NULL CHECK (length(jwk_thumbprint) = 32),
 			proof_jti TEXT NOT NULL CHECK (length(proof_jti) BETWEEN 16 AND 128 AND proof_jti NOT GLOB '*[^A-Za-z0-9_-]*'),
 			purpose TEXT NOT NULL CHECK (purpose IN ('bootstrap', 'authentication')),
@@ -188,29 +189,43 @@ func (r *Registry) migrate(ctx context.Context) error {
 			PRIMARY KEY (jwk_thumbprint, proof_jti),
 			FOREIGN KEY (participant_instance_id) REFERENCES sessions (participant_instance_id)
 		) STRICT`,
-		`CREATE INDEX proof_replays_retention ON proof_replays (retain_until_ms)`,
-		`CREATE TABLE restore_epoch_floors (
+			`CREATE INDEX proof_replays_retention ON proof_replays (retain_until_ms)`,
+			`CREATE TABLE restore_epoch_floors (
 			tenant_id TEXT NOT NULL CHECK (length(tenant_id) BETWEEN 1 AND 256 AND tenant_id GLOB '[a-z0-9]*' AND tenant_id NOT GLOB '*[^a-z0-9._:-]*'),
 			principal_id TEXT NOT NULL CHECK (length(principal_id) = 43 AND principal_id NOT GLOB '*[^A-Za-z0-9_-]*'),
 			epoch_floor INTEGER NOT NULL CHECK (epoch_floor > 0 AND epoch_floor <= 9007199254740991),
 			checkpoint_receipt TEXT NOT NULL CHECK (length(checkpoint_receipt) BETWEEN 1 AND 256 AND checkpoint_receipt NOT GLOB '*[^A-Za-z0-9._:/-]*'),
 			PRIMARY KEY (tenant_id, principal_id)
 		) STRICT`,
-	}
-	for _, statement := range statements {
-		if _, err := tx.conn.ExecContext(ctx, statement); err != nil {
+		}
+		for _, statement := range statements {
+			if _, err := tx.conn.ExecContext(ctx, statement); err != nil {
+				return identity.ErrRegistryUnavailable
+			}
+		}
+		databaseID, err := uuid.NewV7()
+		if err != nil {
 			return identity.ErrRegistryUnavailable
 		}
+		nowMS, ok := unixMillis(r.now())
+		if !ok {
+			return identity.ErrRegistryUnavailable
+		}
+		if _, err := tx.conn.ExecContext(ctx, "INSERT INTO identity_metadata VALUES (1, 1, ?, ?, 'admitted', NULL)", databaseID.String(), nowMS); err != nil {
+			return identity.ErrRegistryUnavailable
+		}
+		version = 1
 	}
-	databaseID, err := uuid.NewV7()
-	if err != nil {
-		return identity.ErrRegistryUnavailable
+	if version == 1 {
+		if _, err := tx.conn.ExecContext(ctx, `ALTER TABLE sessions ADD COLUMN revocation_operation_id TEXT CHECK (revocation_operation_id IS NULL OR (revocation_operation_id GLOB '????????-????-7???-[89ab]???-????????????' AND revocation_operation_id NOT GLOB '*[^0-9a-f-]*'))`); err != nil {
+			return identity.ErrRegistryUnavailable
+		}
+		if _, err := tx.conn.ExecContext(ctx, `ALTER TABLE restore_epoch_floors RENAME COLUMN checkpoint_receipt TO recovery_reference`); err != nil {
+			return identity.ErrRegistryUnavailable
+		}
+		version = 2
 	}
-	nowMS, ok := unixMillis(r.now())
-	if !ok {
-		return identity.ErrRegistryUnavailable
-	}
-	if _, err := tx.conn.ExecContext(ctx, "INSERT INTO identity_metadata VALUES (1, 1, ?, ?, 'admitted', NULL)", databaseID.String(), nowMS); err != nil {
+	if version != schemaVersion {
 		return identity.ErrRegistryUnavailable
 	}
 	if _, err := tx.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
@@ -247,6 +262,10 @@ func (r *Registry) startup(ctx context.Context, restored bool) error {
 		}
 	}
 	if _, err := tx.conn.ExecContext(ctx, "UPDATE sessions SET state = 'abandoned' WHERE state = 'pending'"); err != nil {
+		return identity.ErrRegistryUnavailable
+	}
+	var invalidRevocations uint64
+	if err := tx.conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE (state = 'revoked' AND revocation_operation_id IS NULL) OR (state != 'revoked' AND revocation_operation_id IS NOT NULL)`).Scan(&invalidRevocations); err != nil || invalidRevocations != 0 {
 		return identity.ErrRegistryUnavailable
 	}
 	return tx.commit(ctx)
@@ -286,7 +305,11 @@ func (r *Registry) RecoverySnapshot(ctx context.Context) (identity.RecoverySnaps
 	if fence != "admitted" {
 		return identity.RecoverySnapshot{}, identity.ErrRegistryFenced
 	}
-	rows, err := tx.conn.QueryContext(ctx, `SELECT tenant_id, principal_id, last_epoch FROM principal_epochs ORDER BY tenant_id, principal_id`)
+	rows, err := tx.conn.QueryContext(ctx, `SELECT tenant_id, principal_id, MAX(epoch) FROM (
+		SELECT tenant_id, principal_id, last_epoch AS epoch FROM principal_epochs
+		UNION ALL
+		SELECT tenant_id, principal_id, epoch_floor AS epoch FROM restore_epoch_floors
+	) GROUP BY tenant_id, principal_id ORDER BY tenant_id, principal_id`)
 	if err != nil {
 		return identity.RecoverySnapshot{}, identity.ErrRegistryUnavailable
 	}
@@ -435,7 +458,7 @@ func (r *Registry) Authenticate(ctx context.Context, request identity.Authentica
 }
 
 func (r *Registry) Revoke(ctx context.Context, request identity.Revocation) error {
-	if !validSessionKey(request.Key) || !closedText.MatchString(request.Reason) || !referenceText.MatchString(request.AuthorityReceipt) {
+	if !validUUID(request.OperationID) || !validSessionKey(request.Key) || !closedText.MatchString(request.Reason) || !referenceText.MatchString(request.AuthorityReceipt) {
 		return identity.ErrRegistryInvalid
 	}
 	tx, err := beginImmediate(ctx, r.db)
@@ -447,15 +470,19 @@ func (r *Registry) Revoke(ctx context.Context, request identity.Revocation) erro
 	if clockErr != nil {
 		return finishClockFailure(ctx, tx, clockErr)
 	}
-	result, err := tx.conn.ExecContext(ctx, `UPDATE sessions SET state = 'revoked', revoked_at_ms = ?, revocation_reason = ?, revocation_authority = ?
+	result, err := tx.conn.ExecContext(ctx, `UPDATE sessions SET state = 'revoked', revoked_at_ms = ?, revocation_reason = ?, revocation_authority = ?, revocation_operation_id = ?
 		WHERE tenant_id = ? AND participant_instance_id = ? AND session_epoch = ? AND state = 'active' AND expires_at_ms > ?`,
-		nowMS, request.Reason, request.AuthorityReceipt, request.Key.TenantID, request.Key.ParticipantInstanceID, request.Key.SessionEpoch, nowMS)
+		nowMS, request.Reason, request.AuthorityReceipt, request.OperationID, request.Key.TenantID, request.Key.ParticipantInstanceID, request.Key.SessionEpoch, nowMS)
 	if err != nil {
 		return identity.ErrRegistryUnavailable
 	}
 	rows, _ := result.RowsAffected()
 	if rows != 1 {
-		return identity.ErrSessionConflict
+		var state, reason, authority, operationID string
+		if err := tx.conn.QueryRowContext(ctx, `SELECT state, COALESCE(revocation_reason, ''), COALESCE(revocation_authority, ''), COALESCE(revocation_operation_id, '') FROM sessions WHERE tenant_id = ? AND participant_instance_id = ? AND session_epoch = ?`, request.Key.TenantID, request.Key.ParticipantInstanceID, request.Key.SessionEpoch).Scan(&state, &reason, &authority, &operationID); err != nil || state != string(identity.SessionRevoked) || reason != request.Reason || authority != request.AuthorityReceipt || operationID != request.OperationID {
+			return identity.ErrSessionConflict
+		}
+		return tx.commit(ctx)
 	}
 	if err := tx.commit(ctx); err != nil {
 		return err
@@ -527,11 +554,12 @@ func (r *Registry) SubscribeInactive(ctx context.Context, key identity.SessionKe
 	return signal, nil
 }
 
-// ApplyRestoreFloors admits only a restore-fenced database. Signature and
-// checkpoint verification belong to the later recovery/audit composition; this
-// method accepts only its closed, already-verified result and durable receipt.
-func (r *Registry) ApplyRestoreFloors(ctx context.Context, databaseID, receipt string, floors []identity.EpochFloor) error {
-	if !validUUID(databaseID) || !referenceText.MatchString(receipt) || len(floors) > 100_000 {
+// StageRestoreFloors monotonically loads one complete verified recovery set but
+// deliberately leaves the registry fenced. Admission requires a later audit
+// receipt through CompleteRestore.
+func (r *Registry) StageRestoreFloors(ctx context.Context, databaseID, manifestReference string, wallHighWater time.Time, floors []identity.EpochFloor) error {
+	highWaterMS, ok := unixMillis(wallHighWater)
+	if !ok || !validUUID(databaseID) || !referenceText.MatchString(manifestReference) || len(floors) > 100_000 {
 		return identity.ErrRegistryInvalid
 	}
 	tx, err := beginImmediate(ctx, r.db)
@@ -547,15 +575,12 @@ func (r *Registry) ApplyRestoreFloors(ctx context.Context, databaseID, receipt s
 	if actualID != databaseID || fence != "restore_fenced" {
 		return identity.ErrRegistryFenced
 	}
+	if highWaterMS < high {
+		return identity.ErrRegistryInvalid
+	}
 	nowMS, ok := unixMillis(r.now())
-	if !ok {
-		return identity.ErrRegistryUnavailable
-	}
-	if nowMS < high-clockTolerance.Milliseconds() {
+	if !ok || nowMS < highWaterMS-clockTolerance.Milliseconds() {
 		return identity.ErrClockRollback
-	}
-	if nowMS < high {
-		nowMS = high
 	}
 	seen := make(map[string]struct{}, len(floors))
 	for _, floor := range floors {
@@ -575,9 +600,17 @@ func (r *Registry) ApplyRestoreFloors(ctx context.Context, databaseID, receipt s
 		if floor.Epoch < liveEpoch {
 			return identity.ErrRegistryInvalid
 		}
-		if _, err := tx.conn.ExecContext(ctx, `INSERT INTO restore_epoch_floors (tenant_id, principal_id, epoch_floor, checkpoint_receipt)
+		var existingFloor uint64
+		err = tx.conn.QueryRowContext(ctx, `SELECT epoch_floor FROM restore_epoch_floors WHERE tenant_id = ? AND principal_id = ?`, floor.TenantID, floor.PrincipalID).Scan(&existingFloor)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return identity.ErrRegistryUnavailable
+		}
+		if err == nil && existingFloor > floor.Epoch {
+			return identity.ErrRegistryInvalid
+		}
+		if _, err := tx.conn.ExecContext(ctx, `INSERT INTO restore_epoch_floors (tenant_id, principal_id, epoch_floor, recovery_reference)
 			VALUES (?, ?, ?, ?) ON CONFLICT (tenant_id, principal_id) DO UPDATE SET
-			epoch_floor = max(epoch_floor, excluded.epoch_floor), checkpoint_receipt = excluded.checkpoint_receipt`, floor.TenantID, floor.PrincipalID, floor.Epoch, receipt); err != nil {
+			epoch_floor = excluded.epoch_floor, recovery_reference = excluded.recovery_reference`, floor.TenantID, floor.PrincipalID, floor.Epoch, manifestReference); err != nil {
 			return identity.ErrRegistryUnavailable
 		}
 	}
@@ -603,7 +636,46 @@ func (r *Registry) ApplyRestoreFloors(ctx context.Context, databaseID, receipt s
 	if err := rows.Close(); err != nil {
 		return identity.ErrRegistryUnavailable
 	}
-	if _, err := tx.conn.ExecContext(ctx, "UPDATE identity_metadata SET wall_high_water_ms = ?, fence_state = 'admitted', fence_receipt = ? WHERE singleton = 1 AND fence_state = 'restore_fenced'", nowMS, receipt); err != nil {
+	var mismatched uint64
+	if err := tx.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM restore_epoch_floors WHERE recovery_reference != ?", manifestReference).Scan(&mismatched); err != nil || mismatched != 0 {
+		return identity.ErrRegistryInvalid
+	}
+	if _, err := tx.conn.ExecContext(ctx, "UPDATE identity_metadata SET wall_high_water_ms = max(wall_high_water_ms, ?) WHERE singleton = 1 AND fence_state = 'restore_fenced'", highWaterMS); err != nil {
+		return identity.ErrRegistryUnavailable
+	}
+	return tx.commit(ctx)
+}
+
+// CompleteRestore is the sole identity admission transition. It proves that
+// the complete staged set belongs to the accepted manifest and binds the audit
+// ledger receipt that committed the canonical restore_fence record.
+func (r *Registry) CompleteRestore(ctx context.Context, databaseID, manifestReference, auditReceipt string) error {
+	if !validUUID(databaseID) || !referenceText.MatchString(manifestReference) || !referenceText.MatchString(auditReceipt) {
+		return identity.ErrRegistryInvalid
+	}
+	tx, err := beginImmediate(ctx, r.db)
+	if err != nil {
+		return err
+	}
+	defer tx.rollback()
+	var actualID, fence string
+	var existing sql.NullString
+	if err := tx.conn.QueryRowContext(ctx, "SELECT database_id, fence_state, fence_receipt FROM identity_metadata WHERE singleton = 1").Scan(&actualID, &fence, &existing); err != nil || actualID != databaseID {
+		return identity.ErrRegistryUnavailable
+	}
+	if fence == "admitted" && existing.Valid && existing.String == auditReceipt {
+		return tx.commit(ctx)
+	}
+	if fence != "restore_fenced" {
+		return identity.ErrRegistryFenced
+	}
+	var missing, mismatched uint64
+	if err := tx.conn.QueryRowContext(ctx, `SELECT
+		(SELECT COUNT(*) FROM principal_epochs p WHERE NOT EXISTS (SELECT 1 FROM restore_epoch_floors f WHERE f.tenant_id = p.tenant_id AND f.principal_id = p.principal_id)),
+		(SELECT COUNT(*) FROM restore_epoch_floors WHERE recovery_reference != ?)`, manifestReference).Scan(&missing, &mismatched); err != nil || missing != 0 || mismatched != 0 {
+		return identity.ErrRegistryInvalid
+	}
+	if _, err := tx.conn.ExecContext(ctx, "UPDATE identity_metadata SET fence_state = 'admitted', fence_receipt = ? WHERE singleton = 1 AND fence_state = 'restore_fenced'", auditReceipt); err != nil {
 		return identity.ErrRegistryUnavailable
 	}
 	return tx.commit(ctx)

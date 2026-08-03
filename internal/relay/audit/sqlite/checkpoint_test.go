@@ -30,9 +30,13 @@ func TestSignedCheckpointLifecycleExportAndWitness(t *testing.T) {
 	installStatement(t, ledger, authority, statement)
 	signer := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: checkpointKey}
 	issued := active.Add(time.Hour)
-	first, err := ledger.CreateCheckpoint(ctx, issued, authority.Public().(ed25519.PublicKey), signer)
-	if err != nil || first.Checkpoint.TreeSize != 3 || first.Checkpoint.PredecessorReference != "" {
+	checkpointOperationID := mustV7(t)
+	first, err := ledger.CreateCheckpoint(ctx, issued, authority.Public().(ed25519.PublicKey), signer, checkpointOperationID)
+	if err != nil || first.Checkpoint.TreeSize != 5 || first.Checkpoint.PredecessorReference != "" {
 		t.Fatalf("first checkpoint = %#v, %v", first, err)
+	}
+	if retry, err := ledger.CreateCheckpoint(ctx, issued, authority.Public().(ed25519.PublicKey), signer, checkpointOperationID); err != nil || retry.Reference != first.Reference {
+		t.Fatalf("checkpoint retry = %#v, %v", retry, err)
 	}
 	latest, trust, err := ledger.LatestCheckpoint(ctx, authority.Public().(ed25519.PublicKey))
 	if err != nil || trust != audit.CheckpointTrusted || latest.Reference != first.Reference {
@@ -76,7 +80,7 @@ func TestSignedCheckpointLifecycleExportAndWitness(t *testing.T) {
 	if _, err := ledger.Append(ctx, testRecord(t, 4)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.CreateCheckpoint(ctx, issued.Add(2*time.Minute), authority.Public().(ed25519.PublicKey), signer); !errors.Is(err, audit.ErrUnavailable) {
+	if _, err := ledger.CreateCheckpoint(ctx, issued.Add(2*time.Minute), authority.Public().(ed25519.PublicKey), signer, mustV7(t)); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("compromised key created checkpoint: %v", err)
 	}
 }
@@ -93,16 +97,16 @@ func TestCheckpointRejectsSignerSubstitutionAndHeadRace(t *testing.T) {
 	statement := audit.VerificationKeyStatement{Version: 1, KeyID: "checkpoint-key-2", Algorithm: audit.CheckpointAlgorithm, PublicKey: key.Public().(ed25519.PublicKey), ActiveFrom: now, IssuedAt: now}
 	installStatement(t, ledger, authority, statement)
 	bad := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: ed25519.NewKeyFromSeed(repeatedByte(8, ed25519.SeedSize))}
-	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), bad); !errors.Is(err, audit.ErrUnavailable) {
+	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), bad, mustV7(t)); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("substituted key = %v", err)
 	}
 	outage := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: key, signErr: errors.New("signer unavailable")}
-	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), outage); !errors.Is(err, audit.ErrUnavailable) {
+	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), outage, mustV7(t)); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("signer outage = %v", err)
 	}
 	racing := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: key,
 		onSign: func() { _, _ = ledger.Append(ctx, testRecord(t, 2)) }}
-	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), racing); !errors.Is(err, audit.ErrUnavailable) {
+	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), racing, mustV7(t)); !errors.Is(err, audit.ErrUnavailable) {
 		t.Fatalf("moving head = %v", err)
 	}
 }
@@ -119,7 +123,7 @@ func TestCheckpointRotationRetirementAndPredecessor(t *testing.T) {
 	if _, err := ledger.Append(ctx, testRecord(t, 1)); err != nil {
 		t.Fatal(err)
 	}
-	first, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: firstStatement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: firstKey})
+	first, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: firstStatement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: firstKey}, mustV7(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +132,7 @@ func TestCheckpointRotationRetirementAndPredecessor(t *testing.T) {
 	if _, err := ledger.Append(ctx, testRecord(t, 2)); err != nil {
 		t.Fatal(err)
 	}
-	second, err := ledger.CreateCheckpoint(ctx, now.Add(time.Minute), authority.Public().(ed25519.PublicKey), &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: secondStatement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: secondKey})
+	second, err := ledger.CreateCheckpoint(ctx, now.Add(time.Minute), authority.Public().(ed25519.PublicKey), &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: secondStatement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: secondKey}, mustV7(t))
 	if err != nil || second.Checkpoint.PredecessorReference != first.Reference {
 		t.Fatalf("rotated checkpoint = %#v, %v", second, err)
 	}
@@ -157,11 +161,11 @@ func TestOpenRejectsTamperedCheckpointEvidence(t *testing.T) {
 	key := ed25519.NewKeyFromSeed(repeatedByte(11, ed25519.SeedSize))
 	now := time.Date(2026, 8, 3, 11, 0, 0, 0, time.UTC)
 	statement := audit.VerificationKeyStatement{Version: 1, KeyID: "checkpoint-key-3", Algorithm: audit.CheckpointAlgorithm, PublicKey: key.Public().(ed25519.PublicKey), ActiveFrom: now, IssuedAt: now}
-	installStatement(t, ledger, authority, statement)
+	keyOperationID := installStatement(t, ledger, authority, statement)
 	// Installing the same signed evidence is an exact idempotent retry.
-	installStatement(t, ledger, authority, statement)
+	installStatementWithOperation(t, ledger, authority, statement, keyOperationID)
 	signer := &testCheckpointSigner{selection: audit.CheckpointSigningSelection{KeyID: statement.KeyID, Algorithm: audit.CheckpointAlgorithm}, privateKey: key}
-	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), signer); err != nil {
+	if _, err := ledger.CreateCheckpoint(ctx, now, authority.Public().(ed25519.PublicKey), signer, mustV7(t)); err != nil {
 		t.Fatal(err)
 	}
 	if err := ledger.Close(); err != nil {
@@ -181,7 +185,14 @@ func TestOpenRejectsTamperedCheckpointEvidence(t *testing.T) {
 	}
 }
 
-func installStatement(t *testing.T, ledger *Ledger, authority ed25519.PrivateKey, statement audit.VerificationKeyStatement) {
+func installStatement(t *testing.T, ledger *Ledger, authority ed25519.PrivateKey, statement audit.VerificationKeyStatement) string {
+	t.Helper()
+	operationID := mustV7(t)
+	installStatementWithOperation(t, ledger, authority, statement, operationID)
+	return operationID
+}
+
+func installStatementWithOperation(t *testing.T, ledger *Ledger, authority ed25519.PrivateKey, statement audit.VerificationKeyStatement, operationID string) {
 	t.Helper()
 	canonical, err := audit.CanonicalVerificationKeyStatement(statement)
 	if err != nil {
@@ -192,7 +203,7 @@ func installStatement(t *testing.T, ledger *Ledger, authority ed25519.PrivateKey
 		t.Fatal(err)
 	}
 	signed := audit.SignedVerificationKeyStatement{Statement: statement, Canonical: canonical, Signature: ed25519.Sign(authority, preimage)}
-	if err := ledger.InstallVerificationKey(context.Background(), signed, authority.Public().(ed25519.PublicKey)); err != nil {
+	if err := ledger.InstallVerificationKey(context.Background(), signed, authority.Public().(ed25519.PublicKey), operationID, statement.IssuedAt, "authority:key-lifecycle:1"); err != nil {
 		t.Fatal(err)
 	}
 }

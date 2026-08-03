@@ -50,9 +50,10 @@ func TestRealProviderThroughHTTPEdgeAndReplayBoundary(t *testing.T) {
 	defer jwks.Close()
 	roots := x509.NewCertPool()
 	roots.AddCert(jwks.Certificate())
+	auditor := &recordingAuditor{}
 	verifier, err := identity.NewVerifier(context.Background(), identity.VerifierConfig{
 		Issuer: integrationIssuer, Audience: integrationAudience,
-		JWKS: identity.JWKSConfig{URL: jwks.URL, Roots: roots, Algorithms: []jose.SignatureAlgorithm{jose.RS256}, SoftRefresh: time.Minute, HardMaxAge: 5 * time.Minute, RequestTimeout: time.Second},
+		JWKS: identity.JWKSConfig{URL: jwks.URL, Roots: roots, Algorithms: []jose.SignatureAlgorithm{jose.RS256}, SoftRefresh: time.Minute, HardMaxAge: 5 * time.Minute, RequestTimeout: time.Second, AuthorityReference: "issuer:integration:key-set", Auditor: auditor},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +64,6 @@ func TestRealProviderThroughHTTPEdgeAndReplayBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer registry.Close()
-	auditor := &recordingAuditor{}
 	provider, err := identity.NewProvider(verifier, registry, auditor)
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestRealProviderThroughHTTPEdgeAndReplayBoundary(t *testing.T) {
 	if replayResponse.Code != http.StatusUnauthorized {
 		t.Fatalf("replayed proof status=%d body=%s", replayResponse.Code, replayResponse.Body.String())
 	}
-	if got := auditor.snapshot(); len(got) != 3 || got[0].Outcome != identity.AuditAllow || got[1].Outcome != identity.AuditAllow || got[2].Reason != identity.AuditReasonProofReplay {
+	if got := auditor.snapshot(); len(got) != 4 || got[0].Operation != identity.AuditJWKSRefresh || got[1].Outcome != identity.AuditAllow || got[2].Outcome != identity.AuditAllow || got[3].Reason != identity.AuditReasonProofReplay {
 		t.Fatalf("audit sequence: %#v", got)
 	}
 }

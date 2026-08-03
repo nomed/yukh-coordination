@@ -1,0 +1,1 @@
+{"authority_reference":"issuer:key-set:1","decision_time":"2026-08-03T09:04:00.000Z","jwks_set_digest":"rquQ-lEtQ3x63stKeKp-5bVTdbBKKevRWh57lfwDLCg","operation_id":"0198f56b-0c00-7000-8000-000000000016","operation_kind":"jwks_refresh","outcome":"allow","profile":"yukh-security-audit/v1","reason":"refreshed"}

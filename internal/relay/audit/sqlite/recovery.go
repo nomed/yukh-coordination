@@ -63,6 +63,13 @@ func (p *RestorePlan) IdentityWallHighWater() time.Time {
 	return p.manifest.Manifest.IdentityWallHighWater
 }
 
+func (p *RestorePlan) CheckpointReference() string {
+	if p == nil {
+		return ""
+	}
+	return p.manifest.Manifest.CheckpointReference
+}
+
 func (l *Ledger) CreateRecoveryManifest(ctx context.Context, input audit.RecoveryManifestInput, authority ed25519.PublicKey, signer audit.RecoverySigner) (audit.SignedRecoveryManifest, error) {
 	if l == nil || l.db == nil || ctx == nil || signer == nil {
 		return audit.SignedRecoveryManifest{}, audit.ErrUnavailable
@@ -147,10 +154,80 @@ func (l *Ledger) ValidateRestore(ctx context.Context, signed audit.SignedRecover
 	var ledgerID, fence string
 	var size uint64
 	var rootRaw, restoreDigest []byte
-	if err := l.db.QueryRowContext(ctx, `SELECT m.ledger_id, m.merkle_size, m.merkle_root, o.fence_state, o.restore_backup_digest FROM audit_metadata m CROSS JOIN audit_operational_state o WHERE m.singleton = 1 AND o.singleton = 1`).Scan(&ledgerID, &size, &rootRaw, &fence, &restoreDigest); err != nil || fence != "restore_fenced" || ledgerID != manifest.AuditBackup.DatabaseID || size != manifest.AuditBackupTreeHead.Size || len(rootRaw) != sha256.Size || !bytes.Equal(rootRaw, manifest.AuditBackupTreeHead.Root[:]) || !bytes.Equal(restoreDigest, manifest.AuditBackup.Digest[:]) {
+	var accepted sql.NullString
+	if err := l.db.QueryRowContext(ctx, `SELECT m.ledger_id, m.merkle_size, m.merkle_root, o.fence_state, o.restore_backup_digest, o.accepted_manifest_reference FROM audit_metadata m CROSS JOIN audit_operational_state o WHERE m.singleton = 1 AND o.singleton = 1`).Scan(&ledgerID, &size, &rootRaw, &fence, &restoreDigest, &accepted); err != nil || (fence != "restore_fenced" && !(fence == "admitted" && accepted.Valid && accepted.String == signed.Reference)) || ledgerID != manifest.AuditBackup.DatabaseID || size < manifest.AuditBackupTreeHead.Size || len(rootRaw) != sha256.Size || !bytes.Equal(restoreDigest, manifest.AuditBackup.Digest[:]) {
+		return nil, audit.ErrUnavailable
+	}
+	if fence == "restore_fenced" && (size != manifest.AuditBackupTreeHead.Size || !bytes.Equal(rootRaw, manifest.AuditBackupTreeHead.Root[:])) {
 		return nil, audit.ErrUnavailable
 	}
 	return &RestorePlan{ledger: l, manifest: signed, identityDatabaseID: manifest.IdentityBackup.DatabaseID, floors: append([]identity.EpochFloor(nil), manifest.IdentityEpochFloors...), backupDigest: manifest.AuditBackup.Digest}, nil
+}
+
+// CommitRestore atomically appends the sole canonical restore_fence record,
+// persists its signed manifest and admits the audit ledger. Identity remains
+// independently fenced until it consumes the returned durable receipt.
+func (l *Ledger) CommitRestore(ctx context.Context, plan *RestorePlan, operationID string, at time.Time) (string, error) {
+	if l == nil || l.db == nil || ctx == nil || plan == nil || plan.ledger != l {
+		return "", audit.ErrUnavailable
+	}
+	record := identity.AuditRecord{ProfileVersion: 1, OperationID: operationID, Operation: identity.AuditRestoreFence, Outcome: identity.AuditAllow, Reason: identity.AuditReasonRestoreVerified, DecisionTime: at, CheckpointReference: plan.manifest.Manifest.CheckpointReference, RecoveryReference: plan.manifest.Reference}
+	canonical, err := audit.CanonicalRecord(record)
+	if err != nil {
+		return "", err
+	}
+	tx, err := beginImmediate(ctx, l.db)
+	if err != nil {
+		return "", audit.ErrUnavailable
+	}
+	defer tx.rollback()
+	var fence string
+	var digest []byte
+	var accepted, receipt sql.NullString
+	if err := tx.conn.QueryRowContext(ctx, `SELECT fence_state, restore_backup_digest, accepted_manifest_reference, completion_receipt FROM audit_operational_state WHERE singleton = 1`).Scan(&fence, &digest, &accepted, &receipt); err != nil || !bytes.Equal(digest, plan.backupDigest[:]) {
+		return "", audit.ErrUnavailable
+	}
+	if fence == "admitted" && accepted.Valid && accepted.String == plan.manifest.Reference && receipt.Valid {
+		return receipt.String, tx.commit(ctx)
+	}
+	if fence != "restore_fenced" {
+		return "", audit.ErrUnavailable
+	}
+	committed, err := appendRecord(ctx, tx.conn, record, canonical)
+	if err != nil {
+		return "", err
+	}
+	reference := committed.Reference()
+	if _, err := tx.conn.ExecContext(ctx, `INSERT INTO audit_recovery_manifests (manifest_reference, manifest_id, canonical_manifest, signature, checkpoint_reference, completion_receipt) VALUES (?, ?, ?, ?, ?, ?)`, plan.manifest.Reference, plan.manifest.Manifest.ManifestID, plan.manifest.Canonical, plan.manifest.Signature, plan.manifest.Manifest.CheckpointReference, reference); err != nil {
+		return "", audit.ErrUnavailable
+	}
+	if _, err := tx.conn.ExecContext(ctx, `UPDATE audit_operational_state SET fence_state = 'admitted', accepted_manifest_reference = ?, external_checkpoint_reference = ?, completion_receipt = ? WHERE singleton = 1 AND fence_state = 'restore_fenced'`, plan.manifest.Reference, plan.manifest.Manifest.CheckpointReference, reference); err != nil {
+		return "", audit.ErrUnavailable
+	}
+	if err := tx.commit(ctx); err != nil {
+		return "", audit.ErrUnavailable
+	}
+	return reference, nil
+}
+
+// AcceptedRestore returns the durable completion receipt only when this exact
+// plan has already crossed the audit admission boundary.
+func (l *Ledger) AcceptedRestore(ctx context.Context, plan *RestorePlan) (string, bool, error) {
+	if l == nil || l.db == nil || ctx == nil || plan == nil || plan.ledger != l {
+		return "", false, audit.ErrUnavailable
+	}
+	var fence string
+	var accepted, receipt sql.NullString
+	if err := l.db.QueryRowContext(ctx, `SELECT fence_state, accepted_manifest_reference, completion_receipt FROM audit_operational_state WHERE singleton = 1`).Scan(&fence, &accepted, &receipt); err != nil {
+		return "", false, audit.ErrUnavailable
+	}
+	if fence == "restore_fenced" {
+		return "", false, nil
+	}
+	if fence != "admitted" || !accepted.Valid || accepted.String != plan.manifest.Reference || !receipt.Valid || !recoveryReceiptPattern.MatchString(receipt.String) {
+		return "", false, audit.ErrUnavailable
+	}
+	return receipt.String, true, nil
 }
 
 func (l *Ledger) OperationalReady(ctx context.Context, now time.Time, authority ed25519.PublicKey, policy audit.ReadinessPolicy, signer audit.CheckpointSigner, probe audit.SignerReadiness, witnessVerifier audit.WitnessVerifier) error {

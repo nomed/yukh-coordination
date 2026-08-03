@@ -101,6 +101,7 @@ func (f *verifierFixture) newVerifier() *Verifier {
 		JWKS: JWKSConfig{
 			URL: f.server.URL, Roots: pool, Algorithms: []jose.SignatureAlgorithm{jose.RS256},
 			SoftRefresh: time.Minute, HardMaxAge: 5 * time.Minute, RequestTimeout: 2 * time.Second,
+			AuthorityReference: "issuer:test:key-set", Auditor: &fakeAuditor{},
 		},
 	}, func() time.Time { return f.now })
 	if err != nil {
@@ -324,6 +325,7 @@ func TestJWKSRedirectAndMalformedSetsFailClosed(t *testing.T) {
 		pool.AddCert(fixture.server.Certificate())
 		_, err := newVerifier(context.Background(), VerifierConfig{Issuer: testIssuer, Audience: testAudience, JWKS: JWKSConfig{
 			URL: fixture.server.URL, Roots: pool, Algorithms: []jose.SignatureAlgorithm{jose.RS256}, SoftRefresh: time.Minute, HardMaxAge: 5 * time.Minute, RequestTimeout: time.Second,
+			AuthorityReference: "issuer:test:key-set", Auditor: &fakeAuditor{},
 		}}, func() time.Time { return fixture.now })
 		if !errors.Is(err, errUnavailable) {
 			t.Fatalf("redirect followed: %v", err)

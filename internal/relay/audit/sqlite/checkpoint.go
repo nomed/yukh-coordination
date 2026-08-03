@@ -6,13 +6,16 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/nomed/yukh-coordination/internal/relay/audit"
+	"github.com/nomed/yukh-coordination/internal/relay/identity"
 )
 
-func (l *Ledger) InstallVerificationKey(ctx context.Context, signed audit.SignedVerificationKeyStatement, authority ed25519.PublicKey) error {
+func (l *Ledger) InstallVerificationKey(ctx context.Context, signed audit.SignedVerificationKeyStatement, authority ed25519.PublicKey, operationID string, recordedAt time.Time, authorityReference string) error {
 	if l == nil || l.db == nil || ctx == nil {
 		return audit.ErrUnavailable
 	}
@@ -31,6 +34,11 @@ func (l *Ledger) InstallVerificationKey(ctx context.Context, signed audit.Signed
 	if err := pinAuthority(ctx, tx.conn, authority); err != nil {
 		return err
 	}
+	record := identity.AuditRecord{ProfileVersion: 1, OperationID: operationID, Operation: identity.AuditKeyLifecycle, Outcome: identity.AuditAllow, Reason: identity.AuditReasonKeyLifecycleCommitted, DecisionTime: recordedAt, AuthorityReference: authorityReference, SigningKeyReference: fmt.Sprintf("signing-key:%s:%d", statement.KeyID, statement.Version)}
+	canonicalRecord, err := audit.CanonicalRecord(record)
+	if err != nil {
+		return err
+	}
 	var previousVersion uint64
 	var previousCanonical []byte
 	err = tx.conn.QueryRowContext(ctx, `SELECT version, canonical_statement FROM audit_verification_key_statements WHERE key_id = ? ORDER BY version DESC LIMIT 1`, statement.KeyID).Scan(&previousVersion, &previousCanonical)
@@ -43,7 +51,14 @@ func (l *Ledger) InstallVerificationKey(ctx context.Context, signed audit.Signed
 			if err := tx.conn.QueryRowContext(ctx, `SELECT authority_signature FROM audit_verification_key_statements WHERE key_id = ? AND version = ?`, statement.KeyID, statement.Version).Scan(&previousSignature); err != nil || !bytes.Equal(previousCanonical, signed.Canonical) || !bytes.Equal(previousSignature, signed.Signature) {
 				return audit.ErrConflict
 			}
-			return nil
+			var existingCoverage []byte
+			if err := tx.conn.QueryRowContext(ctx, `SELECT canonical_record FROM audit_entries WHERE json_extract(CAST(canonical_record AS TEXT), '$.operation_kind') = 'audit_key_lifecycle' AND json_extract(CAST(canonical_record AS TEXT), '$.signing_key_reference') = ?`, record.SigningKeyReference).Scan(&existingCoverage); err != nil || !bytes.Equal(existingCoverage, canonicalRecord) {
+				return audit.ErrConflict
+			}
+			if _, err := appendRecord(ctx, tx.conn, record, canonicalRecord); err != nil {
+				return err
+			}
+			return tx.commit(ctx)
 		}
 		if statement.Version < previousVersion {
 			return audit.ErrConflict
@@ -56,13 +71,16 @@ func (l *Ledger) InstallVerificationKey(ctx context.Context, signed audit.Signed
 	if _, err := tx.conn.ExecContext(ctx, `INSERT INTO audit_verification_key_statements (key_id, version, canonical_statement, authority_signature) VALUES (?, ?, ?, ?)`, statement.KeyID, statement.Version, signed.Canonical, signed.Signature); err != nil {
 		return audit.ErrUnavailable
 	}
+	if _, err := appendRecord(ctx, tx.conn, record, canonicalRecord); err != nil {
+		return err
+	}
 	if err := tx.commit(ctx); err != nil {
 		return audit.ErrUnavailable
 	}
 	return nil
 }
 
-func (l *Ledger) CreateCheckpoint(ctx context.Context, issuedAt time.Time, authority ed25519.PublicKey, signer audit.CheckpointSigner) (audit.SignedCheckpoint, error) {
+func (l *Ledger) CreateCheckpoint(ctx context.Context, issuedAt time.Time, authority ed25519.PublicKey, signer audit.CheckpointSigner, operationID string) (audit.SignedCheckpoint, error) {
 	if l == nil || l.db == nil || ctx == nil || signer == nil {
 		return audit.SignedCheckpoint{}, audit.ErrUnavailable
 	}
@@ -74,7 +92,12 @@ func (l *Ledger) CreateCheckpoint(ctx context.Context, issuedAt time.Time, autho
 	if err != nil {
 		return audit.SignedCheckpoint{}, err
 	}
-	checkpoint, err := l.checkpointCandidate(ctx, issuedAt, selection)
+	record := identity.AuditRecord{ProfileVersion: 1, OperationID: operationID, Operation: identity.AuditCheckpoint, Outcome: identity.AuditAllow, Reason: identity.AuditReasonCheckpointCommitted, DecisionTime: issuedAt, SigningKeyReference: fmt.Sprintf("signing-key:%s:%d", selection.KeyID, key.Statement.Version)}
+	canonicalRecord, err := audit.CanonicalRecord(record)
+	if err != nil {
+		return audit.SignedCheckpoint{}, err
+	}
+	checkpoint, err := l.checkpointCandidate(ctx, issuedAt, selection, record, canonicalRecord)
 	if err != nil {
 		return audit.SignedCheckpoint{}, err
 	}
@@ -96,7 +119,7 @@ func (l *Ledger) CreateCheckpoint(ctx context.Context, issuedAt time.Time, autho
 	if err != nil || trust != audit.CheckpointTrusted {
 		return audit.SignedCheckpoint{}, audit.ErrUnavailable
 	}
-	return l.commitCheckpoint(ctx, signed, key.Statement.Version)
+	return l.commitCheckpoint(ctx, signed, key.Statement.Version, record, canonicalRecord)
 }
 
 func (l *Ledger) LatestCheckpoint(ctx context.Context, authority ed25519.PublicKey) (audit.SignedCheckpoint, audit.CheckpointTrust, error) {
@@ -189,11 +212,23 @@ func (l *Ledger) WitnessCheckpoint(ctx context.Context, reference string, author
 	return ack, nil
 }
 
-func (l *Ledger) checkpointCandidate(ctx context.Context, issuedAt time.Time, selection audit.CheckpointSigningSelection) (audit.Checkpoint, error) {
+func (l *Ledger) checkpointCandidate(ctx context.Context, issuedAt time.Time, selection audit.CheckpointSigningSelection, record identity.AuditRecord, canonicalRecord []byte) (audit.Checkpoint, error) {
+	if existing, found, err := lookupOperation(ctx, l.db, record.OperationID); err != nil {
+		return audit.Checkpoint{}, audit.ErrUnavailable
+	} else if found {
+		if !bytes.Equal(existing.record, canonicalRecord) {
+			return audit.Checkpoint{}, audit.ErrConflict
+		}
+		signed, _, err := readCheckpointAtSize(ctx, l.db, existing.receipt.Sequence)
+		if err != nil || signed.Checkpoint.IssuedAt != issuedAt || signed.Checkpoint.KeyID != selection.KeyID || signed.Checkpoint.Algorithm != selection.Algorithm {
+			return audit.Checkpoint{}, audit.ErrUnavailable
+		}
+		return signed.Checkpoint, nil
+	}
 	var ledgerID string
 	var size uint64
 	var root, head []byte
-	if err := l.db.QueryRowContext(ctx, `SELECT ledger_id, merkle_size, merkle_root, chain_head FROM audit_metadata WHERE singleton = 1`).Scan(&ledgerID, &size, &root, &head); err != nil || size == 0 || len(root) != sha256.Size || len(head) != sha256.Size {
+	if err := l.db.QueryRowContext(ctx, `SELECT ledger_id, merkle_size, merkle_root, chain_head FROM audit_metadata WHERE singleton = 1`).Scan(&ledgerID, &size, &root, &head); err != nil || len(root) != sha256.Size || len(head) != sha256.Size || size >= audit.MaxJSONSafeSequence {
 		return audit.Checkpoint{}, audit.ErrUnavailable
 	}
 	var predecessor string
@@ -208,19 +243,55 @@ func (l *Ledger) checkpointCandidate(ctx context.Context, issuedAt time.Time, se
 			return audit.Checkpoint{}, audit.ErrUnavailable
 		}
 	}
-	var rootHash, chainHead audit.Hash
-	copy(rootHash[:], root)
-	copy(chainHead[:], head)
-	return audit.Checkpoint{LedgerID: ledgerID, TreeSize: size, RootHash: rootHash, ChainHead: chainHead, IssuedAt: issuedAt, Algorithm: selection.Algorithm, KeyID: selection.KeyID, PredecessorReference: predecessor}, nil
+	leaves := make([]audit.Hash, 0, size+1)
+	rows, err := l.db.QueryContext(ctx, `SELECT sequence, chain_digest FROM audit_entries ORDER BY sequence`)
+	if err != nil {
+		return audit.Checkpoint{}, audit.ErrUnavailable
+	}
+	for rows.Next() {
+		var sequence uint64
+		var digest []byte
+		if rows.Scan(&sequence, &digest) != nil || sequence != uint64(len(leaves))+1 || len(digest) != sha256.Size {
+			_ = rows.Close()
+			return audit.Checkpoint{}, audit.ErrUnavailable
+		}
+		var chain audit.Hash
+		copy(chain[:], digest)
+		leaf, err := audit.MerkleLeafHash(sequence, chain)
+		if err != nil {
+			_ = rows.Close()
+			return audit.Checkpoint{}, audit.ErrUnavailable
+		}
+		leaves = append(leaves, leaf)
+	}
+	if rows.Err() != nil || rows.Close() != nil || uint64(len(leaves)) != size {
+		return audit.Checkpoint{}, audit.ErrUnavailable
+	}
+	var previous audit.Hash
+	copy(previous[:], head)
+	recordDigest := audit.RecordDigest(canonicalRecord)
+	chainHead, err := audit.ChainDigest(size+1, previous, recordDigest)
+	if err != nil {
+		return audit.Checkpoint{}, err
+	}
+	leaf, err := audit.MerkleLeafHash(size+1, chainHead)
+	if err != nil {
+		return audit.Checkpoint{}, err
+	}
+	leaves = append(leaves, leaf)
+	return audit.Checkpoint{LedgerID: ledgerID, TreeSize: size + 1, RootHash: audit.MerkleRoot(leaves), ChainHead: chainHead, IssuedAt: issuedAt, Algorithm: selection.Algorithm, KeyID: selection.KeyID, PredecessorReference: predecessor}, nil
 }
 
-func (l *Ledger) commitCheckpoint(ctx context.Context, signed audit.SignedCheckpoint, keyVersion uint64) (audit.SignedCheckpoint, error) {
+func (l *Ledger) commitCheckpoint(ctx context.Context, signed audit.SignedCheckpoint, keyVersion uint64, record identity.AuditRecord, canonicalRecord []byte) (audit.SignedCheckpoint, error) {
 	tx, err := beginImmediate(ctx, l.db)
 	if err != nil {
 		return audit.SignedCheckpoint{}, audit.ErrUnavailable
 	}
 	defer tx.rollback()
 	if err := requireAdmitted(ctx, tx.conn); err != nil {
+		return audit.SignedCheckpoint{}, err
+	}
+	if _, err := appendRecord(ctx, tx.conn, record, canonicalRecord); err != nil {
 		return audit.SignedCheckpoint{}, err
 	}
 	var ledgerID string
@@ -230,7 +301,7 @@ func (l *Ledger) commitCheckpoint(ctx context.Context, signed audit.SignedCheckp
 		return audit.SignedCheckpoint{}, audit.ErrUnavailable
 	}
 	var latest string
-	err = tx.conn.QueryRowContext(ctx, `SELECT checkpoint_reference FROM audit_checkpoints ORDER BY tree_size DESC LIMIT 1`).Scan(&latest)
+	err = tx.conn.QueryRowContext(ctx, `SELECT checkpoint_reference FROM audit_checkpoints WHERE tree_size < ? ORDER BY tree_size DESC LIMIT 1`, signed.Checkpoint.TreeSize).Scan(&latest)
 	if errors.Is(err, sql.ErrNoRows) {
 		latest = ""
 	} else if err != nil {
@@ -315,6 +386,12 @@ func readCheckpoint(ctx context.Context, query interface {
 	return scanCheckpoint(query.QueryRowContext(ctx, `SELECT checkpoint_reference, key_version, canonical_checkpoint, signature FROM audit_checkpoints WHERE checkpoint_reference = ?`, reference))
 }
 
+func readCheckpointAtSize(ctx context.Context, query interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, size uint64) (audit.SignedCheckpoint, uint64, error) {
+	return scanCheckpoint(query.QueryRowContext(ctx, `SELECT checkpoint_reference, key_version, canonical_checkpoint, signature FROM audit_checkpoints WHERE tree_size = ?`, size))
+}
+
 func scanCheckpoint(row *sql.Row) (audit.SignedCheckpoint, uint64, error) {
 	var reference string
 	var keyVersion uint64
@@ -353,6 +430,7 @@ func verifyCheckpointState(ctx context.Context, db *sql.DB) error {
 	}
 	keys := make(map[keyCoordinate]audit.VerificationKeyStatement)
 	latest := make(map[string]audit.VerificationKeyStatement)
+	keyReferences := make([]string, 0)
 	rows, err := db.QueryContext(ctx, `SELECT key_id, version, canonical_statement, authority_signature FROM audit_verification_key_statements ORDER BY key_id, version`)
 	if err != nil {
 		return audit.ErrUnavailable
@@ -376,9 +454,16 @@ func verifyCheckpointState(ctx context.Context, db *sql.DB) error {
 		}
 		keys[keyCoordinate{id: keyID, version: version}] = statement
 		latest[keyID] = statement
+		keyReferences = append(keyReferences, fmt.Sprintf("signing-key:%s:%d", keyID, version))
 	}
 	if rows.Err() != nil || rows.Close() != nil {
 		return audit.ErrUnavailable
+	}
+	for _, keyReference := range keyReferences {
+		var coverage int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_entries WHERE json_extract(CAST(canonical_record AS TEXT), '$.operation_kind') = 'audit_key_lifecycle' AND json_extract(CAST(canonical_record AS TEXT), '$.signing_key_reference') = ?`, keyReference).Scan(&coverage); err != nil || coverage != 1 {
+			return audit.ErrUnavailable
+		}
 	}
 
 	checkpointRows, err := db.QueryContext(ctx, `SELECT checkpoint_reference, tree_size, key_id, key_version, canonical_checkpoint, signature FROM audit_checkpoints ORDER BY tree_size`)
@@ -405,7 +490,7 @@ func verifyCheckpointState(ctx context.Context, db *sql.DB) error {
 	var predecessor string
 	var priorSize uint64
 	for _, stored := range storedCheckpoints {
-		var chainRaw []byte
+		var chainRaw, coverageRaw []byte
 		if stored.treeSize <= priorSize {
 			return audit.ErrUnavailable
 		}
@@ -418,7 +503,15 @@ func verifyCheckpointState(ctx context.Context, db *sql.DB) error {
 			return audit.ErrUnavailable
 		}
 		root, err := subtreeHash(ctx, db, 0, stored.treeSize)
-		if err != nil || root != checkpoint.RootHash || db.QueryRowContext(ctx, `SELECT chain_digest FROM audit_entries WHERE sequence = ?`, stored.treeSize).Scan(&chainRaw) != nil || len(chainRaw) != sha256.Size || !bytes.Equal(chainRaw, checkpoint.ChainHead[:]) {
+		if err != nil || root != checkpoint.RootHash || db.QueryRowContext(ctx, `SELECT chain_digest, canonical_record FROM audit_entries WHERE sequence = ?`, stored.treeSize).Scan(&chainRaw, &coverageRaw) != nil || len(chainRaw) != sha256.Size || !bytes.Equal(chainRaw, checkpoint.ChainHead[:]) || audit.ValidateCanonicalRecord(coverageRaw) != nil {
+			return audit.ErrUnavailable
+		}
+		var coverage struct {
+			OperationKind       string `json:"operation_kind"`
+			DecisionTime        string `json:"decision_time"`
+			SigningKeyReference string `json:"signing_key_reference"`
+		}
+		if json.Unmarshal(coverageRaw, &coverage) != nil || coverage.OperationKind != string(identity.AuditCheckpoint) || coverage.DecisionTime != checkpoint.IssuedAt.Format("2006-01-02T15:04:05.000Z") || coverage.SigningKeyReference != fmt.Sprintf("signing-key:%s:%d", checkpoint.KeyID, stored.keyVersion) {
 			return audit.ErrUnavailable
 		}
 		statement, ok := keys[keyCoordinate{id: stored.keyID, version: stored.keyVersion}]

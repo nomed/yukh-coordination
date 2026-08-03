@@ -13,7 +13,8 @@ operated service or turn local audit evidence into external transparency.
   cross-envelope/semantic failures;
 - `canonical`: JCS inputs, exact bytes, SHA-256 digests, and applicable frozen
   domain digests for event, channel metadata, evidence descriptor/set, receipt,
-  receipt signature preimage, diagnostics, audit record/receipt, independent
+  receipt signature preimage, diagnostics, every closed security-audit
+  operation shape and receipt, independent
   Merkle roots/proofs, audit checkpoints, verification-key statements and
   signed two-database recovery manifests;
 - `SHA256SUMS`: immutable byte manifest for all corpus and runner inputs;

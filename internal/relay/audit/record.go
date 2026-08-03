@@ -30,7 +30,8 @@ var (
 	ErrConflict      = errors.New("audit operation conflict")
 	ErrUnavailable   = errors.New("audit ledger unavailable")
 
-	tenantPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{0,255}$`)
+	tenantPattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]{0,255}$`)
+	referencePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]*$`)
 )
 
 type canonicalRecord struct {
@@ -45,6 +46,11 @@ type canonicalRecord struct {
 	ParticipantInstanceID string `json:"participant_instance_id,omitempty"`
 	SessionEpoch          uint64 `json:"session_epoch,omitempty"`
 	DPoPThumbprintDigest  string `json:"dpop_thumbprint_digest,omitempty"`
+	AuthorityReference    string `json:"authority_reference,omitempty"`
+	JWKSSetDigest         string `json:"jwks_set_digest,omitempty"`
+	CheckpointReference   string `json:"checkpoint_reference,omitempty"`
+	SigningKeyReference   string `json:"signing_key_reference,omitempty"`
+	RecoveryReference     string `json:"recovery_reference,omitempty"`
 }
 
 type Receipt struct {
@@ -71,6 +77,13 @@ func CanonicalRecord(record identity.AuditRecord) ([]byte, error) {
 	if record.HasDPoPThumbprint {
 		value.DPoPThumbprintDigest = encodeDigest(record.DPoPThumbprint)
 	}
+	if record.HasJWKSSetDigest {
+		value.JWKSSetDigest = encodeDigest(record.JWKSSetDigest)
+	}
+	value.AuthorityReference = record.AuthorityReference
+	value.CheckpointReference = record.CheckpointReference
+	value.SigningKeyReference = record.SigningKeyReference
+	value.RecoveryReference = record.RecoveryReference
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrInvalidRecord
@@ -123,6 +136,18 @@ func ValidateCanonicalRecord(canonical []byte) error {
 		copy(record.DPoPThumbprint[:], decoded)
 		record.HasDPoPThumbprint = true
 	}
+	if value.JWKSSetDigest != "" {
+		decoded, err := base64.RawURLEncoding.Strict().DecodeString(value.JWKSSetDigest)
+		if err != nil || len(decoded) != sha256.Size {
+			return ErrInvalidRecord
+		}
+		copy(record.JWKSSetDigest[:], decoded)
+		record.HasJWKSSetDigest = true
+	}
+	record.AuthorityReference = value.AuthorityReference
+	record.CheckpointReference = value.CheckpointReference
+	record.SigningKeyReference = value.SigningKeyReference
+	record.RecoveryReference = value.RecoveryReference
 	if !validRecord(record) {
 		return ErrInvalidRecord
 	}
@@ -202,23 +227,23 @@ func validRecord(record identity.AuditRecord) bool {
 	if _, err := canonicalV7(record.OperationID); err != nil {
 		return false
 	}
-	if record.Operation != identity.AuditBootstrap && record.Operation != identity.AuditAuthentication {
+	if !validOperationShape(record) {
 		return false
 	}
 	switch record.Outcome {
 	case identity.AuditAllow:
-		if record.Reason != identity.AuditReasonAllowed || !validIdentity(record, true) || !record.HasDPoPThumbprint {
+		if !validAllowReason(record) {
 			return false
 		}
 	case identity.AuditDeny:
-		if record.Reason != identity.AuditReasonInvalidCredential && record.Reason != identity.AuditReasonProofReplay && record.Reason != identity.AuditReasonInactiveSession {
+		if (record.Operation != identity.AuditBootstrap && record.Operation != identity.AuditAuthentication) || (record.Reason != identity.AuditReasonInvalidCredential && record.Reason != identity.AuditReasonProofReplay && record.Reason != identity.AuditReasonInactiveSession) {
 			return false
 		}
 		if !validIdentity(record, false) {
 			return false
 		}
 	case identity.AuditUnavailable:
-		if record.Reason != identity.AuditReasonVerificationUnavailable && record.Reason != identity.AuditReasonRegistryUnavailable && record.Reason != identity.AuditReasonMaterialCollision {
+		if record.Reason != identity.AuditReasonVerificationUnavailable && record.Reason != identity.AuditReasonRegistryUnavailable && record.Reason != identity.AuditReasonMaterialCollision && record.Reason != identity.AuditReasonOperationUnavailable {
 			return false
 		}
 		if !validIdentity(record, false) {
@@ -227,7 +252,63 @@ func validRecord(record identity.AuditRecord) bool {
 	default:
 		return false
 	}
-	return record.HasDPoPThumbprint || record.DPoPThumbprint == ([sha256.Size]byte{})
+	return (record.HasDPoPThumbprint || record.DPoPThumbprint == ([sha256.Size]byte{})) && (record.HasJWKSSetDigest || record.JWKSSetDigest == ([sha256.Size]byte{}))
+}
+
+func validAllowReason(record identity.AuditRecord) bool {
+	switch record.Operation {
+	case identity.AuditBootstrap, identity.AuditAuthentication:
+		return record.Reason == identity.AuditReasonAllowed && validIdentity(record, true) && record.HasDPoPThumbprint
+	case identity.AuditRevocation:
+		return record.Reason == identity.AuditReasonRevoked
+	case identity.AuditJWKSRefresh:
+		return record.Reason == identity.AuditReasonRefreshed
+	case identity.AuditRestoreFence:
+		return record.Reason == identity.AuditReasonRestoreVerified
+	case identity.AuditCheckpoint:
+		return record.Reason == identity.AuditReasonCheckpointCommitted
+	case identity.AuditKeyLifecycle:
+		return record.Reason == identity.AuditReasonKeyLifecycleCommitted
+	default:
+		return false
+	}
+}
+
+func validOperationShape(record identity.AuditRecord) bool {
+	identityFields := record.TenantID != "" || record.PrincipalID != "" || record.ParticipantInstanceID != "" || record.SessionEpoch != 0 || record.HasDPoPThumbprint
+	switch record.Operation {
+	case identity.AuditBootstrap, identity.AuditAuthentication:
+		return record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
+	case identity.AuditRevocation:
+		return validRevocationIdentity(record) && !record.HasDPoPThumbprint && record.AuthorityReference != "" && validReference(record.AuthorityReference) && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
+	case identity.AuditJWKSRefresh:
+		digestShape := (record.Outcome == identity.AuditAllow && record.HasJWKSSetDigest) || (record.Outcome == identity.AuditUnavailable && !record.HasJWKSSetDigest)
+		return !identityFields && record.AuthorityReference != "" && validReference(record.AuthorityReference) && digestShape && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
+	case identity.AuditRestoreFence:
+		return !identityFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && validCheckpointReference(record.CheckpointReference) && record.SigningKeyReference == "" && validRecoveryReference(record.RecoveryReference)
+	case identity.AuditCheckpoint:
+		return !identityFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && validReference(record.SigningKeyReference) && record.RecoveryReference == ""
+	case identity.AuditKeyLifecycle:
+		return !identityFields && validReference(record.AuthorityReference) && !record.HasJWKSSetDigest && record.CheckpointReference == "" && validReference(record.SigningKeyReference) && record.RecoveryReference == ""
+	default:
+		return false
+	}
+}
+
+func validRevocationIdentity(record identity.AuditRecord) bool {
+	if !tenantPattern.MatchString(record.TenantID) || record.PrincipalID != "" || record.SessionEpoch == 0 || record.SessionEpoch > MaxJSONSafeSequence {
+		return false
+	}
+	_, err := canonicalV7(record.ParticipantInstanceID)
+	return err == nil
+}
+
+func validReference(value string) bool {
+	return len(value) >= 1 && len(value) <= 256 && referencePattern.MatchString(value)
+}
+
+func validRecoveryReference(value string) bool {
+	return len(value) == 58 && len(value) > len("audit-recovery:") && value[:len("audit-recovery:")] == "audit-recovery:" && validDigestText(value[len("audit-recovery:"):])
 }
 
 func validIdentity(record identity.AuditRecord, required bool) bool {

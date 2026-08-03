@@ -75,6 +75,7 @@ type AuthenticationReservation struct {
 }
 
 type Revocation struct {
+	OperationID      string
 	Key              SessionKey
 	Reason           string
 	AuthorityReceipt string

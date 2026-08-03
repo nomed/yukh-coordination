@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -60,6 +61,7 @@ type fakeRegistry struct {
 	lastAuth        AuthenticationReservation
 	seenProofs      map[string]struct{}
 	status          RegistryStatus
+	revocation      Revocation
 }
 
 func (r *fakeRegistry) ReserveBootstrap(_ context.Context, request BootstrapReservation) (PendingSession, error) {
@@ -115,6 +117,11 @@ func (r *fakeRegistry) Authenticate(_ context.Context, request AuthenticationRes
 }
 
 func (r *fakeRegistry) Status(context.Context) (RegistryStatus, error) { return r.status, nil }
+func (r *fakeRegistry) Revoke(_ context.Context, request Revocation) error {
+	r.revocation = request
+	r.appendOrder("revoke")
+	return nil
+}
 
 func (r *fakeRegistry) appendOrder(value string) {
 	if r.order != nil {
@@ -171,6 +178,21 @@ func TestProviderBootstrapOrdersPendingAuditAndActivation(t *testing.T) {
 	}
 	if len(auditor.records) != 1 || auditor.records[0].Outcome != AuditAllow || auditor.records[0].ParticipantInstanceID == "" || auditor.records[0].SessionEpoch != 7 {
 		t.Fatalf("wrong allow audit: %#v", auditor.records)
+	}
+}
+
+func TestProviderRevocationRequiresDurableAudit(t *testing.T) {
+	provider, _, registry, auditor, _ := providerFixture(t)
+	request := Revocation{OperationID: "01890f3e-7b00-7000-8000-000000000020", Key: SessionKey{TenantID: "tenant:example", ParticipantInstanceID: "01890f3e-7b00-7000-8000-000000000001", SessionEpoch: 7}, Reason: "operator-request", AuthorityReceipt: "authority:revocation:1"}
+	if err := provider.Revoke(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if registry.revocation != request || len(auditor.records) != 1 || auditor.records[0].Operation != AuditRevocation || strings.Join(*registry.order, ",") != "revoke,audit" {
+		t.Fatalf("revocation coverage: %#v %#v %v", registry.revocation, auditor.records, *registry.order)
+	}
+	auditor.err = errors.New("audit unavailable")
+	if err := provider.Revoke(context.Background(), request); !errors.Is(err, httpapi.ErrAuthenticationUnavailable) {
+		t.Fatalf("unaudited revocation reported success: %v", err)
 	}
 }
 
