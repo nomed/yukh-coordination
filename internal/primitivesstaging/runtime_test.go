@@ -260,7 +260,9 @@ func runtimeConfig(t *testing.T, publicAddress, operationsAddress string, now ti
 		RegistrationPath: filepath.Join(dir, "registration.json"), RegistrationSignaturePath: filepath.Join(dir, "registration.sig"), ReplayDatabasePath: filepath.Join(dir, "replays.db"),
 		AuditDatabasePath: filepath.Join(dir, "audit.db"),
 		RegistrationKeyID: "coordination-staging-1", RegistrationPublicKey: base64.RawURLEncoding.EncodeToString(make([]byte, 32)),
-		RequestDeadlineMS: 1000, MaxConcurrentRequests: 8, MaxReplayEntries: 128, MaxLeaseLifetimeMS: 60_000, Epoch: 1,
+		RequestDeadlineMS: 1000, MaxConcurrentRequests: 8, MaxReplayEntries: 128, MaxLeaseLifetimeMS: 60_000,
+		NATSServerURI: "nats://127.0.0.1:4222", NATSConnectTimeoutMS: 1000, NATSRequestTimeoutMS: 1000, NATSReplicas: 1,
+		NATSReplaySafetyWindowMS: 300_000, NATSRetentionMS: 3_600_000, CapabilityLimit: 8, CapabilityPendingTTLMS: 500, Epoch: 1,
 	}
 	raw, _ := json.Marshal(value)
 	config, err := ParseConfig(raw)
