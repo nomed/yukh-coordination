@@ -37,8 +37,9 @@
   #83; RFC-0022 private staging primitives service profile in #92
 - Next action: deliver and review #117 without running it against real
   infrastructure, then supersede the immutable candidate and reconcile the
-  deployment plan. Provisioning approval is premature until that reviewed
-  bootstrap artifact and the reconciled packet exist. Live
+  deployment plan in a separate record-only increment. Provisioning approval
+  is premature until that reviewed bootstrap artifact and reconciled packet
+  exist. Live
   infrastructure, credentials, listener exposure, MCP traffic, protected
   mutations and production use remain separately gated
 

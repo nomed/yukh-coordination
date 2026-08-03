@@ -437,6 +437,36 @@ bootstrap issue #117, a superseding immutable implementation record and
 deployment-plan reconciliation remain required before provisioning approval. No live listener,
 credential, MCP traffic or provider authority is created by #115.
 
+### RFC-0022 accountable bucket-bootstrap implementation review — 2026-08-03
+
+Issue #117 adds a second, one-shot administrative executable with no listener,
+service runtime, capability key, registration, replay database or audit
+database access. It captures exactly one short-lived bootstrap NATS credential
+from inherited descriptor 3 before opening its single absolute, closed,
+non-secret configuration file. Configuration remains loopback-NATS-only and
+fixes the exact replica, retention, lifetime, replay-safety, capability-budget
+and positive epoch profile.
+
+The operation reuses the accepted JetStream adapters with bootstrap enabled to
+create missing nonce, lease and capability-budget buckets or verify every
+immutable property of existing buckets. A mismatch fails closed; the operation
+has no update, delete, purge, migration, enumeration, retry, polling or repair
+path. It closes the owned connection and descriptor and clears the bounded
+credential buffer on every result.
+
+Success emits one canonical, deterministic receipt containing only the closed
+schema/profile, embedded source revision, epoch, a SHA-256 digest of the exact
+three-bucket profile and `verified`. It contains no endpoint, credential,
+provider error, stored key/value or mutable infrastructure detail. Failures
+collapse to one fixed stderr line and emit no receipt. Hermetic tests prove
+create-then-verify behavior against disposable JetStream and exactly three
+bucket streams; reproducible builds embed the source revision.
+
+This increment does not execute against real infrastructure and grants no
+credential minting, provisioning, listener, MCP traffic, provider execution,
+protected mutation or production authority. A superseding immutable record and
+deployment-plan reconciliation remain prerequisites to a provisioning request.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
