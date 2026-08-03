@@ -48,5 +48,19 @@
     "digest": "sha-256:6c3443bff447e221866b390fb1117f7355cccc18d3ebc37cb8decfa9ba471a23",
     "input": "conformance/canonical/diagnostics.input.json",
     "name": "diagnostics"
+  },
+  {
+    "canonical": "conformance/canonical/audit-record.canonical.json",
+    "digest": "sha-256:62739dfb32de3ed723300c0c0db91b767576306d9cd69ba594fb15b3a3ebf857",
+    "domain_digest": "sha-256:3224ff61922bd14a3e1698161b60ad97294fcc686b73c9619b713db5843eb20a",
+    "domain_prefix": "yukh-coordination:audit-record:v1\n",
+    "input": "conformance/canonical/audit-record.input.json",
+    "name": "audit-record"
+  },
+  {
+    "canonical": "conformance/canonical/audit-receipt.canonical.json",
+    "digest": "sha-256:9b9011ecaf07f6066c0f9483999c46b7273e9256258013fc957e7460bfadfc75",
+    "input": "conformance/canonical/audit-receipt.input.json",
+    "name": "audit-receipt"
   }
 ]

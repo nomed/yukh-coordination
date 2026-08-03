@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import base64
 import shutil
+import struct
 import sys
+import uuid
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -112,8 +115,14 @@ def main():
  bad=json.loads(json.dumps(meta["channel"][0])); bad["unexpected"]="x"; add("channel-extra-property",bad,"schema/channel-metadata-0.1.schema.json",False,"INVALID_CHANNEL")
  write(FIX/"index.json",index)
  receipt_preimage=json.loads(json.dumps(meta["receipt"][0])); receipt_preimage.pop("signature")
- vector_values={"event":events["claim"],"channel":meta["channel"][0],"evidence-descriptor":evidence(),"evidence-set":[evidence()],"receipt":meta["receipt"][0],"receipt-signature-preimage":receipt_preimage,"diagnostics":[{"sequence":2,"code":"CLAIM_CONFLICT","severity":"warning","primary_id":U[3],"contender_ids":[U[20],U[21]],"contender_event_ids":[U[3],U[4]]}]}
- domains={"channel":"yukh.channel-metadata.v0.1\u0000","evidence-descriptor":"yukh.evidence-descriptor.v0.1\u0000","evidence-set":"yukh.evidence-set.v0.1\u0000","receipt-signature-preimage":"yukh-coordination-receipt-v0.1\u0000"}
+ b64=lambda value:base64.urlsafe_b64encode(value).rstrip(b"=").decode()
+ audit_record={"profile":"yukh-security-audit/v1","operation_id":"0198f56b-0c00-7000-8000-000000000001","operation_kind":"bootstrap","outcome":"allow","reason":"allowed","decision_time":"2026-08-03T08:00:00.123Z","tenant_id":"tenant-a","principal_id":b64(hashlib.sha256(b"principal").digest()),"participant_instance_id":"0198f56b-0c00-7000-8000-000000000002","session_epoch":7,"dpop_thumbprint_digest":b64(hashlib.sha256(b"thumbprint").digest())}
+ audit_record_bytes=jcs(audit_record); audit_record_digest=hashlib.sha256(b"yukh-coordination:audit-record:v1\n"+audit_record_bytes).digest()
+ audit_ledger_id="0198f56b-0c00-7000-8000-000000000003"; audit_genesis=hashlib.sha256(b"yukh-coordination:audit-chain-genesis:v1\n"+uuid.UUID(audit_ledger_id).bytes).digest()
+ audit_chain=hashlib.sha256(b"yukh-coordination:audit-chain:v1\n"+struct.pack(">Q",1)+audit_genesis+audit_record_digest).digest()
+ audit_receipt={"profile":"yukh-security-audit-receipt/v1","ledger_id":audit_ledger_id,"sequence":1,"operation_id":audit_record["operation_id"],"record_digest":b64(audit_record_digest),"previous_chain_digest":b64(audit_genesis),"chain_digest":b64(audit_chain)}
+ vector_values={"event":events["claim"],"channel":meta["channel"][0],"evidence-descriptor":evidence(),"evidence-set":[evidence()],"receipt":meta["receipt"][0],"receipt-signature-preimage":receipt_preimage,"diagnostics":[{"sequence":2,"code":"CLAIM_CONFLICT","severity":"warning","primary_id":U[3],"contender_ids":[U[20],U[21]],"contender_event_ids":[U[3],U[4]]}],"audit-record":audit_record,"audit-receipt":audit_receipt}
+ domains={"channel":"yukh.channel-metadata.v0.1\u0000","evidence-descriptor":"yukh.evidence-descriptor.v0.1\u0000","evidence-set":"yukh.evidence-set.v0.1\u0000","receipt-signature-preimage":"yukh-coordination-receipt-v0.1\u0000","audit-record":"yukh-coordination:audit-record:v1\n"}
  vectors=[]
  for name,obj in vector_values.items():
   inp=f"conformance/canonical/{name}.input.json"; out=f"conformance/canonical/{name}.canonical.json"; write(ROOT/inp,obj); canonical=jcs(obj); (ROOT/out).write_bytes(canonical)

@@ -1,9 +1,9 @@
-# Protocol v0.1 core conformance corpus
+# Yukh Coordination conformance corpus
 
-This directory qualifies the client-neutral wire contract from RFC-0001 Draft
-with independent Python and JavaScript replay implementations. It does not
-accept the RFC, implement a relay, authenticate identities, or authorize an
-operated service.
+This directory qualifies byte-stable Yukh Coordination contracts. It contains
+the client-neutral protocol corpus from RFC-0001 and the independent canonical
+security-audit vectors from RFC-0011. It does not accept an RFC, authorize an
+operated service or turn local audit evidence into external transparency.
 
 ## Contents
 
@@ -13,7 +13,7 @@ operated service.
   cross-envelope/semantic failures;
 - `canonical`: JCS inputs, exact bytes, SHA-256 digests, and applicable frozen
   domain digests for event, channel metadata, evidence descriptor/set, receipt,
-  receipt signature preimage, and diagnostics;
+  receipt signature preimage, diagnostics, audit record and audit receipt;
 - `SHA256SUMS`: immutable byte manifest for all corpus and runner inputs;
 - `validate.py`: standard-library schema subset, reference resolver, semantic
   checks, JCS canonicalizer, fixture runner, and manifest verifier;
