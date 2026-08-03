@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"testing"
@@ -12,6 +13,8 @@ import (
 
 const encryptionResource = "projects/123456789012/locations/europe-west8/keyRings/yukh-custody/cryptoKeys/session-records/cryptoKeyVersions/7"
 const signingResource = "projects/123456789012/locations/europe-west8/keyRings/yukh-custody/cryptoKeys/dpop-signer/cryptoKeyVersions/3"
+const aadGoldenSHA256 = "e3e4e6301fd0d5c45473d22c68c629ae06bee99113f200a0bd2f8af5f0d55cc4"
+const envelopeGoldenSHA256 = "699a84a2ee3faacc0c4097178333b326cfee226a070f7c919d09d0c2e18a18e9"
 
 func TestExactKeyVersionAndGenerationContracts(t *testing.T) {
 	valid, err := NewKeyVersion(encryptionResource)
@@ -55,6 +58,9 @@ func TestAssociatedDataIsCanonicalAndClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(canonical)); got != aadGoldenSHA256 {
+		t.Fatalf("AAD golden digest = %s", got)
+	}
 	parsed, err := ParseAssociatedData(canonical)
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +74,7 @@ func TestAssociatedDataIsCanonicalAndClosed(t *testing.T) {
 		append([]byte("BADMAG"), canonical[len(aadMagic):]...),
 		clone(canonical),
 		clone(canonical),
+		clone(canonical),
 	}
 	mutations[2][len(aadMagic)+2] ^= 1               // domain byte
 	mutations[3][len(aadMagic)+2+len(aadDomain)] = 0 // zero profile digest byte-by-byte below
@@ -75,6 +82,8 @@ func TestAssociatedDataIsCanonicalAndClosed(t *testing.T) {
 	for index := 0; index < 32; index++ {
 		mutations[3][profileOffset+index] = 0
 	}
+	mutations[4][len(aadMagic)] = 0
+	mutations[4][len(aadMagic)+1] = 0 // noncanonical zero domain length
 	for index, raw := range mutations {
 		if _, err := ParseAssociatedData(raw); !errors.Is(err, ErrInvalidContract) {
 			t.Fatalf("mutation %d accepted: %v", index, err)
@@ -98,6 +107,9 @@ func TestEnvelopeRoundTripRejectsSubstitutionAndNoncanonicalInput(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(canonical)); got != envelopeGoldenSHA256 {
+		t.Fatalf("envelope golden digest = %s", got)
+	}
 	parsed, err := ParseEnvelope(canonical)
 	if err != nil {
 		t.Fatal(err)
@@ -115,8 +127,15 @@ func TestEnvelopeRoundTripRejectsSubstitutionAndNoncanonicalInput(t *testing.T) 
 	if _, err := NewEnvelope(wrong, iv, standardTagBytes, ciphertext, aad); !errors.Is(err, ErrInvalidContract) {
 		t.Fatalf("AAD/key substitution accepted: %v", err)
 	}
+	zeroAlgorithmLength := clone(canonical)
+	zeroAlgorithmLength[len(envelopeMagic)] = 0
+	zeroAlgorithmLength[len(envelopeMagic)+1] = 0
+	wrongAlgorithm := clone(canonical)
+	wrongAlgorithm[len(envelopeMagic)+2] ^= 1
 	for index, raw := range [][]byte{
-		append(clone(canonical), 0), canonical[:len(canonical)-1], append([]byte("BADENV"), canonical[len(envelopeMagic):]...),
+		append(clone(canonical), 0), canonical[:len(canonical)-1],
+		append([]byte("BADENV"), canonical[len(envelopeMagic):]...),
+		zeroAlgorithmLength, wrongAlgorithm,
 	} {
 		if _, err := ParseEnvelope(raw); !errors.Is(err, ErrInvalidContract) {
 			t.Fatalf("invalid envelope %d accepted: %v", index, err)
