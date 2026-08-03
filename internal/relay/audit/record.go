@@ -51,6 +51,9 @@ type canonicalRecord struct {
 	CheckpointReference   string `json:"checkpoint_reference,omitempty"`
 	SigningKeyReference   string `json:"signing_key_reference,omitempty"`
 	RecoveryReference     string `json:"recovery_reference,omitempty"`
+	ServiceProfile        string `json:"service_profile,omitempty"`
+	Action                string `json:"action,omitempty"`
+	IdentityReference     string `json:"identity_reference,omitempty"`
 }
 
 type Receipt struct {
@@ -84,6 +87,9 @@ func CanonicalRecord(record identity.AuditRecord) ([]byte, error) {
 	value.CheckpointReference = record.CheckpointReference
 	value.SigningKeyReference = record.SigningKeyReference
 	value.RecoveryReference = record.RecoveryReference
+	value.ServiceProfile = record.ServiceProfile
+	value.Action = record.Action
+	value.IdentityReference = record.IdentityReference
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrInvalidRecord
@@ -148,6 +154,9 @@ func ValidateCanonicalRecord(canonical []byte) error {
 	record.CheckpointReference = value.CheckpointReference
 	record.SigningKeyReference = value.SigningKeyReference
 	record.RecoveryReference = value.RecoveryReference
+	record.ServiceProfile = value.ServiceProfile
+	record.Action = value.Action
+	record.IdentityReference = value.IdentityReference
 	if !validRecord(record) {
 		return ErrInvalidRecord
 	}
@@ -236,14 +245,18 @@ func validRecord(record identity.AuditRecord) bool {
 			return false
 		}
 	case identity.AuditDeny:
-		if (record.Operation != identity.AuditBootstrap && record.Operation != identity.AuditAuthentication) || (record.Reason != identity.AuditReasonInvalidCredential && record.Reason != identity.AuditReasonProofReplay && record.Reason != identity.AuditReasonInactiveSession) {
+		legacy := (record.Operation == identity.AuditBootstrap || record.Operation == identity.AuditAuthentication) && (record.Reason == identity.AuditReasonInvalidCredential || record.Reason == identity.AuditReasonProofReplay || record.Reason == identity.AuditReasonInactiveSession)
+		staging := (record.Operation == identity.AuditStagingAuthentication && (record.Reason == identity.AuditReasonInvalidCredential || record.Reason == identity.AuditReasonCredentialExpired)) || (record.Operation == identity.AuditStagingAuthorization && record.Reason == identity.AuditReasonAccessDenied)
+		if !legacy && !staging {
 			return false
 		}
 		if !validIdentity(record, false) {
 			return false
 		}
 	case identity.AuditUnavailable:
-		if record.Reason != identity.AuditReasonVerificationUnavailable && record.Reason != identity.AuditReasonRegistryUnavailable && record.Reason != identity.AuditReasonMaterialCollision && record.Reason != identity.AuditReasonOperationUnavailable {
+		legacy := record.Reason == identity.AuditReasonVerificationUnavailable || record.Reason == identity.AuditReasonRegistryUnavailable || record.Reason == identity.AuditReasonMaterialCollision || record.Reason == identity.AuditReasonOperationUnavailable
+		staging := record.Reason == identity.AuditReasonDependencyUnavailable && (record.Operation == identity.AuditStagingAuthentication || record.Operation == identity.AuditStagingAuthorization || record.Operation == identity.AuditStagingLifecycle)
+		if !legacy && !staging {
 			return false
 		}
 		if !validIdentity(record, false) {
@@ -269,6 +282,10 @@ func validAllowReason(record identity.AuditRecord) bool {
 		return record.Reason == identity.AuditReasonCheckpointCommitted
 	case identity.AuditKeyLifecycle:
 		return record.Reason == identity.AuditReasonKeyLifecycleCommitted
+	case identity.AuditStagingAuthentication, identity.AuditStagingAuthorization:
+		return record.Reason == identity.AuditReasonAllowed
+	case identity.AuditStagingLifecycle:
+		return record.Reason == identity.AuditReasonRegistrationLoaded || record.Reason == identity.AuditReasonTLSReady || record.Reason == identity.AuditReasonStarted || record.Reason == identity.AuditReasonStopped
 	default:
 		return false
 	}
@@ -276,23 +293,38 @@ func validAllowReason(record identity.AuditRecord) bool {
 
 func validOperationShape(record identity.AuditRecord) bool {
 	identityFields := record.TenantID != "" || record.PrincipalID != "" || record.ParticipantInstanceID != "" || record.SessionEpoch != 0 || record.HasDPoPThumbprint
+	stagingFields := record.ServiceProfile != "" || record.Action != "" || record.IdentityReference != ""
 	switch record.Operation {
 	case identity.AuditBootstrap, identity.AuditAuthentication:
-		return record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
+		return !stagingFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
 	case identity.AuditRevocation:
-		return validRevocationIdentity(record) && !record.HasDPoPThumbprint && record.AuthorityReference != "" && validReference(record.AuthorityReference) && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
+		return !stagingFields && validRevocationIdentity(record) && !record.HasDPoPThumbprint && record.AuthorityReference != "" && validReference(record.AuthorityReference) && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
 	case identity.AuditJWKSRefresh:
 		digestShape := (record.Outcome == identity.AuditAllow && record.HasJWKSSetDigest) || (record.Outcome == identity.AuditUnavailable && !record.HasJWKSSetDigest)
-		return !identityFields && record.AuthorityReference != "" && validReference(record.AuthorityReference) && digestShape && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
+		return !stagingFields && !identityFields && record.AuthorityReference != "" && validReference(record.AuthorityReference) && digestShape && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
 	case identity.AuditRestoreFence:
-		return !identityFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && validCheckpointReference(record.CheckpointReference) && record.SigningKeyReference == "" && validRecoveryReference(record.RecoveryReference)
+		return !stagingFields && !identityFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && validCheckpointReference(record.CheckpointReference) && record.SigningKeyReference == "" && validRecoveryReference(record.RecoveryReference)
 	case identity.AuditCheckpoint:
-		return !identityFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && validReference(record.SigningKeyReference) && record.RecoveryReference == ""
+		return !stagingFields && !identityFields && record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && validReference(record.SigningKeyReference) && record.RecoveryReference == ""
 	case identity.AuditKeyLifecycle:
-		return !identityFields && validReference(record.AuthorityReference) && !record.HasJWKSSetDigest && record.CheckpointReference == "" && validReference(record.SigningKeyReference) && record.RecoveryReference == ""
+		return !stagingFields && !identityFields && validReference(record.AuthorityReference) && !record.HasJWKSSetDigest && record.CheckpointReference == "" && validReference(record.SigningKeyReference) && record.RecoveryReference == ""
+	case identity.AuditStagingAuthentication:
+		identityShape := (record.Outcome == identity.AuditAllow && record.IdentityReference != "") || (record.Outcome != identity.AuditAllow && record.IdentityReference == "")
+		return validStagingShape(record, record.Action == "" && identityShape)
+	case identity.AuditStagingAuthorization:
+		return validStagingShape(record, record.Action != "" && record.IdentityReference != "")
+	case identity.AuditStagingLifecycle:
+		return validStagingShape(record, record.Action == "" && record.IdentityReference == "")
 	default:
 		return false
 	}
+}
+
+func validStagingShape(record identity.AuditRecord, fields bool) bool {
+	return fields && !((record.TenantID != "") || record.PrincipalID != "" || record.ParticipantInstanceID != "" || record.SessionEpoch != 0 || record.HasDPoPThumbprint) &&
+		record.ServiceProfile == "yukh-coordination/private-primitives-staging-v1" &&
+		(record.IdentityReference == "" || validReference(record.IdentityReference)) &&
+		(record.Action == "" || validReference(record.Action)) && record.AuthorityReference == "" && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
 }
 
 func validRevocationIdentity(record identity.AuditRecord) bool {

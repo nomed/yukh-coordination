@@ -68,6 +68,14 @@ func (a *Authenticator) Ready() bool {
 	return validMillisecond(now) && now.Before(a.registration.expiresAt) && a.replays.Ready(now)
 }
 
+func (a *Authenticator) CredentialExpired() bool {
+	if a == nil || a.registration == nil || a.now == nil {
+		return false
+	}
+	now := a.now().UTC().Truncate(time.Millisecond)
+	return validMillisecond(now) && !now.Before(a.registration.expiresAt)
+}
+
 type verifiedProof struct {
 	thumbprint [sha256.Size]byte
 	jti        string

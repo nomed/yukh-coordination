@@ -27,11 +27,16 @@ import (
 	"github.com/nomed/yukh-coordination/internal/primitives"
 	"github.com/nomed/yukh-coordination/internal/primitivesauth"
 	"github.com/nomed/yukh-coordination/internal/primitiveshttp"
+	"github.com/nomed/yukh-coordination/internal/relay/identity"
 )
 
 type readinessFlag struct{ value atomic.Bool }
 
 func (flag *readinessFlag) Ready() bool { return flag.value.Load() }
+func (flag *readinessFlag) RecordLifecycle(context.Context, identity.AuditReason) error {
+	return nil
+}
+func (flag *readinessFlag) RecordDependencyUnavailable(context.Context) error { return nil }
 
 type runtimeKeyProvider struct {
 	key   primitives.SealingKey
@@ -61,13 +66,22 @@ func TestRuntimeServesDirectTLSAndLoopbackOperations(t *testing.T) {
 	}
 	defer replays.Close()
 	authenticator, _ := NewAuthenticator(registration, replays, func() time.Time { return now })
+	auditLedger, err := OpenAuditLedger(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer auditLedger.Close()
 	store, _ := memory.New(time.Minute, 1, func() time.Time { return now })
 	key, _ := primitives.NewSealingKey("staging-key", bytes.Repeat([]byte{1}, 32))
 	provider := &runtimeKeyProvider{key: key}
 	sealer, _ := primitives.NewAEADSealer(provider, bytes.NewReader(bytes.Repeat([]byte{2}, 256)))
 	budget, _ := memory.NewCapabilityBudget(32, time.Second, 1, func() time.Time { return now })
 	service, _ := primitives.NewService(store, store, budget, sealer, provider, 1, time.Minute, func() time.Time { return now })
-	pipeline, _ := primitivesauth.NewPipeline(authenticator, registration, registration)
+	auditGate, err := NewAuditGate(context.Background(), authenticator, registration, registration, auditLedger, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipeline, _ := primitivesauth.NewPipeline(auditGate, auditGate, auditGate)
 	bridge, _ := primitiveshttp.NewBridge(pipeline, service)
 	handler, _ := primitiveshttp.NewHandler(bridge, config.PublicBaseURI(), config.Epoch(), config.RequestDeadline(), config.MaxConcurrentRequests())
 	tlsConfig, err := LoadServerTLSConfig(config)
@@ -76,8 +90,8 @@ func TestRuntimeServesDirectTLSAndLoopbackOperations(t *testing.T) {
 	}
 	dependencies := &readinessFlag{}
 	dependencies.value.Store(true)
-	readiness, _ := NewReadinessSet(authenticator, dependencies)
-	runtime, err := NewRuntime(config, handler, readiness, tlsConfig)
+	readiness, _ := NewReadinessSet(authenticator, auditGate, dependencies)
+	runtime, err := NewRuntime(config, handler, readiness, tlsConfig, auditGate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,6 +151,9 @@ func TestRuntimeServesDirectTLSAndLoopbackOperations(t *testing.T) {
 	if runtime.Ready() {
 		t.Fatal("runtime ready after shutdown")
 	}
+	if err := auditLedger.Verify(context.Background()); err != nil {
+		t.Fatalf("audit after shutdown: %v", err)
+	}
 }
 
 func TestRuntimeRejectsTLS12AndMismatchedListeners(t *testing.T) {
@@ -151,7 +168,7 @@ func TestRuntimeRejectsTLS12AndMismatchedListeners(t *testing.T) {
 	handler, _, _ := newRuntimeHandler(t, config, now)
 	ready := &readinessFlag{}
 	ready.value.Store(true)
-	runtime, _ := NewRuntime(config, handler, ready, tlsConfig)
+	runtime, _ := NewRuntime(config, handler, ready, tlsConfig, ready)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- runtime.Serve(ctx, publicListener, operationsListener) }()
@@ -171,7 +188,7 @@ func TestRuntimeRejectsTLS12AndMismatchedListeners(t *testing.T) {
 	wrongOperations := testListener(t)
 	defer wrongPublic.Close()
 	defer wrongOperations.Close()
-	second, _ := NewRuntime(config, handler, ready, tlsConfig)
+	second, _ := NewRuntime(config, handler, ready, tlsConfig, ready)
 	if err := second.Serve(context.Background(), wrongPublic, wrongOperations); err != ErrInvalid {
 		t.Fatalf("mismatched listener error = %v", err)
 	}
@@ -230,6 +247,7 @@ func runtimeConfig(t *testing.T, publicAddress, operationsAddress string, now ti
 		Profile: Profile, PublicBaseURI: "https://" + publicAddress, PublicBind: publicAddress, OperationsBind: operationsAddress,
 		TLSCertificatePath: filepath.Join(dir, "tls.crt"), TLSPrivateKeyPath: filepath.Join(dir, "tls.key"), TLSTrustBundlePath: filepath.Join(dir, "ca.crt"),
 		RegistrationPath: filepath.Join(dir, "registration.json"), RegistrationSignaturePath: filepath.Join(dir, "registration.sig"), ReplayDatabasePath: filepath.Join(dir, "replays.db"),
+		AuditDatabasePath: filepath.Join(dir, "audit.db"),
 		RegistrationKeyID: "coordination-staging-1", RegistrationPublicKey: base64.RawURLEncoding.EncodeToString(make([]byte, 32)),
 		RequestDeadlineMS: 1000, MaxConcurrentRequests: 8, MaxReplayEntries: 128, Epoch: 1,
 	}

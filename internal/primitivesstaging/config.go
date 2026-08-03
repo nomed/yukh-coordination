@@ -36,6 +36,7 @@ type configJSON struct {
 	RegistrationPath          string `json:"registration_path"`
 	RegistrationSignaturePath string `json:"registration_signature_path"`
 	ReplayDatabasePath        string `json:"replay_database_path"`
+	AuditDatabasePath         string `json:"audit_database_path"`
 	RegistrationKeyID         string `json:"registration_key_id"`
 	RegistrationPublicKey     string `json:"registration_public_key"`
 	RequestDeadlineMS         int    `json:"request_deadline_ms"`
@@ -70,7 +71,7 @@ func ParseConfig(raw []byte) (*Config, error) {
 	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 {
 		return nil, ErrInvalid
 	}
-	paths := []string{value.TLSCertificatePath, value.TLSPrivateKeyPath, value.TLSTrustBundlePath, value.RegistrationPath, value.RegistrationSignaturePath, value.ReplayDatabasePath}
+	paths := []string{value.TLSCertificatePath, value.TLSPrivateKeyPath, value.TLSTrustBundlePath, value.RegistrationPath, value.RegistrationSignaturePath, value.ReplayDatabasePath, value.AuditDatabasePath}
 	seen := make(map[string]struct{}, len(paths))
 	for _, path := range paths {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -94,13 +95,15 @@ func (c *Config) ValidatePaths() error {
 			return ErrInvalid
 		}
 	}
-	if !secureParent(c.value.ReplayDatabasePath) {
-		return ErrInvalid
-	}
-	if info, err := os.Lstat(c.value.ReplayDatabasePath); err == nil && (!info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0) {
-		return ErrInvalid
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return ErrInvalid
+	for _, path := range []string{c.value.ReplayDatabasePath, c.value.AuditDatabasePath} {
+		if !secureParent(path) {
+			return ErrInvalid
+		}
+		if info, err := os.Lstat(path); err == nil && (!info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0) {
+			return ErrInvalid
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return ErrInvalid
+		}
 	}
 	return nil
 }
@@ -109,6 +112,7 @@ func (c *Config) PublicBaseURI() string         { return c.value.PublicBaseURI }
 func (c *Config) PublicBind() string            { return c.value.PublicBind }
 func (c *Config) OperationsBind() string        { return c.value.OperationsBind }
 func (c *Config) ReplayDatabasePath() string    { return c.value.ReplayDatabasePath }
+func (c *Config) AuditDatabasePath() string     { return c.value.AuditDatabasePath }
 func (c *Config) RegistrationKeyID() string     { return c.value.RegistrationKeyID }
 func (c *Config) RegistrationPublicKey() string { return c.value.RegistrationPublicKey }
 func (c *Config) RequestDeadline() time.Duration {
