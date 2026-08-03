@@ -12,11 +12,13 @@ qualified relay packages. The review found that an honest standalone binary is
 not yet possible: no accepted profile supplies session identity, ACL decisions,
 channel provisioning or signing-key custody.
 
-RFC-0007 therefore proposes an internal, typed composition root that owns HTTP
+RFC-0007 therefore defines an internal, typed composition root that owns HTTP
 serving, graceful shutdown and explicit resource cleanup while receiving every
 policy and adapter dependency from its caller. It explicitly forbids permissive
 development providers and keeps `cmd/` unauthorized until a provider profile is
 accepted.
+
+The project owner accepted RFC-0007 on 2026-08-03 in PR #28.
 
 ## Boundary
 

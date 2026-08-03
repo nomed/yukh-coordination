@@ -1,6 +1,6 @@
 # RFC-0007: Relay composition and lifecycle boundary
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #5
@@ -16,6 +16,8 @@ Acceptance authorizes an internal composition package and executable lifecycle
 tests. It does not authorize a public binary, deployment, production operation,
 an authentication scheme, an ACL store, a signing-key source or an
 administrative control plane.
+
+The project owner accepted this boundary on 2026-08-03 after review in PR #28.
 
 ## Core decision
 
