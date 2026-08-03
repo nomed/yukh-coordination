@@ -3,13 +3,13 @@
 - Updated: 2026-08-03
 - Governing issue: #6
 - Last delivery pull request: #46
-- Active increment: RFC-0013 client-neutral CLI implementation not yet started
+- Active increment: RFC-0013 read-only client and CLI foundation in review
 - Runtime decisions: RFC-0003 through RFC-0013 Accepted
 - Completed delivery: RFC-0011 in pull request #47 and RFC-0012 in pull request
   #46
-- Next action: implement the first bounded RFC-0013 client library and CLI
-  foundation under issue #6; do not add an insecure server profile or
-  provider-specific ownership inference
+- Next action: owner review of the RFC-0013 replay and `work inspect`
+  foundation; DPoP custody, watch, mutations and a process executable remain
+  separate increments
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
