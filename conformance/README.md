@@ -13,14 +13,15 @@ operated service or turn local audit evidence into external transparency.
   cross-envelope/semantic failures;
 - `canonical`: JCS inputs, exact bytes, SHA-256 digests, and applicable frozen
   domain digests for event, channel metadata, evidence descriptor/set, receipt,
-  receipt signature preimage, diagnostics, audit record, audit receipt and
-  independent Merkle roots/proofs;
+  receipt signature preimage, diagnostics, audit record/receipt, independent
+  Merkle roots/proofs, audit checkpoints and verification-key statements;
 - `SHA256SUMS`: immutable byte manifest for all corpus and runner inputs;
 - `validate.py`: standard-library schema subset, reference resolver, semantic
   checks, JCS canonicalizer, fixture runner, and manifest verifier;
 - `generate.py`: deterministic corpus regeneration tool.
 - `standards-schema.py`: independent pinned `jsonschema` Draft 2020-12 gate;
-- `signatures`: fixed RFC 8032-derived receipt signature and OpenSSL verifier.
+- `signatures`: fixed RFC 8032-derived receipt and audit-checkpoint signatures
+  with an independent OpenSSL verifier.
 
 ## Repeatable validation
 

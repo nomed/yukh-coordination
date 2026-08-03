@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 const metadataAppendTriggerV2 = `CREATE TRIGGER audit_metadata_append_only BEFORE UPDATE ON audit_metadata
 	WHEN NEW.singleton != OLD.singleton OR NEW.profile_version != OLD.profile_version OR NEW.ledger_id != OLD.ledger_id
@@ -180,7 +180,10 @@ func (l *Ledger) Verify(ctx context.Context) error {
 	if !bytes.Equal(storedMerkleRoot, expectedRoot[:]) {
 		return audit.ErrUnavailable
 	}
-	return verifyStoredNodes(ctx, l.db, expectedNodes)
+	if err := verifyStoredNodes(ctx, l.db, expectedNodes); err != nil {
+		return err
+	}
+	return verifyCheckpointState(ctx, l.db)
 }
 
 type chainReader interface {
@@ -282,13 +285,68 @@ func (l *Ledger) migrate(ctx context.Context) error {
 		}
 		version = 2
 	}
+	if version == 2 {
+		if err := migrateV3(ctx, tx.conn); err != nil {
+			return audit.ErrUnavailable
+		}
+		version = 3
+	}
 	if version != schemaVersion {
 		return audit.ErrUnavailable
 	}
-	if _, err := tx.conn.ExecContext(ctx, "PRAGMA user_version=2"); err != nil {
+	if _, err := tx.conn.ExecContext(ctx, "PRAGMA user_version=3"); err != nil {
 		return audit.ErrUnavailable
 	}
 	return tx.commit(ctx)
+}
+
+func migrateV3(ctx context.Context, conn *sql.Conn) error {
+	statements := []string{
+		`CREATE TABLE audit_verification_key_statements (
+			key_id TEXT NOT NULL CHECK (length(key_id) BETWEEN 1 AND 128 AND key_id NOT GLOB '*[^A-Za-z0-9._:-]*'),
+			version INTEGER NOT NULL CHECK (version > 0 AND version <= 9007199254740991),
+			canonical_statement BLOB NOT NULL CHECK (length(canonical_statement) BETWEEN 1 AND 4096),
+			authority_signature BLOB NOT NULL CHECK (length(authority_signature) = 64),
+			PRIMARY KEY (key_id, version),
+			UNIQUE (canonical_statement)
+		) STRICT`,
+		`CREATE TABLE audit_checkpoint_authority (
+			singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+			public_key BLOB NOT NULL UNIQUE CHECK (length(public_key) = 32)
+		) STRICT`,
+		`CREATE TABLE audit_checkpoints (
+			checkpoint_reference TEXT PRIMARY KEY CHECK (length(checkpoint_reference) = 60 AND checkpoint_reference GLOB 'audit-checkpoint:*' AND checkpoint_reference NOT GLOB '*[^A-Za-z0-9_:-]*'),
+			tree_size INTEGER NOT NULL UNIQUE CHECK (tree_size > 0 AND tree_size <= 9007199254740991),
+			key_id TEXT NOT NULL CHECK (length(key_id) BETWEEN 1 AND 128 AND key_id NOT GLOB '*[^A-Za-z0-9._:-]*'),
+			key_version INTEGER NOT NULL CHECK (key_version > 0 AND key_version <= 9007199254740991),
+			predecessor_reference TEXT UNIQUE,
+			canonical_checkpoint BLOB NOT NULL UNIQUE CHECK (length(canonical_checkpoint) BETWEEN 1 AND 4096),
+			signature BLOB NOT NULL CHECK (length(signature) = 64),
+			FOREIGN KEY (key_id, key_version) REFERENCES audit_verification_key_statements(key_id, version)
+		) STRICT`,
+		`CREATE TABLE audit_witness_acknowledgements (
+			witness_id TEXT NOT NULL CHECK (length(witness_id) BETWEEN 1 AND 128 AND witness_id NOT GLOB '*[^A-Za-z0-9._:-]*'),
+			checkpoint_reference TEXT NOT NULL,
+			canonical_acknowledgement BLOB NOT NULL CHECK (length(canonical_acknowledgement) BETWEEN 1 AND 16384),
+			acknowledgement_digest BLOB NOT NULL UNIQUE CHECK (length(acknowledgement_digest) = 32),
+			PRIMARY KEY (witness_id, checkpoint_reference),
+			FOREIGN KEY (checkpoint_reference) REFERENCES audit_checkpoints(checkpoint_reference)
+		) STRICT`,
+		`CREATE TRIGGER audit_verification_keys_no_update BEFORE UPDATE ON audit_verification_key_statements BEGIN SELECT RAISE(ABORT, 'verification key statements are immutable'); END`,
+		`CREATE TRIGGER audit_verification_keys_no_delete BEFORE DELETE ON audit_verification_key_statements BEGIN SELECT RAISE(ABORT, 'verification key statements are immutable'); END`,
+		`CREATE TRIGGER audit_checkpoint_authority_no_update BEFORE UPDATE ON audit_checkpoint_authority BEGIN SELECT RAISE(ABORT, 'checkpoint authority is immutable'); END`,
+		`CREATE TRIGGER audit_checkpoint_authority_no_delete BEFORE DELETE ON audit_checkpoint_authority BEGIN SELECT RAISE(ABORT, 'checkpoint authority is immutable'); END`,
+		`CREATE TRIGGER audit_checkpoints_no_update BEFORE UPDATE ON audit_checkpoints BEGIN SELECT RAISE(ABORT, 'audit checkpoints are immutable'); END`,
+		`CREATE TRIGGER audit_checkpoints_no_delete BEFORE DELETE ON audit_checkpoints BEGIN SELECT RAISE(ABORT, 'audit checkpoints are immutable'); END`,
+		`CREATE TRIGGER audit_witnesses_no_update BEFORE UPDATE ON audit_witness_acknowledgements BEGIN SELECT RAISE(ABORT, 'witness acknowledgements are immutable'); END`,
+		`CREATE TRIGGER audit_witnesses_no_delete BEFORE DELETE ON audit_witness_acknowledgements BEGIN SELECT RAISE(ABORT, 'witness acknowledgements are immutable'); END`,
+	}
+	for _, statement := range statements {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return audit.ErrUnavailable
+		}
+	}
+	return nil
 }
 
 func migrateV1(ctx context.Context, conn *sql.Conn) error {

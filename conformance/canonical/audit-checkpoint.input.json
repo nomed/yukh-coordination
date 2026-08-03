@@ -1,0 +1,10 @@
+{
+  "algorithm": "Ed25519",
+  "chain_head": "Pe2HNyy-3gTlWOQkwTYx1gYsr_3Wz3eUqWnyexd8_wk",
+  "issued_at": "2026-08-03T09:00:00.123Z",
+  "key_id": "rfc8032-checkpoint-1",
+  "ledger_id": "0198f56b-0c00-7000-8000-000000000003",
+  "profile": "yukh-security-audit-checkpoint/v1",
+  "root_hash": "gC1iB_J5KbAt54Qc6t9pAVHuvMb4881ESh6U4Sa4QFY",
+  "tree_size": 7
+}

@@ -68,5 +68,21 @@
     "digest": "sha-256:c11ed9731d2cc326606c513b17f6727517f43f404b2a7c509209bf4d47b7dc5e",
     "input": "conformance/canonical/audit-merkle.input.json",
     "name": "audit-merkle"
+  },
+  {
+    "canonical": "conformance/canonical/audit-verification-key.canonical.json",
+    "digest": "sha-256:9ee3ccfd3e7196d13992de1531a759315baea0c872a6c5b3b3842c112957dcee",
+    "domain_digest": "sha-256:7db825071025575bf1d1f8e81cdc941ebfd17e4c47968bcd8eb4d713e13e3226",
+    "domain_prefix": "yukh-coordination:audit-verification-key:v1\n",
+    "input": "conformance/canonical/audit-verification-key.input.json",
+    "name": "audit-verification-key"
+  },
+  {
+    "canonical": "conformance/canonical/audit-checkpoint.canonical.json",
+    "digest": "sha-256:18eba969167191e308466d5dc263f3f5484fd1d189515e150266236ea6e4bfa5",
+    "domain_digest": "sha-256:c6c122653a77a5792e7b932902f2a1a100840e7462d447deb753a5c9e2a5ef7f",
+    "domain_prefix": "yukh-coordination:audit-checkpoint:v1\n",
+    "input": "conformance/canonical/audit-checkpoint.input.json",
+    "name": "audit-checkpoint"
   }
 ]
