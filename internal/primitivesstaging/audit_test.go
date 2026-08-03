@@ -68,6 +68,12 @@ func TestAuditGatePersistsClosedRedactedDecisionsAcrossRestart(t *testing.T) {
 	if err := gate.AuthorizeScope(context.Background(), subject, primitivesauth.LeaseAcquire, scope); err != nil {
 		t.Fatal(err)
 	}
+	if err := gate.RecordCapabilityKeyLifecycle(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.RecordCapabilityKeyLifecycle(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
 	if err := ledger.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +105,7 @@ func TestAuditGatePersistsClosedRedactedDecisionsAcrossRestart(t *testing.T) {
 		}
 		records = append(records, record)
 	}
-	if len(records) != 4 {
+	if len(records) != 6 {
 		t.Fatalf("record count = %d", len(records))
 	}
 	joined := strings.Join(records, "\n")
@@ -108,7 +114,7 @@ func TestAuditGatePersistsClosedRedactedDecisionsAcrossRestart(t *testing.T) {
 			t.Fatalf("audit contains prohibited value %q", prohibited)
 		}
 	}
-	for _, required := range []string{`"operation_kind":"staging_lifecycle"`, `"operation_kind":"staging_authentication"`, `"operation_kind":"staging_authorization"`, `"action":"coordination.lease.acquire"`, `"identity_reference":"staging-identity:`} {
+	for _, required := range []string{`"operation_kind":"staging_lifecycle"`, `"operation_kind":"staging_authentication"`, `"operation_kind":"staging_authorization"`, `"action":"coordination.lease.acquire"`, `"identity_reference":"staging-identity:`, `"reason":"capability_key_loaded"`, `"reason":"capability_key_zeroed"`} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("audit missing %s", required)
 		}

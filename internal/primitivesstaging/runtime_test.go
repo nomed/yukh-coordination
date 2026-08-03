@@ -36,7 +36,12 @@ func (flag *readinessFlag) Ready() bool { return flag.value.Load() }
 func (flag *readinessFlag) RecordLifecycle(context.Context, identity.AuditReason) error {
 	return nil
 }
-func (flag *readinessFlag) RecordDependencyUnavailable(context.Context) error { return nil }
+func (flag *readinessFlag) RecordDependencyUnavailable(context.Context) error        { return nil }
+func (flag *readinessFlag) RecordCapabilityKeyLifecycle(context.Context, bool) error { return nil }
+func (flag *readinessFlag) Close(context.Context) error {
+	flag.value.Store(false)
+	return nil
+}
 
 type runtimeKeyProvider struct {
 	key   primitives.SealingKey
@@ -91,7 +96,9 @@ func TestRuntimeServesDirectTLSAndLoopbackOperations(t *testing.T) {
 	dependencies := &readinessFlag{}
 	dependencies.value.Store(true)
 	readiness, _ := NewReadinessSet(authenticator, auditGate, dependencies)
-	runtime, err := NewRuntime(config, handler, readiness, tlsConfig, auditGate)
+	custody := &readinessFlag{}
+	custody.value.Store(true)
+	runtime, err := NewRuntime(config, handler, readiness, tlsConfig, auditGate, custody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +175,9 @@ func TestRuntimeRejectsTLS12AndMismatchedListeners(t *testing.T) {
 	handler, _, _ := newRuntimeHandler(t, config, now)
 	ready := &readinessFlag{}
 	ready.value.Store(true)
-	runtime, _ := NewRuntime(config, handler, ready, tlsConfig, ready)
+	custody := &readinessFlag{}
+	custody.value.Store(true)
+	runtime, _ := NewRuntime(config, handler, ready, tlsConfig, ready, custody)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- runtime.Serve(ctx, publicListener, operationsListener) }()
@@ -188,7 +197,9 @@ func TestRuntimeRejectsTLS12AndMismatchedListeners(t *testing.T) {
 	wrongOperations := testListener(t)
 	defer wrongPublic.Close()
 	defer wrongOperations.Close()
-	second, _ := NewRuntime(config, handler, ready, tlsConfig, ready)
+	secondCustody := &readinessFlag{}
+	secondCustody.value.Store(true)
+	second, _ := NewRuntime(config, handler, ready, tlsConfig, ready, secondCustody)
 	if err := second.Serve(context.Background(), wrongPublic, wrongOperations); err != ErrInvalid {
 		t.Fatalf("mismatched listener error = %v", err)
 	}
@@ -249,7 +260,7 @@ func runtimeConfig(t *testing.T, publicAddress, operationsAddress string, now ti
 		RegistrationPath: filepath.Join(dir, "registration.json"), RegistrationSignaturePath: filepath.Join(dir, "registration.sig"), ReplayDatabasePath: filepath.Join(dir, "replays.db"),
 		AuditDatabasePath: filepath.Join(dir, "audit.db"),
 		RegistrationKeyID: "coordination-staging-1", RegistrationPublicKey: base64.RawURLEncoding.EncodeToString(make([]byte, 32)),
-		RequestDeadlineMS: 1000, MaxConcurrentRequests: 8, MaxReplayEntries: 128, Epoch: 1,
+		RequestDeadlineMS: 1000, MaxConcurrentRequests: 8, MaxReplayEntries: 128, MaxLeaseLifetimeMS: 60_000, Epoch: 1,
 	}
 	raw, _ := json.Marshal(value)
 	config, err := ParseConfig(raw)

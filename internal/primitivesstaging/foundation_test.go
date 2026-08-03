@@ -126,7 +126,7 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 		RegistrationPath: filepath.Join(dir, "registration.json"), RegistrationSignaturePath: filepath.Join(dir, "registration.sig"), ReplayDatabasePath: filepath.Join(dir, "replays.db"),
 		AuditDatabasePath: filepath.Join(dir, "audit.db"),
 		RegistrationKeyID: "coordination-staging-1", RegistrationPublicKey: base64.RawURLEncoding.EncodeToString(make([]byte, 32)),
-		RequestDeadlineMS: 1000, MaxConcurrentRequests: 16, MaxReplayEntries: 1024, Epoch: 1,
+		RequestDeadlineMS: 1000, MaxConcurrentRequests: 16, MaxReplayEntries: 1024, MaxLeaseLifetimeMS: 60_000, Epoch: 1,
 	}
 	raw, _ := json.Marshal(value)
 	config, err := ParseConfig(raw)
@@ -142,7 +142,7 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 		t.Fatalf("public bind error = %v", err)
 	}
 	descriptors, err := NewSecretDescriptors(3, 4)
-	if err != nil || descriptors.NATSCredential() != 3 || descriptors.CapabilityKey() != 4 {
+	if err != nil || descriptors.NATSCredential() != 3 {
 		t.Fatalf("valid descriptors rejected: %v", err)
 	}
 	if _, err := json.Marshal(descriptors); !errors.Is(err, ErrInvalid) {

@@ -285,7 +285,7 @@ func validAllowReason(record identity.AuditRecord) bool {
 	case identity.AuditStagingAuthentication, identity.AuditStagingAuthorization:
 		return record.Reason == identity.AuditReasonAllowed
 	case identity.AuditStagingLifecycle:
-		return record.Reason == identity.AuditReasonRegistrationLoaded || record.Reason == identity.AuditReasonTLSReady || record.Reason == identity.AuditReasonStarted || record.Reason == identity.AuditReasonStopped
+		return record.Reason == identity.AuditReasonRegistrationLoaded || record.Reason == identity.AuditReasonTLSReady || record.Reason == identity.AuditReasonStarted || record.Reason == identity.AuditReasonStopped || record.Reason == identity.AuditReasonCapabilityKeyLoaded || record.Reason == identity.AuditReasonCapabilityKeyZeroed
 	default:
 		return false
 	}

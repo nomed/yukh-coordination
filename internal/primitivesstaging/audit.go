@@ -113,6 +113,14 @@ func (g *AuditGate) RecordDependencyUnavailable(ctx context.Context) error {
 	return g.record(ctx, identity.AuditStagingLifecycle, identity.AuditUnavailable, identity.AuditReasonDependencyUnavailable, "", "")
 }
 
+func (g *AuditGate) RecordCapabilityKeyLifecycle(ctx context.Context, loaded bool) error {
+	reason := identity.AuditReasonCapabilityKeyZeroed
+	if loaded {
+		reason = identity.AuditReasonCapabilityKeyLoaded
+	}
+	return g.record(ctx, identity.AuditStagingLifecycle, identity.AuditAllow, reason, "", "")
+}
+
 func (g *AuditGate) Ready() bool {
 	return g != nil && !g.failed.Load() && g.auditor != nil && g.auditor.Ready(context.Background()) == nil
 }
