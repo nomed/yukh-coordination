@@ -205,8 +205,11 @@ func (service *Service) sealLease(ctx context.Context, identity Identity, key, h
 		return LeaseResult{}, ErrInvariant
 	}
 	capability, err := service.sealer.Seal(ctx, identity, state)
-	if err != nil || capability == "" || len(capability) > 4096 {
+	if err != nil {
 		return LeaseResult{}, ErrUnavailable
+	}
+	if capability == "" || len(capability) > 4096 {
+		return LeaseResult{}, ErrInvariant
 	}
 	return LeaseResult{Capability: capability, FencingToken: fence, ExpiresAt: expiresAt}, nil
 }

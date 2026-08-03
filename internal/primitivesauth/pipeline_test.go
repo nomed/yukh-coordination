@@ -96,6 +96,7 @@ func TestDenialsAndInvalidCapabilityStopBeforeStore(t *testing.T) {
 		{"action deny", func(v *fixture) { v.actionErr = ErrAccessDenied }, ErrAccessDenied, []string{"authenticate", "action"}},
 		{"invalid capability", func(v *fixture) { v.openErr = ErrInvalidCapability }, ErrInvalidCapability, []string{"authenticate", "action", "open"}},
 		{"scope deny", func(v *fixture) { v.scopeErr = ErrAccessDenied }, ErrAccessDenied, []string{"authenticate", "action", "open", "scope"}},
+		{"invariant", func(v *fixture) { v.operationErr = ErrInvariantViolation }, ErrInvariantViolation, []string{"authenticate", "action", "open", "scope", "operation"}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {

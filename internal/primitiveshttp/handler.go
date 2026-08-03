@@ -209,6 +209,8 @@ func writeMappedProblem(writer http.ResponseWriter, err error) {
 		writeProblem(writer, 409, "stale_fence")
 	case errors.Is(err, primitivesauth.ErrInvalidArgument):
 		writeProblem(writer, 400, "invalid_request")
+	case errors.Is(err, primitivesauth.ErrInvariantViolation):
+		writeProblem(writer, 500, "invariant_violation")
 	default:
 		writeProblem(writer, 503, "temporarily_unavailable")
 	}

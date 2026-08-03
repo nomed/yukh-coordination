@@ -132,5 +132,8 @@ func mapCoreError(err error) error {
 	if errors.Is(err, primitives.ErrConflict) || errors.Is(err, primitives.ErrInvalidArgument) {
 		return primitivesauth.ErrInvalidCapability
 	}
+	if errors.Is(err, primitives.ErrInvariant) {
+		return primitivesauth.ErrInvariantViolation
+	}
 	return primitivesauth.ErrTemporarilyUnavailable
 }

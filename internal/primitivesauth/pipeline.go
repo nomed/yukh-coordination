@@ -16,6 +16,7 @@ var (
 	ErrAccessDenied           = errors.New("primitives authorization: access denied")
 	ErrInvalidCapability      = errors.New("primitives authorization: invalid capability")
 	ErrTemporarilyUnavailable = errors.New("primitives authorization: temporarily unavailable")
+	ErrInvariantViolation     = errors.New("primitives authorization: invariant violation")
 )
 
 type Action string
@@ -172,7 +173,7 @@ func mapAuthorizationError(err error) error {
 }
 
 func mapOperationError(err error) error {
-	if err == nil || errors.Is(err, ErrInvalidCapability) {
+	if err == nil || errors.Is(err, ErrInvalidCapability) || errors.Is(err, ErrInvariantViolation) {
 		return err
 	}
 	return ErrTemporarilyUnavailable
