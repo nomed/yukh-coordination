@@ -2,9 +2,9 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #121
-- Active increment: #122 publishes task-first component documentation;
-  #117 owns the separate accountable bucket-bootstrap successor
+- Last delivery pull request: #123
+- Active increment: #117 implements the separate accountable RFC-0022
+  three-bucket bootstrap operation
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -27,17 +27,18 @@
   capability-key custody in #106, and its exact loopback JetStream/epoch
   composition in #109 at immutable implementation candidate `1af3ddb`; its
   immutable record and redacted, execution-forbidden deployment plan were
-  published in #112
+  published in #112; the closed, reproducibly qualified staging executable
+  assembly was delivered in #121; task-first component documentation was
+  published in #123
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next action: deliver and review #122 without deployment or credential
-  authority; proceed separately with #117. The executable and bucket-bootstrap
-  increments must then supersede the immutable candidate and reconcile the
-  deployment plan.
-  Provisioning approval is premature until both artifacts exist. Live
+- Next action: deliver and review #117 without running it against real
+  infrastructure, then supersede the immutable candidate and reconcile the
+  deployment plan. Provisioning approval is premature until that reviewed
+  bootstrap artifact and the reconciled packet exist. Live
   infrastructure, credentials, listener exposure, MCP traffic, protected
   mutations and production use remain separately gated
 
