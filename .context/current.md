@@ -2,7 +2,7 @@
 
 - Updated: 2026-08-03
 - Governing implementation issue: none; RFC-0011 issue #37 is complete
-- Last merged pull request: #47
+- Last delivery pull request: #47
 - Active increment: RFC-0012 JetStream KV adapter in the independent draft
   pull request #46
 - Runtime decisions: RFC-0003 through RFC-0012 Accepted
