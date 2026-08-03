@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-03: Signed append service
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #18
 - Status: Active
 
 ## Objective
