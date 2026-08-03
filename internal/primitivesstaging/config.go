@@ -42,11 +42,23 @@ type configJSON struct {
 	MaxConcurrentRequests     int    `json:"max_concurrent_requests"`
 	MaxReplayEntries          int    `json:"max_replay_entries"`
 	Epoch                     uint64 `json:"epoch"`
-	NATSCredentialFD          int    `json:"nats_credential_fd"`
-	CapabilityKeyFD           int    `json:"capability_key_fd"`
 }
 
 type Config struct{ value configJSON }
+
+// SecretDescriptors is constructed by the supervisor and is deliberately not
+// part of the serializable configuration surface.
+type SecretDescriptors struct {
+	natsCredential int
+	capabilityKey  int
+}
+
+func NewSecretDescriptors(natsCredential, capabilityKey int) (*SecretDescriptors, error) {
+	if natsCredential < 3 || capabilityKey < 3 || natsCredential == capabilityKey {
+		return nil, ErrInvalid
+	}
+	return &SecretDescriptors{natsCredential: natsCredential, capabilityKey: capabilityKey}, nil
+}
 
 func ParseConfig(raw []byte) (*Config, error) {
 	if len(raw) == 0 || len(raw) > 16_384 || !closedJSONObject(raw) {
@@ -55,7 +67,7 @@ func ParseConfig(raw []byte) (*Config, error) {
 	var value configJSON
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 || value.NATSCredentialFD < 3 || value.CapabilityKeyFD < 3 || value.NATSCredentialFD == value.CapabilityKeyFD {
+	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 {
 		return nil, ErrInvalid
 	}
 	paths := []string{value.TLSCertificatePath, value.TLSPrivateKeyPath, value.TLSTrustBundlePath, value.RegistrationPath, value.RegistrationSignaturePath, value.ReplayDatabasePath}
@@ -108,6 +120,21 @@ func (c *Config) Epoch() uint64              { return c.value.Epoch }
 func (*Config) String() string               { return "Config{REDACTED}" }
 func (*Config) GoString() string             { return "Config{REDACTED}" }
 func (*Config) MarshalJSON() ([]byte, error) { return nil, ErrInvalid }
+func (s *SecretDescriptors) NATSCredential() int {
+	if s == nil {
+		return -1
+	}
+	return s.natsCredential
+}
+func (s *SecretDescriptors) CapabilityKey() int {
+	if s == nil {
+		return -1
+	}
+	return s.capabilityKey
+}
+func (*SecretDescriptors) String() string               { return "SecretDescriptors{REDACTED}" }
+func (*SecretDescriptors) GoString() string             { return "SecretDescriptors{REDACTED}" }
+func (*SecretDescriptors) MarshalJSON() ([]byte, error) { return nil, ErrInvalid }
 
 func exactHTTPSOrigin(value string) bool {
 	parsed, err := url.Parse(value)

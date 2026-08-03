@@ -14,8 +14,9 @@ listener and does not send MCP traffic.
 ## Delivered candidate
 
 - closed, bounded private-staging configuration with explicit HTTPS authority,
-  private/loopback literal binds, distinct inherited descriptors and secure
-  path validation;
+  private/loopback literal binds and secure path validation;
+- distinct supervisor-only inherited descriptors that cannot be serialized
+  into configuration or logs;
 - canonical Ed25519-signed, short-lived workload registration bound to an exact
   identity, five primitive actions, token digest and P-256 DPoP thumbprint;
 - strict ES256 DPoP verification for exact POST target and credential hash;

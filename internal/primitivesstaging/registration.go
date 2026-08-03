@@ -60,7 +60,7 @@ func VerifyRegistration(raw, detachedSignature, publicKey []byte, expectedKeyID 
 	var value registrationJSON
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&value) != nil || value.Profile != registrationProfile || value.KeyID != expectedKeyID || !opaque(value.TenantID, 256) || !opaque(value.PrincipalID, 256) || !exactActions(value.Actions) {
+	if decoder.Decode(&value) != nil || value.Profile != registrationProfile || !opaque(expectedKeyID, 128) || value.KeyID != expectedKeyID || !opaque(value.KeyID, 128) || !opaque(value.TenantID, 256) || !opaque(value.PrincipalID, 256) || !exactActions(value.Actions) {
 		return nil, ErrInvalid
 	}
 	token, tokenErr := base64.RawURLEncoding.Strict().DecodeString(value.TokenDigest)

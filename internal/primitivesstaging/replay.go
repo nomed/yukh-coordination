@@ -126,7 +126,8 @@ func (s *ReplayStore) Reserve(ctx context.Context, thumbprint [sha256.Size]byte,
 	if err = conn.QueryRowContext(ctx, "SELECT count(*) FROM proof_replays").Scan(&count); err != nil || count >= int64(s.maxEntries) {
 		return ErrUnavailable
 	}
-	retainUntil := issuedAt.Add(65 * time.Second).UnixMilli()
+	// Keep the identifier beyond the complete -60s/+5s proof acceptance window.
+	retainUntil := issuedAt.Add(70 * time.Second).UnixMilli()
 	if retainUntil <= now.UnixMilli() {
 		retainUntil = now.Add(5 * time.Second).UnixMilli()
 	}

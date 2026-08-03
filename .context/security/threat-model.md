@@ -261,8 +261,8 @@ separately gated.
 
 Issue #95 implements only the pre-listener security foundation. Configuration
 is closed and bounded, accepts only an explicit HTTPS origin and private or
-loopback literal binds, validates absolute non-symlink-controlled paths, and
-keeps inherited credential descriptors distinct. The signed canonical
+loopback literal binds, and validates absolute non-symlink-controlled paths.
+Secret descriptors use a distinct supervisor-only, non-serializable API. The signed canonical
 registration fixes one identity, five actions, token digest, DPoP thumbprint,
 key identifier and a validity interval of at most fifteen minutes.
 
