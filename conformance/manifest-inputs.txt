@@ -181,11 +181,16 @@ conformance/standards-schema.py
 conformance/update-manifest-allowlist.py
 conformance/validate.py
 js/bin/replay.mjs
+js/dist/primitives-client.mjs
 js/lib/canonical-json.mjs
+js/lib/primitives-client.mjs
 js/lib/replay.mjs
+js/test/primitives-bundle.test.mjs
+js/test/primitives-client.test.mjs
 js/test/replay.test.mjs
 package.json
 schema/channel-metadata-0.1.schema.json
+schema/coordination-primitives-1.schema.json
 schema/diagnostic-0.1.schema.json
 schema/envelope-0.1.schema.json
 schema/evidence-0.1.schema.json
