@@ -27,8 +27,9 @@ jobs:
         with:
           node-version: 24
       - name: Run dependency-free Node 24 qualification offline
-        env:
-          npm_config_offline: "true"
-          npm_config_audit: "false"
-          npm_config_fund: "false"
-        run: npm run check:primitives-bundle && npm test
+        run: |
+          node_bin="$(dirname "$(command -v node)")"
+          sudo env \
+            "PATH=${node_bin}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+            npm_config_offline=true npm_config_audit=false npm_config_fund=false \
+            unshare --net bash -c 'ip link set lo up && npm run check:primitives-bundle && npm test'

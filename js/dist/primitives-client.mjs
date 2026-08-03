@@ -102,6 +102,7 @@ const DIGEST = /^[a-f0-9]{64}$/u;
 const MAX_MESSAGE_BYTES = 4096;
 const MAX_CAPABILITY_CHARS = 3800;
 const PROBLEM_CODES = new Set(["unauthenticated", "access_denied", "conflict", "replayed", "stale_fence", "temporarily_unavailable", "invariant_violation", "invalid_request"]);
+const PROBLEM_STATUS = new Map([["invalid_request", 400], ["unauthenticated", 401], ["access_denied", 403], ["conflict", 409], ["replayed", 409], ["stale_fence", 409], ["invariant_violation", 500], ["temporarily_unavailable", 503]]);
 
 export class LeaseCapability {
   #value;
@@ -139,7 +140,7 @@ export class PrimitivesClient {
     const timer = setTimeout(() => controller.abort(), this.#deadline);
     try {
       const material = await withAbort(Promise.resolve(this.#authenticate({ method: "POST", targetUri: target })), controller.signal);
-      if (!material || typeof material.credential !== "string" || typeof material.proof !== "string" || material.credential.length === 0 || material.proof.split(".").length !== 3) throw stable("unauthenticated");
+      if (!material || typeof material.credential !== "string" || typeof material.proof !== "string" || material.credential.length === 0 || material.credential.length > 8192 || material.proof.length === 0 || material.proof.length > 16384 || material.proof.split(".").length !== 3) throw stable("unauthenticated");
       const response = await withAbort(Promise.resolve(this.#transport(target, { method: "POST", redirect: "manual", signal: controller.signal, headers: { Authorization: `DPoP ${material.credential}`, DPoP: material.proof, "Content-Type": MEDIA_TYPE }, body: requestBody })), controller.signal);
       if (!response || response.type === "opaqueredirect" || response.status >= 300 && response.status < 400) throw stable("temporarily_unavailable");
       const contentType = response.headers?.get?.("content-type")?.split(";").map((part) => part.trim()).join(";");
@@ -192,7 +193,7 @@ async function readBoundedBody(response, limit, signal) {
       chunks.push(value);
     }
   } catch (error) {
-    if (signal.aborted) await reader.cancel().catch(() => {});
+    if (signal.aborted) Promise.resolve(reader.cancel()).catch(() => {});
     if (error?.code === "invariant_violation") throw error;
     throw stable("temporarily_unavailable");
   } finally {
@@ -215,7 +216,7 @@ function exactObject(value, keys) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join("\n") === [...keys].sort().join("\n");
 }
 function validProblem(value, status) {
-  return exactObject(value, ["code", "status", "title", "type"]) && PROBLEM_CODES.has(value.code) && value.status === status && value.title === value.code && value.type === `urn:yukh:coordination-primitives:problem:${value.code}`;
+  return exactObject(value, ["code", "status", "title", "type"]) && PROBLEM_STATUS.get(value.code) === status && value.status === status && value.title === value.code && value.type === `urn:yukh:coordination-primitives:problem:${value.code}`;
 }
 function validateSuccess(value, outcomes, leaseResult) {
   const keys = leaseResult ? ["expires_at", "fencing_token", "lease_capability", "outcome", "specversion"] : ["outcome", "specversion"];

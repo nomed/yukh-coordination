@@ -86,6 +86,10 @@ test("client deadline covers authentication, headers, and streamed response", as
   const body = new ReadableStream({ pull() {} });
   client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 10, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async () => ({ ok: true, status: 200, type: "basic", headers: { get: () => MEDIA_TYPE }, body }) });
   await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable");
+
+	const hostileBody = { getReader: () => ({ read: () => new Promise(() => {}), cancel: () => new Promise(() => {}), releaseLock() {} }) };
+	client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 10, authenticate: async () => ({ credential: "secret", proof: "a.b.c" }), transport: async () => ({ ok: true, status: 200, type: "basic", headers: { get: () => MEDIA_TYPE }, body: hostileBody }) });
+	await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "temporarily_unavailable");
 });
 
 test("client accepts only closed route-specific success and problem shapes", async () => {
@@ -94,8 +98,18 @@ test("client accepts only closed route-specific success and problem shapes", asy
   await assert.rejects(make({ extra: true, outcome: "valid", specversion: "1" }).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation");
   await assert.rejects(make({ code: "provider body secret", status: 503, title: "provider body secret", type: "urn:yukh:coordination-primitives:problem:provider_body_secret" }, 503).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation" && !error.message.includes("secret"));
   await assert.rejects(make({ code: "temporarily_unavailable", status: 500, title: "temporarily_unavailable", type: "urn:yukh:coordination-primitives:problem:temporarily_unavailable" }, 503).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation");
+	await assert.rejects(make({ code: "unauthenticated", status: 503, title: "unauthenticated", type: "urn:yukh:coordination-primitives:problem:unauthenticated" }, 503).inspect(new LeaseCapability("opaque")), (error) => error.code === "invariant_violation");
 });
 
 test("client rejects capabilities that cannot fit a complete 4 KiB message", async () => {
   assert.throws(() => new LeaseCapability("x".repeat(3801)), /invalid capability/u);
+});
+
+test("client bounds authentication material before transport", async () => {
+	let calls = 0;
+	for (const material of [{ credential: "x".repeat(8193), proof: "a.b.c" }, { credential: "x", proof: `${"a".repeat(8192)}.${"b".repeat(8192)}.c` }]) {
+		const client = new PrimitivesClient({ baseUri: "https://coordination.invalid", deadlineMs: 1000, authenticate: async () => material, transport: async () => { calls += 1; } });
+		await assert.rejects(client.inspect(new LeaseCapability("opaque")), (error) => error.code === "unauthenticated");
+	}
+	assert.equal(calls, 0);
 });

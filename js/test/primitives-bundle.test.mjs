@@ -8,6 +8,11 @@ import { Readable } from "node:stream";
 import test from "node:test";
 import { MEDIA_TYPE, PrimitivesClient } from "../dist/primitives-client.mjs";
 
+test("runtime client bundle contains no subprocess or ambient proxy integration", () => {
+	const source = readFileSync(new URL("../dist/primitives-client.mjs", import.meta.url), "utf8");
+	for (const forbidden of ["node:child_process", "HTTP_PROXY", "HTTPS_PROXY", "process.env"]) assert.equal(source.includes(forbidden), false, forbidden);
+});
+
 test("committed Node 24 bundle runs only against its injected in-process target", async (context) => {
   const ambientFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("ambient network forbidden"); };
