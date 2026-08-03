@@ -65,8 +65,9 @@ topology. RFC-0012 and the concurrent JetStream KV adapter PR #46 are untouched.
 
 ## Next step
 
-Explicit owner acceptance may promote and merge #47, completing RFC-0011 and
-allowing issue #37 to close. The repository must then reconcile against the
-independent #46 outcome rather than opening duplicate JetStream KV work. A new
-component increment requires its own governing issue and reviewable pull
+The owner explicitly accepted this increment on 2026-08-03. Pull request #47
+was squash-merged as `4a14e65`, completing RFC-0011 and allowing issue #37 to
+close. The repository must now qualify the independent #46 outcome against
+RFC-0012 and the updated `main` rather than opening duplicate JetStream KV work.
+A new component increment requires its own governing issue and reviewable pull
 request.
