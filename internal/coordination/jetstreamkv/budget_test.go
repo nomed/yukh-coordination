@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	natsjs "github.com/nats-io/nats.go/jetstream"
 	"github.com/nomed/yukh-coordination/internal/coordination"
 )
 
@@ -37,6 +38,35 @@ func TestCapabilityBudgetAgainstDisposableNATS(t *testing.T) {
 	}
 	if err := budget.Retire(ctx, principal, second, 1); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCapabilityBudgetReconcilesOneExactAmbiguousMutation(t *testing.T) {
+	connection := startServer(t, "14321")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	budget, err := OpenCapabilityBudget(ctx, connection, testConfig(1), 1, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	budget.now = func() time.Time { return now }
+	hook := &hookedKV{KeyValue: budget.kv.(natsjs.KeyValue), loseCreate: true}
+	budget.kv = hook
+	principal := coordination.Digest("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	token, _ := coordination.NewCapabilityTokenID([16]byte{1})
+	if err := budget.Reserve(ctx, principal, token, now.Add(30*time.Second), 1); err != nil {
+		t.Fatal(err)
+	}
+	if hook.creates != 1 || hook.gets != 2 {
+		t.Fatalf("reserve calls: create=%d get=%d", hook.creates, hook.gets)
+	}
+	hook.loseUpdate, hook.gets = true, 0
+	if err := budget.Commit(ctx, principal, token, 1); err != nil {
+		t.Fatal(err)
+	}
+	if hook.updates != 1 || hook.gets != 2 {
+		t.Fatalf("commit calls: update=%d get=%d", hook.updates, hook.gets)
 	}
 }
 
