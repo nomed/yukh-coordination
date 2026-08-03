@@ -409,6 +409,34 @@ must be delivered at a new immutable commit, after which the implementation
 record and plan must be reconciled. Publishing the present documents creates
 no infrastructure, credential, listener or MCP authority.
 
+### RFC-0022 executable-assembly implementation review — 2026-08-03
+
+Issue #115 adds one closed executable below the existing `internal/`
+responsibility. It accepts exactly one absolute supervisor-owned non-secret
+configuration path and fixes inherited descriptor slots for the NATS
+credential and capability keyring. There are no environment overrides,
+subcommands, bootstrap, debug, credential-minting or administration modes.
+
+The application validates configuration, file custody, TLS identity and signed
+registration before consuming descriptors. It then owns replay and audit
+ledgers, mandatory audit, capability custody, the bootstrap-disabled
+JetStream composition, neutral primitives service, HTTP bridge, readiness and
+direct TLS runtime. Shutdown removes readiness, closes JetStream, zeroes the
+capability key, appends the stopped audit and only then closes the replay and
+audit databases. Construction and runtime failures collapse to one fixed
+non-sensitive process message.
+
+The workflow builds the executable twice with trimmed paths and embedded Git
+revision, requires byte-identical outputs, and continues to run the complete
+race/disposable-JetStream qualification. Hermetic assembly tests cover valid
+serve/shutdown, descriptor sequencing, closed audit continuity, zeroization,
+argument bounds and redacted failure mapping.
+
+This executable still cannot create its three fixed buckets. Accountable
+bootstrap issue #117, a superseding immutable implementation record and
+deployment-plan reconciliation remain required before provisioning approval. No live listener,
+credential, MCP traffic or provider authority is created by #115.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

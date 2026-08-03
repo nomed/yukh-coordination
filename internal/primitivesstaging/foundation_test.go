@@ -22,6 +22,7 @@ import (
 	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/nomed/yukh-coordination/internal/primitivesauth"
+	"golang.org/x/sys/unix"
 )
 
 func TestAuthenticationPersistsReplayAndAdmitsOnlyOnce(t *testing.T) {
@@ -165,6 +166,35 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 	if _, err := NewSecretDescriptors(3, 3); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("duplicate descriptor error = %v", err)
 	}
+}
+
+func TestCaptureSecretDescriptorsClosesInheritedSlotsBeforeReuse(t *testing.T) {
+	natsDescriptor := memfdBytes(t, "capture-nats", []byte("nats-secret"))
+	keyDescriptor := memfdBytes(t, "capture-key", []byte("key-secret"))
+	descriptors, err := CaptureSecretDescriptors(natsDescriptor, keyDescriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range []int{natsDescriptor, keyDescriptor} {
+		if _, err := unix.Read(original, make([]byte, 1)); err == nil {
+			t.Fatalf("original descriptor %d remained open", original)
+		}
+	}
+	natsCopy, ok := descriptors.takeNATSCredential()
+	if !ok || natsCopy < 64 {
+		t.Fatalf("captured NATS descriptor = %d, %v", natsCopy, ok)
+	}
+	raw := make([]byte, 32)
+	count, err := unix.Read(natsCopy, raw)
+	if err != nil || string(raw[:count]) != "nats-secret" {
+		t.Fatalf("captured bytes = %q, %v", raw[:count], err)
+	}
+	_ = unix.Close(natsCopy)
+	keyCopy, ok := descriptors.takeCapabilityKey()
+	if !ok || keyCopy < 64 {
+		t.Fatalf("captured key descriptor = %d, %v", keyCopy, ok)
+	}
+	_ = unix.Close(keyCopy)
 }
 
 func testRegistration(t *testing.T, now time.Time) (*Registration, string, *ecdsa.PrivateKey) {

@@ -77,6 +77,30 @@ func VerifyRegistration(raw, detachedSignature, publicKey []byte, expectedKeyID 
 	return result, nil
 }
 
+func LoadRegistration(config *Config, now time.Time) (*Registration, error) {
+	if config == nil || config.ValidatePaths() != nil || !validMillisecond(now) {
+		return nil, ErrInvalid
+	}
+	raw, err := boundedFile(config.value.RegistrationPath)
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	signature, err := boundedFile(config.value.RegistrationSignaturePath)
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	publicKey, err := base64.RawURLEncoding.Strict().DecodeString(config.RegistrationPublicKey())
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	registration, err := VerifyRegistration(raw, signature, publicKey, config.RegistrationKeyID(), now)
+	clear(publicKey)
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	return registration, nil
+}
+
 func (r *Registration) Identity() (primitivesauth.Identity, error) {
 	if r == nil {
 		return primitivesauth.Identity{}, ErrInvalid

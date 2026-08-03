@@ -1,6 +1,6 @@
 // Package primitivesstaging implements the RFC-0022 private staging security
-// foundation. It contains no listener, executable, provider composition or
-// deployment defaults.
+// foundation and closed executable composition. It contains no provisioning,
+// bootstrap, provider execution or deployment defaults.
 package primitivesstaging
 
 import (
@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 const Profile = "yukh-coordination/private-primitives-staging-v1"
@@ -73,6 +75,27 @@ func NewSecretDescriptors(natsCredential, capabilityKey int) (*SecretDescriptors
 	return &SecretDescriptors{natsCredential: natsCredential, capabilityKey: capabilityKey}, nil
 }
 
+// CaptureSecretDescriptors snapshots the supervisor-owned inherited slots
+// before any ordinary file open can reuse them, then closes the original slots.
+func CaptureSecretDescriptors(natsCredential, capabilityKey int) (*SecretDescriptors, error) {
+	if _, err := NewSecretDescriptors(natsCredential, capabilityKey); err != nil {
+		return nil, err
+	}
+	natsCopy, natsErr := unix.FcntlInt(uintptr(natsCredential), unix.F_DUPFD_CLOEXEC, 64)
+	keyCopy, keyErr := unix.FcntlInt(uintptr(capabilityKey), unix.F_DUPFD_CLOEXEC, 64)
+	closeNATS, closeKey := unix.Close(natsCredential), unix.Close(capabilityKey)
+	if natsErr != nil || keyErr != nil || closeNATS != nil || closeKey != nil {
+		if natsErr == nil {
+			_ = unix.Close(natsCopy)
+		}
+		if keyErr == nil {
+			_ = unix.Close(keyCopy)
+		}
+		return nil, ErrUnavailable
+	}
+	return NewSecretDescriptors(natsCopy, keyCopy)
+}
+
 func ParseConfig(raw []byte) (*Config, error) {
 	if len(raw) == 0 || len(raw) > 16_384 || !closedJSONObject(raw) {
 		return nil, ErrInvalid
@@ -95,6 +118,32 @@ func ParseConfig(raw []byte) (*Config, error) {
 		seen[path] = struct{}{}
 	}
 	return &Config{value: value}, nil
+}
+
+// LoadConfigFile is the executable's only configuration input. The path and
+// file are revalidated before the closed JSON profile is parsed.
+func LoadConfigFile(path string) (*Config, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path || !secureRegular(path) {
+		return nil, ErrInvalid
+	}
+	raw, err := boundedFile(path)
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	config, err := ParseConfig(raw)
+	if err != nil || config.ValidatePaths() != nil {
+		return nil, ErrInvalid
+	}
+	for _, ownedPath := range []string{
+		config.value.TLSCertificatePath, config.value.TLSPrivateKeyPath, config.value.TLSTrustBundlePath,
+		config.value.RegistrationPath, config.value.RegistrationSignaturePath,
+		config.value.ReplayDatabasePath, config.value.AuditDatabasePath,
+	} {
+		if path == ownedPath {
+			return nil, ErrInvalid
+		}
+	}
+	return config, nil
 }
 
 func (c *Config) ValidatePaths() error {
@@ -168,6 +217,22 @@ func (s *SecretDescriptors) takeCapabilityKey() (int, bool) {
 		return -1, false
 	}
 	return s.capabilityKey, true
+}
+func (s *SecretDescriptors) Close() error {
+	if s == nil {
+		return ErrInvalid
+	}
+	var failed bool
+	if !s.natsTaken.Swap(true) && unix.Close(s.natsCredential) != nil {
+		failed = true
+	}
+	if !s.capabilityTaken.Swap(true) && unix.Close(s.capabilityKey) != nil {
+		failed = true
+	}
+	if failed {
+		return ErrUnavailable
+	}
+	return nil
 }
 func (*SecretDescriptors) String() string               { return "SecretDescriptors{REDACTED}" }
 func (*SecretDescriptors) GoString() string             { return "SecretDescriptors{REDACTED}" }

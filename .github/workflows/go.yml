@@ -23,6 +23,8 @@ jobs:
         run: go install github.com/nats-io/nats-server/v2@v2.12.0
       - name: Run race and JetStream qualification tests
         run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
+      - name: Build reproducible private primitives executable
+        run: .github/scripts/qualify-primitives-executable.sh
       - uses: actions/setup-node@v6
         with:
           node-version: 24
