@@ -80,8 +80,8 @@ func TestLeaseLifecycleSurvivesServiceRestart(t *testing.T) {
 	if result.Capability == "" || result.FencingToken == 0 {
 		t.Fatal("incomplete acquisition")
 	}
-	if valid, err := service.Inspect(context.Background(), identity, result.Capability); err != nil || !valid {
-		t.Fatalf("inspect: %v %v", valid, err)
+	if status, err := service.Inspect(context.Background(), identity, result.Capability); err != nil || status != coordination.LeaseValid {
+		t.Fatalf("inspect: %v %v", status, err)
 	}
 	if keys.opens != 1 {
 		t.Fatalf("capability opens: %d", keys.opens)
@@ -90,8 +90,8 @@ func TestLeaseLifecycleSurvivesServiceRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if valid, err := service.InspectOpened(context.Background(), opened); err != nil || !valid {
-		t.Fatalf("opened inspect: %v %v", valid, err)
+	if status, err := service.InspectOpened(context.Background(), opened); err != nil || status != coordination.LeaseValid {
+		t.Fatalf("opened inspect: %v %v", status, err)
 	}
 	if keys.opens != 2 {
 		t.Fatalf("opened capability was reopened: %d", keys.opens)
@@ -107,14 +107,14 @@ func TestLeaseLifecycleSurvivesServiceRestart(t *testing.T) {
 	if renewed.FencingToken <= result.FencingToken {
 		t.Fatal("fence did not advance")
 	}
-	if _, err := service.Inspect(context.Background(), identity, result.Capability); !errors.Is(err, ErrConflict) {
-		t.Fatalf("old capability: %v", err)
+	if status, err := service.Inspect(context.Background(), identity, result.Capability); err != nil || status != coordination.LeaseStale {
+		t.Fatalf("old capability: %s %v", status, err)
 	}
 	if err := restarted.Release(context.Background(), identity, renewed.Capability); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restarted.Inspect(context.Background(), identity, renewed.Capability); !errors.Is(err, ErrConflict) {
-		t.Fatalf("released capability: %v", err)
+	if status, err := restarted.Inspect(context.Background(), identity, renewed.Capability); err != nil || status != coordination.LeaseReleased {
+		t.Fatalf("released capability: %s %v", status, err)
 	}
 }
 
@@ -133,8 +133,8 @@ func TestCapabilityBindsIdentityAndSupportsBoundedRotation(t *testing.T) {
 		t.Fatalf("cross-tenant capability: %v", err)
 	}
 	keys.old[oldKey.id], keys.active = oldKey, newKey
-	if valid, err := service.Inspect(context.Background(), identity, result.Capability); err != nil || !valid {
-		t.Fatalf("decrypt-only rotation: %v %v", valid, err)
+	if status, err := service.Inspect(context.Background(), identity, result.Capability); err != nil || status != coordination.LeaseValid {
+		t.Fatalf("decrypt-only rotation: %v %v", status, err)
 	}
 	delete(keys.old, oldKey.id)
 	if _, err := service.Inspect(context.Background(), identity, result.Capability); !errors.Is(err, ErrUnavailable) {

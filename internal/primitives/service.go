@@ -130,21 +130,22 @@ func (service *Service) Acquire(ctx context.Context, identity Identity, scope, h
 	return service.sealLease(ctx, identity, key, holder, expiresAt, held.FencingToken())
 }
 
-func (service *Service) Inspect(ctx context.Context, identity Identity, capability string) (bool, error) {
+func (service *Service) Inspect(ctx context.Context, identity Identity, capability string) (coordination.LeaseStatus, error) {
 	opened, err := service.OpenCapability(ctx, identity, capability)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	return service.InspectOpened(ctx, opened)
 }
 
-func (service *Service) InspectOpened(ctx context.Context, opened OpenedCapability) (bool, error) {
-	held, err := service.resumeOpened(ctx, opened)
+func (service *Service) InspectOpened(ctx context.Context, opened OpenedCapability) (coordination.LeaseStatus, error) {
+	state := opened.state
+	value, err := coordination.NewLeaseResumeValue(state.holder, state.expiresAt, state.epoch, state.fencingToken)
 	if err != nil {
-		return false, err
+		return "", ErrInvariant
 	}
-	valid, err := held.Valid(ctx)
-	return valid, mapStoreError(err)
+	status, err := service.leases.Inspect(ctx, state.key, value)
+	return status, mapStoreError(err)
 }
 
 func (service *Service) Renew(ctx context.Context, identity Identity, capability string, expiresAt time.Time) (LeaseResult, error) {

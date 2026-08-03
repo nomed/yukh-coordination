@@ -36,10 +36,10 @@ func (bridge *Bridge) Acquire(ctx context.Context, authentication primitivesauth
 	return flow.lease, err
 }
 
-func (bridge *Bridge) Inspect(ctx context.Context, authentication primitivesauth.RequestAuthentication, capability string) (bool, error) {
+func (bridge *Bridge) Inspect(ctx context.Context, authentication primitivesauth.RequestAuthentication, capability string) (coordination.LeaseStatus, error) {
 	flow := &sealedFlow{service: bridge.service, capability: capability}
 	err := bridge.pipeline.ExecuteSealed(ctx, authentication, primitivesauth.LeaseInspect, capability, flow, flow)
-	return flow.valid, err
+	return flow.status, err
 }
 
 func (bridge *Bridge) Renew(ctx context.Context, authentication primitivesauth.RequestAuthentication, capability string, expires time.Time) (primitives.LeaseResult, error) {
@@ -84,7 +84,7 @@ type sealedFlow struct {
 	opened     primitives.OpenedCapability
 	identity   primitives.Identity
 	lease      primitives.LeaseResult
-	valid      bool
+	status     coordination.LeaseStatus
 }
 
 func (flow *sealedFlow) OpenScope(ctx context.Context, identity primitivesauth.Identity, capability string) (coordination.Digest, error) {
@@ -110,7 +110,7 @@ func (flow *sealedFlow) Run(ctx context.Context, _ primitivesauth.Identity, acti
 	var err error
 	switch action {
 	case primitivesauth.LeaseInspect:
-		flow.valid, err = flow.service.InspectOpened(ctx, flow.opened)
+		flow.status, err = flow.service.InspectOpened(ctx, flow.opened)
 	case primitivesauth.LeaseRenew:
 		flow.lease, err = flow.service.RenewOpened(ctx, flow.identity, flow.opened, flow.expires)
 	case primitivesauth.LeaseRelease:

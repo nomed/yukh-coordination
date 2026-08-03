@@ -112,12 +112,8 @@ func (handler *Handler) dispatch(ctx context.Context, path string, authenticatio
 		if !ok || !exactKeys(body, "lease_capability") {
 			return nil, primitivesauth.ErrInvalidArgument
 		}
-		valid, err := handler.bridge.Inspect(ctx, authentication, capability)
-		outcome := "stale"
-		if valid {
-			outcome = "valid"
-		}
-		return map[string]any{"outcome": outcome, "specversion": "1"}, err
+		status, err := handler.bridge.Inspect(ctx, authentication, capability)
+		return map[string]any{"outcome": string(status), "specversion": "1"}, err
 	case "/coordination-primitives/v1/leases:renew":
 		capability, ok1 := stringValue("lease_capability")
 		expires, ok2 := expiry()

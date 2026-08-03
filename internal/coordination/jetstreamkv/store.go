@@ -294,6 +294,36 @@ func (store *Store) Resume(ctx context.Context, key coordination.Digest, resume 
 	return &lease{store: store, key: key, holder: resume.HolderDigest(), expires: resume.ExpiresAt(), revision: resume.FencingToken()}, nil
 }
 
+func (store *Store) Inspect(ctx context.Context, key coordination.Digest, resume coordination.LeaseResumeValue) (coordination.LeaseStatus, error) {
+	if !validDigest(key) || resume.Epoch() != store.config.Epoch {
+		return "", coordination.ErrInvalidArgument
+	}
+	entry, err := store.leases.Get(ctx, string(key))
+	if errors.Is(err, natsjs.ErrKeyNotFound) || errors.Is(err, natsjs.ErrKeyDeleted) {
+		return coordination.LeaseStale, nil
+	}
+	if err != nil {
+		return "", coordination.ErrUnavailable
+	}
+	observed, err := decode(entry.Value())
+	if err != nil || observed.Kind != "lease" {
+		return "", coordination.ErrUnavailable
+	}
+	if observed.Digest != string(resume.HolderDigest()) || observed.ExpiresAt != resume.ExpiresAt().Format(time.RFC3339Nano) || observed.Epoch != resume.Epoch() {
+		return coordination.LeaseStale, nil
+	}
+	if observed.Released && resume.FencingToken() < ^uint64(0) && entry.Revision() == resume.FencingToken()+1 {
+		return coordination.LeaseReleased, nil
+	}
+	if observed.Released || entry.Revision() != resume.FencingToken() {
+		return coordination.LeaseStale, nil
+	}
+	if !resume.ExpiresAt().After(store.now().UTC()) {
+		return coordination.LeaseExpired, nil
+	}
+	return coordination.LeaseValid, nil
+}
+
 func (held *lease) FencingToken() uint64 {
 	held.mu.Lock()
 	defer held.mu.Unlock()

@@ -130,11 +130,11 @@ func TestHandlerExercisesEveryRouteAndStableLeaseOutcomes(t *testing.T) {
 	}
 	renewedCapability := renewedBody["lease_capability"].(string)
 	stale := perform(t, handler, "/coordination-primitives/v1/leases:inspect", map[string]any{"lease_capability": capability})
-	assertProblem(t, stale, http.StatusConflict, "stale_fence")
+	assertOutcome(t, stale, http.StatusOK, "stale")
 	released := perform(t, handler, "/coordination-primitives/v1/leases:release", map[string]any{"lease_capability": renewedCapability})
 	assertOutcome(t, released, http.StatusOK, "released")
 	afterRelease := perform(t, handler, "/coordination-primitives/v1/leases:inspect", map[string]any{"lease_capability": renewedCapability})
-	assertProblem(t, afterRelease, http.StatusConflict, "stale_fence")
+	assertOutcome(t, afterRelease, http.StatusOK, "released")
 }
 
 func TestHandlerBoundsFramingAndDeniesWithoutSensitiveDiagnostics(t *testing.T) {
@@ -274,9 +274,9 @@ func TestBridgeComposesTwoPhaseSingleOpenLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture.calls = nil
-	valid, err := bridge.Inspect(context.Background(), authentication, acquired.Capability)
-	if err != nil || !valid {
-		t.Fatalf("inspect: %v %v", valid, err)
+	status, err := bridge.Inspect(context.Background(), authentication, acquired.Capability)
+	if err != nil || status != coordination.LeaseValid {
+		t.Fatalf("inspect: %v %v", status, err)
 	}
 	expected := []string{"authenticate", "action", "open", "scope"}
 	if len(fixture.calls) != len(expected) {
