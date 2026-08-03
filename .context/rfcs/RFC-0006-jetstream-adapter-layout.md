@@ -1,6 +1,6 @@
 # RFC-0006: JetStream adapter layout
 
-- Status: Proposed
+- Status: Accepted
 - Author: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #5
@@ -16,11 +16,17 @@ Acceptance authorizes adapter implementation and repository qualification only.
 It does not authorize a NATS deployment, production topology, public admission
 or production-readiness claim.
 
+The project owner accepted this layout on 2026-08-03 after review in PR #24.
+
 ## Core decision
 
 JetStream stores one append-only command log per tenant subject inside one
 adapter-owned stream. Every state change for a tenant is serialized with
 JetStream optimistic concurrency using `Nats-Expected-Last-Subject-Sequence`.
+
+KV is not used anywhere in the authoritative read or write path. JetStream is
+used solely as a linearizable tenant command log; all indexes and current state
+are deterministic reducer views of that log.
 
 The stream is named `YUKH_COORDINATION_V1` and accepts only:
 
@@ -133,6 +139,8 @@ Qualification requires the existing stream configuration to match exactly:
   protocol history;
 - message deletion and purge denied;
 - rollups disabled;
+- atomic batch publishing disabled and not required: one Yukh transition is one
+  canonical command publication;
 - one subject pattern, no mirrors, sources or republish;
 - maximum message size large enough for the bounded command envelope;
 - replica count supplied explicitly by environment configuration.
@@ -205,6 +213,11 @@ CI; it is not committed to the repository.
 
 Rejected because KV CAS and stream publication do not form the single atomic
 acceptance operation required by the Store contract.
+
+JetStream 2.12 atomic batch publication does not change this choice: it can
+atomically add multiple messages to one stream, but it does not create a
+transaction between a separate KV bucket and an application stream. The first
+adapter needs only one command message per transition.
 
 ### One stream or subject per channel
 

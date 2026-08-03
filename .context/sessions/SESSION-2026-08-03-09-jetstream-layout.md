@@ -2,7 +2,7 @@
 
 - Governing issue: #5
 - Pull request: #24
-- Status: Active
+- Status: Complete
 
 ## Objective
 
@@ -29,5 +29,5 @@ qualification requirements.
 
 ## Next
 
-Obtain owner review, then implement the adapter in `internal/relay/jetstream`
-without changing the public HTTP/SSE contract.
+The owner accepted RFC-0006 on 2026-08-03. Implement the adapter in
+`internal/relay/jetstream` without changing the public HTTP/SSE contract.
