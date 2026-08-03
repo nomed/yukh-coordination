@@ -1,8 +1,9 @@
 # Identity boundary
 
-This directory contains the first two isolated increments of accepted
-RFC-0010. The root package owns strict JWT/JWKS and RFC 9449 DPoP verification
-plus the closed identity lifecycle types. The `sqlite` subpackage owns the
+This directory contains the three isolated implementation increments of
+accepted RFC-0010. The root package owns strict JWT/JWKS and RFC 9449 DPoP
+verification, the closed identity lifecycle and audit types, and the provider
+that implements the RFC-0009 HTTP ports. The `sqlite` subpackage owns the
 separate durable identity registry.
 
 The boundary is intentionally layered:
@@ -16,7 +17,7 @@ The boundary is intentionally layered:
 - DPoP signatures are checked before claims are trusted, and `ath`, public URI,
   method, time and JWK thumbprint are verified explicitly.
 
-The directory still has no audit implementation, session-token generator,
-provider composition, HTTP wiring or process configuration. A cryptographically
-valid proof and a registry transaction are therefore not yet a complete
-admitted request.
+The provider generates opaque session tokens, but the directory has no audit
+store, checkpoint signer, policy implementation, process wiring or external
+configuration. The mandatory `Auditor` is a port: production composition
+cannot claim readiness until a durable implementation is supplied explicitly.

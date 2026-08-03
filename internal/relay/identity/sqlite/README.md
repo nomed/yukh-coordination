@@ -17,5 +17,5 @@ Its narrow operations implement:
 The adapter stores digests, derived identities and closed references only. It
 never stores a token, proof, JWT, JWK, external subject, arbitrary claims or
 audit payload. Checkpoint signature verification and audit durability remain
-the next composition increment; `ApplyRestoreFloors` accepts only their
+separate security-domain work; `ApplyRestoreFloors` accepts only their
 already-verified closed result.
