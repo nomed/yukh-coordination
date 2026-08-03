@@ -179,6 +179,15 @@ func TestTamperWrongRootAndProvisionalRetirementFailClosed(t *testing.T) {
 
 func TestConfigurationRootErrorsAndEncryptionLimitAreClosed(t *testing.T) {
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filepath.Join(dir, "permissive.db"), fixedRoot{key: [32]byte{1}}); !errors.Is(err, ErrInvalidConfiguration) {
+		t.Fatalf("permissive directory: %v", err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Open("relative.db", fixedRoot{key: [32]byte{1}}); !errors.Is(err, ErrInvalidConfiguration) {
 		t.Fatalf("relative path: %v", err)
 	}
@@ -201,6 +210,9 @@ func TestConfigurationRootErrorsAndEncryptionLimitAreClosed(t *testing.T) {
 
 func openStore(t *testing.T, path string) *Store {
 	t.Helper()
+	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	root := fixedRoot{key: [32]byte{1, 2, 3, 4, 5}}
 	store, err := Open(path, root)
 	if err != nil {
