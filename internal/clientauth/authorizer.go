@@ -1,62 +1,131 @@
 package clientauth
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
-	jose "github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 )
 
 type clock func() time.Time
 type identifierSource func() (uuid.UUID, error)
 
-// Authorizer loads one session only for the duration of a request and creates
-// a fresh proof over the normalized public target.
+// Authorizer loads one session and opens its exact signer only for the duration
+// of a request. It creates and locally verifies a fresh proof before mutation.
 type Authorizer struct {
-	store   CredentialStore
-	profile string
-	now     clock
-	newJTI  identifierSource
+	store       CredentialStore
+	signerStore ProofSignerStore
+	profile     string
+	now         clock
+	newJTI      identifierSource
 }
 
-func NewAuthorizer(store CredentialStore, profile string) (*Authorizer, error) {
-	if store == nil || validateProfile(profile) != nil {
+func NewAuthorizer(store CredentialStore, signerStore ProofSignerStore, profile string) (*Authorizer, error) {
+	if nilInterface(store) || nilInterface(signerStore) || validateProfile(profile) != nil {
 		return nil, ErrInvalidCredential
 	}
-	return &Authorizer{store: store, profile: profile, now: time.Now, newJTI: uuid.NewV7}, nil
+	return &Authorizer{store: store, signerStore: signerStore, profile: profile, now: time.Now, newJTI: uuid.NewV7}, nil
 }
 
 func (a *Authorizer) Authorize(request *http.Request) error {
-	if a == nil || a.store == nil || a.now == nil || a.newJTI == nil || request == nil || request.URL == nil || request.Method == "" || request.Method != strings.ToUpper(request.Method) || request.URL.Scheme != "https" || request.URL.Host == "" || request.URL.User != nil || request.URL.Fragment != "" || len(request.Header.Values("Authorization")) != 0 || len(request.Header.Values("DPoP")) != 0 || len(request.Header.Values("Cookie")) != 0 {
+	if a == nil || nilInterface(a.store) || nilInterface(a.signerStore) || a.now == nil || a.newJTI == nil {
 		return ErrInvalidCredential
 	}
-	credentials, err := a.store.Load(request.Context(), a.profile)
+	target, err := validateAuthorizationRequest(request)
+	if err != nil {
+		return err
+	}
+	stored, err := a.store.Load(request.Context(), a.profile)
 	if err != nil {
 		return sanitizeStoreError(err)
 	}
-	if !validCredentials(credentials) {
+	record, err := stored.Record()
+	if err != nil || !stored.Revision().valid() || stored.Revision().absent {
 		return ErrCredentialStore
 	}
 	now := a.now().UTC()
-	if !now.Before(credentials.expiresAt) {
+	if !now.Before(record.expiresAt) {
 		return ErrCredentialMissing
+	}
+
+	signer, err := a.signerStore.Open(request.Context(), record.proofKeyReference)
+	if err != nil {
+		return sanitizeSignerError(err)
+	}
+	if nilInterface(signer) || signer.KeyReference() != record.proofKeyReference {
+		return ErrProofSigner
+	}
+	jwk, err := signer.PublicJWK()
+	if err != nil {
+		return ErrProofSigner
+	}
+	publicKey, err := jwk.publicKey()
+	if err != nil {
+		return ErrProofSigner
+	}
+	if !jwk.equalThumbprint(record.proofJWKThumbprint) {
+		return ErrProofKeyMissing
+	}
+
+	proof, err := createProof(request.Context(), record, signer, jwk, publicKey, request.Method, target, now, a.newJTI)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "DPoP "+record.sessionToken)
+	request.Header.Set("DPoP", proof)
+	return nil
+}
+
+func validateAuthorizationRequest(request *http.Request) (string, error) {
+	if request == nil || request.URL == nil || !validProofMethod(request.Method) || request.RequestURI != "" || request.URL.Scheme != "https" || request.URL.Host == "" || request.URL.User != nil || request.URL.Opaque != "" || request.URL.OmitHost || request.URL.RawPath != "" || request.URL.Fragment != "" || request.URL.RawFragment != "" || len(request.Header.Values("Authorization")) != 0 || len(request.Header.Values("DPoP")) != 0 || len(request.Header.Values("Cookie")) != 0 {
+		return "", ErrInvalidCredential
+	}
+	full := request.URL.String()
+	parsedFull, err := url.Parse(full)
+	if err != nil || parsedFull.String() != full || parsedFull.Scheme != "https" || parsedFull.Host == "" || parsedFull.User != nil || parsedFull.Opaque != "" || parsedFull.Fragment != "" {
+		return "", ErrInvalidCredential
 	}
 	target := *request.URL
 	target.RawQuery = ""
 	target.ForceQuery = false
-	target.Fragment = ""
-	proof, err := createProof(credentials, request.Method, target.String(), now, a.newJTI)
-	if err != nil {
-		return err
+	value := target.String()
+	parsedTarget, err := url.Parse(value)
+	if err != nil || parsedTarget.String() != value || parsedTarget.Scheme != "https" || parsedTarget.Host == "" || parsedTarget.User != nil || parsedTarget.Opaque != "" || parsedTarget.RawQuery != "" || parsedTarget.Fragment != "" {
+		return "", ErrInvalidCredential
 	}
-	request.Header.Set("Authorization", "DPoP "+credentials.sessionToken)
-	request.Header.Set("DPoP", proof)
-	return nil
+	return value, nil
+}
+
+func validProofMethod(method string) bool {
+	if len(method) < 1 || len(method) > 16 {
+		return false
+	}
+	for index := 0; index < len(method); index++ {
+		if method[index] < 'A' || method[index] > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+type proofHeader struct {
+	Algorithm string         `json:"alg"`
+	JWK       proofHeaderJWK `json:"jwk"`
+	Type      string         `json:"typ"`
+}
+
+type proofHeaderJWK struct {
+	Curve   string `json:"crv"`
+	KeyType string `json:"kty"`
+	X       string `json:"x"`
+	Y       string `json:"y"`
 }
 
 type proofClaims struct {
@@ -67,30 +136,46 @@ type proofClaims struct {
 	JTI string `json:"jti"`
 }
 
-func createProof(credentials *SessionCredentials, method, target string, now time.Time, newJTI identifierSource) (string, error) {
+func createProof(ctx context.Context, record *SessionRecord, signer ProofSigner, jwk PublicP256JWK, publicKey *ecdsa.PublicKey, method, target string, now time.Time, newJTI identifierSource) (string, error) {
 	jti, err := newJTI()
 	if err != nil || jti.Version() != 7 {
 		return "", ErrInvalidCredential
 	}
-	digest := sha256.Sum256([]byte(credentials.sessionToken))
-	claims, err := json.Marshal(proofClaims{ATH: base64.RawURLEncoding.EncodeToString(digest[:]), HTM: method, HTU: target, IAT: now.Unix(), JTI: jti.String()})
+	tokenDigest := sha256.Sum256([]byte(record.sessionToken))
+	header, err := json.Marshal(proofHeader{Algorithm: "ES256", JWK: proofHeaderJWK{Curve: "P-256", KeyType: "EC", X: base64.RawURLEncoding.EncodeToString(jwk.x[:]), Y: base64.RawURLEncoding.EncodeToString(jwk.y[:])}, Type: "dpop+jwt"})
 	if err != nil {
 		return "", ErrInvalidCredential
 	}
-	options := (&jose.SignerOptions{}).WithType("dpop+jwt").WithHeader("jwk", jose.JSONWebKey{Key: &credentials.privateKey.PublicKey})
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.ES256, Key: credentials.privateKey}, options)
+	claims, err := json.Marshal(proofClaims{ATH: base64.RawURLEncoding.EncodeToString(tokenDigest[:]), HTM: method, HTU: target, IAT: now.Unix(), JTI: jti.String()})
 	if err != nil {
 		return "", ErrInvalidCredential
 	}
-	object, err := signer.Sign(claims)
-	if err != nil {
+	signingInput := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
+	if len(signingInput) > maxSigningInputBytes {
 		return "", ErrInvalidCredential
 	}
-	proof, err := object.CompactSerialize()
-	if err != nil || len(proof) > 16_384 {
+	signature, err := signer.SignES256(ctx, []byte(signingInput))
+	if err != nil {
+		return "", ErrProofSigner
+	}
+	if ctx.Err() != nil {
+		return "", ErrProofSigner
+	}
+	if !validSignature(publicKey, []byte(signingInput), signature) {
+		return "", ErrProofSigner
+	}
+	proof := signingInput + "." + base64.RawURLEncoding.EncodeToString(signature[:])
+	if len(proof) > 16_384 {
 		return "", ErrInvalidCredential
 	}
 	return proof, nil
+}
+
+func sanitizeSignerError(err error) error {
+	if errors.Is(err, ErrProofKeyMissing) {
+		return ErrProofKeyMissing
+	}
+	return ErrProofSigner
 }
 
 var _ interface{ Authorize(*http.Request) error } = (*Authorizer)(nil)
