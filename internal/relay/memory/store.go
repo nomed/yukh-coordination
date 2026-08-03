@@ -54,7 +54,7 @@ func (s *Store) CreateChannel(ctx context.Context, channel relay.Channel) error 
 		return relay.ErrChannelConflict
 	}
 	if existing, ok := s.transcripts[channel.Key]; ok {
-		if existing.channel == channel {
+		if relay.SameChannel(existing.channel, channel) {
 			return nil
 		}
 		return relay.ErrChannelConflict
@@ -63,8 +63,24 @@ func (s *Store) CreateChannel(ctx context.Context, channel relay.Channel) error 
 	if s.events[identity] == nil {
 		s.events[identity] = make(map[string]relay.AcceptedRecord)
 	}
-	s.transcripts[channel.Key] = &transcript{channel: channel}
+	s.transcripts[channel.Key] = &transcript{channel: relay.CloneChannel(channel)}
 	return nil
+}
+
+func (s *Store) LookupChannel(ctx context.Context, key relay.ChannelKey) (relay.Channel, error) {
+	if err := ctx.Err(); err != nil {
+		return relay.Channel{}, err
+	}
+	if key.TenantID == "" || key.ChannelID == "" || key.TranscriptEpoch == "" {
+		return relay.Channel{}, relay.ErrInvalidArgument
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	transcript, ok := s.transcripts[key]
+	if !ok {
+		return relay.Channel{}, relay.ErrChannelNotFound
+	}
+	return relay.CloneChannel(transcript.channel), nil
 }
 
 func (s *Store) Append(ctx context.Context, intent relay.AppendIntent, prepare relay.PrepareRecord) (relay.AppendResult, error) {

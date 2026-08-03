@@ -31,8 +31,11 @@ type ChannelKey struct {
 
 // Channel is the immutable relay metadata for one transcript epoch.
 type Channel struct {
-	Key ChannelKey
-	URI string
+	Key               ChannelKey
+	URI               string
+	CanonicalMetadata []byte
+	MetadataDigest    string
+	Lifecycle         string
 }
 
 // AppendIntent is the stable client material used for idempotency.
@@ -88,6 +91,7 @@ type AppendResult struct {
 // Store is the transport-neutral append and replay persistence port.
 type Store interface {
 	CreateChannel(context.Context, Channel) error
+	LookupChannel(context.Context, ChannelKey) (Channel, error)
 	Lookup(context.Context, ChannelKey, string) (AcceptedRecord, error)
 	Append(context.Context, AppendIntent, PrepareRecord) (AppendResult, error)
 	AttachSignature(context.Context, SignatureAttachment) (AcceptedRecord, error)
@@ -101,10 +105,22 @@ func SameEvent(left, right AppendIntent) bool {
 
 // ValidateChannel enforces the adapter-independent channel contract.
 func ValidateChannel(channel Channel) error {
-	if channel.Key.TenantID == "" || channel.Key.ChannelID == "" || channel.Key.TranscriptEpoch == "" || channel.URI == "" {
+	if channel.Key.TenantID == "" || channel.Key.ChannelID == "" || channel.Key.TranscriptEpoch == "" || channel.URI == "" || len(channel.CanonicalMetadata) == 0 || channel.MetadataDigest == "" || channel.Lifecycle != "active" {
 		return ErrInvalidArgument
 	}
 	return nil
+}
+
+// CloneChannel returns an immutable copy of channel metadata.
+func CloneChannel(channel Channel) Channel {
+	channel.CanonicalMetadata = bytes.Clone(channel.CanonicalMetadata)
+	return channel
+}
+
+// SameChannel reports whether the complete immutable transcript identity is
+// byte-identical.
+func SameChannel(left, right Channel) bool {
+	return left.Key == right.Key && left.URI == right.URI && left.MetadataDigest == right.MetadataDigest && left.Lifecycle == right.Lifecycle && bytes.Equal(left.CanonicalMetadata, right.CanonicalMetadata)
 }
 
 // ValidateAppendIntent enforces the adapter-independent append input contract.
@@ -130,7 +146,7 @@ func ValidateIntent(intent AppendIntent) error {
 // EventDigest returns the frozen digest representation for canonical bytes.
 func EventDigest(canonicalEvent []byte) string {
 	digest := sha256.Sum256(canonicalEvent)
-	return "sha256:" + hex.EncodeToString(digest[:])
+	return "sha-256:" + hex.EncodeToString(digest[:])
 }
 
 // ValidatePreparedRecord ensures record preparation cannot change the intent
