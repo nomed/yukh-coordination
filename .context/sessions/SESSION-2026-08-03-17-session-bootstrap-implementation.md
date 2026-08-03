@@ -3,6 +3,7 @@
 - Date: 2026-08-03
 - Governing issue: #5
 - Governing decision: RFC-0009
+- Pull request: #32
 - Branch: `agent/session-bootstrap-implementation`
 
 ## Outcome
