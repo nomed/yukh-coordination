@@ -4,7 +4,7 @@
 - Governing issue: #6
 - Last delivery pull request: #53
 - Active increment: RFC-0014 client credential custody and proof signing
-  proposed, not accepted
+  proposed in PR #56, not accepted
 - Runtime decisions: RFC-0003 through RFC-0013 Accepted; RFC-0014 Proposed
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, and its DPoP credential foundation in
