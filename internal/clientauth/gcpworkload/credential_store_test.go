@@ -44,8 +44,20 @@ func (a deterministicAEAD) Decrypt(_ context.Context, version KeyVersion, cipher
 type memoryObjectStore struct {
 	body            []byte
 	generation      uint64
+	verifyErr       error
 	ambiguousSave   bool
 	ambiguousDelete bool
+	deleteScript    []error
+}
+
+type wrongBindingStore struct{ *memoryObjectStore }
+
+func (wrongBindingStore) Binding() (string, string, bool) {
+	return "other-custody", "profiles/opaque", true
+}
+
+func (*memoryObjectStore) Binding() (string, string, bool) {
+	return "yukh-custody", "profiles/opaque", true
 }
 
 func (s *memoryObjectStore) Load(context.Context) (StoredObject, error) {
@@ -57,6 +69,9 @@ func (s *memoryObjectStore) Load(context.Context) (StoredObject, error) {
 }
 
 func (s *memoryObjectStore) LoadGeneration(ctx context.Context, expected Generation) (StoredObject, error) {
+	if s.verifyErr != nil {
+		return StoredObject{}, s.verifyErr
+	}
 	loaded, err := s.Load(ctx)
 	if err != nil {
 		return StoredObject{}, err
@@ -89,6 +104,11 @@ func (s *memoryObjectStore) Delete(_ context.Context, expected Generation) error
 	value, valid := expected.ProviderValue()
 	if !valid || expected.IsAbsent() || len(s.body) == 0 || value != s.generation {
 		return ErrConflict
+	}
+	if len(s.deleteScript) != 0 {
+		result := s.deleteScript[0]
+		s.deleteScript = s.deleteScript[1:]
+		return result
 	}
 	s.body = nil
 	if s.ambiguousDelete {
@@ -159,6 +179,33 @@ func TestCredentialStoreRejectsWrongProfileAndSigner(t *testing.T) {
 	}
 	if _, err := store.Save(context.Background(), "server", clientauth.AbsentRevision(), badRecord); !errors.Is(err, clientauth.ErrInvalidCredential) {
 		t.Fatalf("wrong signer error = %v", err)
+	}
+}
+
+func TestCredentialStoreRejectsObjectAADBindingMismatch(t *testing.T) {
+	store, object, _ := credentialFixture(t)
+	if _, err := NewCredentialStore(store.profile, wrongBindingStore{object}, store.aead, store.aad, &fixedOperationIDs{}); !errors.Is(err, ErrInvalidContract) {
+		t.Fatalf("binding mismatch error = %v", err)
+	}
+}
+
+func TestCredentialStoreClassifiesVerificationRaceAsConflict(t *testing.T) {
+	store, object, record := credentialFixture(t)
+	object.verifyErr = ErrConflict
+	if _, err := store.Save(context.Background(), "server", clientauth.AbsentRevision(), record); !errors.Is(err, clientauth.ErrCredentialConflict) {
+		t.Fatalf("verification race error = %v", err)
+	}
+}
+
+func TestCredentialStoreAcceptsAbsentOnControlledDeleteRetry(t *testing.T) {
+	store, object, record := credentialFixture(t)
+	revision, err := store.Save(context.Background(), "server", clientauth.AbsentRevision(), record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object.deleteScript = []error{ErrAmbiguous, ErrAbsent}
+	if err := store.Delete(context.Background(), "server", revision); err != nil {
+		t.Fatalf("controlled delete retry: %v", err)
 	}
 }
 

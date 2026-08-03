@@ -64,6 +64,18 @@ func newCloudObjectStore(backend objectBackend, timeout time.Duration) (*CloudOb
 	return &CloudObjectStore{backend: backend, timeout: timeout}, nil
 }
 
+// Binding returns the exact provider object identity authenticated by the AAD.
+func (s *CloudObjectStore) Binding() (string, string, bool) {
+	if s == nil {
+		return "", "", false
+	}
+	backend, ok := s.backend.(*sdkObjectBackend)
+	if !ok || !validBucket(backend.bucket) || !validObject(backend.object) {
+		return "", "", false
+	}
+	return backend.bucket, backend.object, true
+}
+
 func (s *CloudObjectStore) Load(ctx context.Context) (StoredObject, error) {
 	if s == nil || s.backend == nil {
 		return StoredObject{}, ErrInvalidContract

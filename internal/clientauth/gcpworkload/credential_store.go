@@ -50,13 +50,18 @@ type CredentialStore struct {
 // before a successful credential mutation may be reported.
 type CredentialObjectStore interface {
 	ObjectStore
+	Binding() (bucket, object string, valid bool)
 	LoadGeneration(context.Context, Generation) (StoredObject, error)
 }
 
 func NewCredentialStore(profile string, object CredentialObjectStore, aead RawAEAD, aad AssociatedData, operations OperationIDSource) (*CredentialStore, error) {
 	canonical, err := aad.Canonical()
 	digest := sha256.Sum256([]byte(profileDigestDomain + profile))
-	if !validProfileName(profile) || object == nil || aead == nil || operations == nil || err != nil || subtle.ConstantTimeCompare(digest[:], aad.profileDigest[:]) != 1 {
+	bucket, objectName, bindingValid := "", "", false
+	if object != nil {
+		bucket, objectName, bindingValid = object.Binding()
+	}
+	if !validProfileName(profile) || object == nil || aead == nil || operations == nil || err != nil || !bindingValid || bucket != aad.bucket || objectName != aad.object || subtle.ConstantTimeCompare(digest[:], aad.profileDigest[:]) != 1 {
 		return nil, ErrInvalidContract
 	}
 	return &CredentialStore{profile: profile, object: object, aead: aead, aad: aad, aadCanonical: canonical, operations: operations}, nil
@@ -129,6 +134,9 @@ func (s *CredentialStore) Save(ctx context.Context, profile string, expected cli
 		verified, verifyErr = s.object.Load(ctx)
 	}
 	if verifyErr != nil {
+		if saveErr == nil && (errors.Is(verifyErr, ErrConflict) || errors.Is(verifyErr, ErrAbsent)) {
+			return clientauth.Revision{}, clientauth.ErrCredentialConflict
+		}
 		return clientauth.Revision{}, clientauth.ErrCredentialStore
 	}
 	observedID, observedRecord, openErr := s.open(ctx, verified)
@@ -170,6 +178,9 @@ func (s *CredentialStore) Delete(ctx context.Context, profile string, expected c
 		return clientauth.ErrCredentialConflict
 	}
 	if retryErr := s.object.Delete(ctx, generation); retryErr != nil {
+		if errors.Is(retryErr, ErrAbsent) {
+			return nil
+		}
 		return publicStoreError(retryErr)
 	}
 	return nil
