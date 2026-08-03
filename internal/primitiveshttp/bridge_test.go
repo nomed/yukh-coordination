@@ -3,6 +3,10 @@ package primitiveshttp
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +21,44 @@ type fixture struct {
 	calls    []string
 	key      primitives.SealingKey
 	opens    int
+}
+
+func TestHandlerAdmitsCanonicalBoundedAcquire(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	store, _ := memory.New(time.Minute, 1, func() time.Time { return now })
+	identity, _ := primitivesauth.NewIdentity("tenant-a", "principal-a")
+	key, _ := primitives.NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
+	fixture := &fixture{identity: identity, key: key}
+	sealer, _ := primitives.NewAEADSealer(fixture, bytes.NewReader(bytes.Repeat([]byte{2}, 256)))
+	service, _ := primitives.NewService(store, store, sealer, fixture, 1)
+	pipeline, _ := primitivesauth.NewPipeline(fixture, fixture, fixture)
+	bridge, _ := NewBridge(pipeline, service)
+	handler, err := NewHandler(bridge, "https://coordination.invalid", 1, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{"epoch":1,"expires_at":"2026-08-03T12:00:30.000Z","holder_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","scope_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`
+	request := httptest.NewRequest(http.MethodPost, "https://coordination.invalid/coordination-primitives/v1/leases:acquire", strings.NewReader(body))
+	request.TLS = &tls.ConnectionState{}
+	request.Header.Set("Content-Type", MediaType)
+	request.Header.Set("Authorization", "DPoP credential")
+	request.Header.Set("DPoP", "a.b.c")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"outcome":"acquired"`) {
+		t.Fatalf("response: %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "https://coordination.invalid/coordination-primitives/v1/leases:acquire", strings.NewReader(" "+body))
+	request.TLS = &tls.ConnectionState{}
+	request.Header.Set("Content-Type", MediaType)
+	request.Header.Set("Authorization", "DPoP credential")
+	request.Header.Set("DPoP", "a.b.c")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("non-canonical response: %d", recorder.Code)
+	}
 }
 
 func (value *fixture) Authenticate(context.Context, primitivesauth.RequestAuthentication) (primitivesauth.Identity, error) {
