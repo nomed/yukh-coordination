@@ -1,16 +1,12 @@
-// Package clientauth provides the RFC-0013 client-side credential and DPoP
-// boundary. It deliberately contains no persistent storage implementation.
+// Package clientauth provides the RFC-0014 provider-neutral client custody,
+// proof-signing and external-token boundaries. It contains no concrete adapter.
 package clientauth
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,119 +15,200 @@ import (
 const (
 	credentialSpecVersion = "0.1"
 	maxSafeInteger        = uint64(9_007_199_254_740_991)
+	maxReferenceBytes     = 1024
+	maxRevisionBytes      = 512
 )
 
 var (
-	ErrInvalidCredential = errors.New("client authentication: invalid credential")
-	ErrCredentialStore   = errors.New("client authentication: credential store unavailable")
-	ErrCredentialMissing = errors.New("client authentication: credential missing")
+	ErrInvalidCredential  = errors.New("client authentication: invalid credential")
+	ErrCredentialStore    = errors.New("client authentication: credential store unavailable")
+	ErrCredentialMissing  = errors.New("client authentication: credential missing")
+	ErrCredentialConflict = errors.New("client authentication: credential revision conflict")
+	ErrProofSigner        = errors.New("client authentication: proof signer unavailable")
+	ErrProofKeyMissing    = errors.New("client authentication: proof key missing")
+	ErrExternalToken      = errors.New("client authentication: external token unavailable")
 )
 
-// CredentialStore is the mandatory custody boundary. Implementations must use
-// an explicitly selected operating-system credential store and must never fall
-// back to plaintext files. Tests supply an in-memory fake.
+// CredentialStore owns recoverable relay-session custody. Save and Delete are
+// exact-revision compare-and-set operations; implementations without CAS do not
+// satisfy this port.
 type CredentialStore interface {
-	Load(context.Context, string) (*SessionCredentials, error)
-	Save(context.Context, string, *SessionCredentials) error
-	Delete(context.Context, string) error
+	Load(context.Context, string) (StoredSession, error)
+	Save(context.Context, string, Revision, *SessionRecord) (Revision, error)
+	Delete(context.Context, string, Revision) error
 }
 
-// SessionCredentials is one immutable proof-bound relay session. Secret fields
-// are intentionally inaccessible outside this package.
-type SessionCredentials struct {
+// SessionRecord is an immutable proof-bound relay session. It contains no
+// private key. Credential is an explicit custody-boundary accessor; callers
+// must not retain, format or copy its result beyond one adapter operation.
+type SessionRecord struct {
 	specVersion           string
 	participantInstanceID string
 	sessionEpoch          uint64
 	sessionToken          string
+	issuedAt              time.Time
 	expiresAt             time.Time
-	privateKey            *ecdsa.PrivateKey
+	proofKeyReference     string
+	proofJWKThumbprint    [32]byte
 }
 
-func GenerateKey() (*ecdsa.PrivateKey, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, ErrInvalidCredential
-	}
-	return key, nil
-}
-
-func NewSessionCredentials(participantInstanceID string, sessionEpoch uint64, sessionToken string, expiresAt time.Time, privateKey *ecdsa.PrivateKey) (*SessionCredentials, error) {
+func NewSessionRecord(participantInstanceID string, sessionEpoch uint64, sessionToken string, issuedAt, expiresAt time.Time, proofKeyReference string, proofJWKThumbprint [32]byte) (*SessionRecord, error) {
 	participant, participantErr := uuid.Parse(participantInstanceID)
 	decodedToken, tokenErr := base64.RawURLEncoding.Strict().DecodeString(sessionToken)
-	if participantErr != nil || participant.Version() != 7 || participant.String() != participantInstanceID || sessionEpoch == 0 || sessionEpoch > maxSafeInteger || tokenErr != nil || len(sessionToken) != 43 || len(decodedToken) != 32 || expiresAt.Location() != time.UTC || !expiresAt.Equal(expiresAt.Truncate(time.Millisecond)) || !validPrivateKey(privateKey) {
+	if participantErr != nil || participant.Version() != 7 || participant.String() != participantInstanceID || sessionEpoch == 0 || sessionEpoch > maxSafeInteger || tokenErr != nil || len(sessionToken) != 43 || len(decodedToken) != 32 || !validUTCmillisecond(issuedAt) || !validUTCmillisecond(expiresAt) || !expiresAt.After(issuedAt) || expiresAt.Sub(issuedAt) > 15*time.Minute || !validOpaque(proofKeyReference, maxReferenceBytes) || zeroThumbprint(proofJWKThumbprint) {
 		return nil, ErrInvalidCredential
 	}
-	return &SessionCredentials{
+	return &SessionRecord{
 		specVersion:           credentialSpecVersion,
 		participantInstanceID: participantInstanceID,
 		sessionEpoch:          sessionEpoch,
 		sessionToken:          sessionToken,
+		issuedAt:              issuedAt,
 		expiresAt:             expiresAt,
-		privateKey:            clonePrivateKey(privateKey),
+		proofKeyReference:     proofKeyReference,
+		proofJWKThumbprint:    proofJWKThumbprint,
 	}, nil
 }
 
-func (c *SessionCredentials) SpecVersion() string {
-	if c == nil {
+func (r *SessionRecord) SpecVersion() string {
+	if r == nil {
 		return ""
 	}
-	return c.specVersion
+	return r.specVersion
 }
-func (c *SessionCredentials) ParticipantInstanceID() string {
-	if c == nil {
+func (r *SessionRecord) ParticipantInstanceID() string {
+	if r == nil {
 		return ""
 	}
-	return c.participantInstanceID
+	return r.participantInstanceID
 }
-func (c *SessionCredentials) SessionEpoch() uint64 {
-	if c == nil {
+func (r *SessionRecord) SessionEpoch() uint64 {
+	if r == nil {
 		return 0
 	}
-	return c.sessionEpoch
+	return r.sessionEpoch
 }
-func (c *SessionCredentials) ExpiresAt() time.Time {
-	if c == nil {
+func (r *SessionRecord) IssuedAt() time.Time {
+	if r == nil {
 		return time.Time{}
 	}
-	return c.expiresAt
+	return r.issuedAt
 }
-func (*SessionCredentials) String() string   { return "SessionCredentials{REDACTED}" }
-func (*SessionCredentials) GoString() string { return "SessionCredentials{REDACTED}" }
+func (r *SessionRecord) ExpiresAt() time.Time {
+	if r == nil {
+		return time.Time{}
+	}
+	return r.expiresAt
+}
+func (r *SessionRecord) Credential() string {
+	if r == nil {
+		return ""
+	}
+	return r.sessionToken
+}
+func (r *SessionRecord) ProofKeyReference() string {
+	if r == nil {
+		return ""
+	}
+	return r.proofKeyReference
+}
+func (r *SessionRecord) ProofJWKThumbprint() [32]byte {
+	if r == nil {
+		return [32]byte{}
+	}
+	return r.proofJWKThumbprint
+}
+func (*SessionRecord) String() string   { return "SessionRecord{REDACTED}" }
+func (*SessionRecord) GoString() string { return "SessionRecord{REDACTED}" }
 
-func (c *SessionCredentials) clone() (*SessionCredentials, error) {
-	if !validCredentials(c) {
+func (r *SessionRecord) clone() (*SessionRecord, error) {
+	if !validSessionRecord(r) {
 		return nil, ErrInvalidCredential
 	}
-	return &SessionCredentials{c.specVersion, c.participantInstanceID, c.sessionEpoch, c.sessionToken, c.expiresAt, clonePrivateKey(c.privateKey)}, nil
+	copy := *r
+	return &copy, nil
 }
 
-func validCredentials(c *SessionCredentials) bool {
-	if c == nil {
+func validSessionRecord(r *SessionRecord) bool {
+	if r == nil {
 		return false
 	}
-	validated, err := NewSessionCredentials(c.participantInstanceID, c.sessionEpoch, c.sessionToken, c.expiresAt, c.privateKey)
-	return err == nil && c.specVersion == validated.specVersion
+	validated, err := NewSessionRecord(r.participantInstanceID, r.sessionEpoch, r.sessionToken, r.issuedAt, r.expiresAt, r.proofKeyReference, r.proofJWKThumbprint)
+	return err == nil && r.specVersion == validated.specVersion
 }
 
-func validPrivateKey(key *ecdsa.PrivateKey) bool {
-	if key == nil || key.Curve != elliptic.P256() || key.D == nil || key.D.Sign() <= 0 || key.D.Cmp(key.Params().N) >= 0 || key.X == nil || key.Y == nil || !key.Curve.IsOnCurve(key.X, key.Y) {
-		return false
+// Revision is an opaque credential-store CAS revision. Its value is deliberately
+// absent from formatting and output.
+type Revision struct {
+	value  string
+	absent bool
+}
+
+func AbsentRevision() Revision { return Revision{absent: true} }
+
+func NewRevision(value string) (Revision, error) {
+	if !validOpaque(value, maxRevisionBytes) {
+		return Revision{}, ErrInvalidCredential
 	}
-	x, y := key.Curve.ScalarBaseMult(key.D.Bytes())
-	return x.Cmp(key.X) == 0 && y.Cmp(key.Y) == 0
+	return Revision{value: value}, nil
 }
 
-func clonePrivateKey(key *ecdsa.PrivateKey) *ecdsa.PrivateKey {
-	d := new(big.Int).Set(key.D)
-	x, y := elliptic.P256().ScalarBaseMult(d.Bytes())
-	return &ecdsa.PrivateKey{PublicKey: ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, D: d}
-}
+func (r Revision) valid() bool    { return r.absent != (r.value != "") }
+func (Revision) String() string   { return "Revision{REDACTED}" }
+func (Revision) GoString() string { return "Revision{REDACTED}" }
 
-func sanitizeStoreError(err error) error {
-	if errors.Is(err, ErrCredentialMissing) {
-		return ErrCredentialMissing
+// ProviderValue is restricted to a credential-store adapter's CAS call. The
+// boolean is false for the explicit absent revision.
+func (r Revision) ProviderValue() (string, bool) {
+	if !r.valid() || r.absent {
+		return "", false
 	}
-	return ErrCredentialStore
+	return r.value, true
+}
+
+// StoredSession couples one validated record to the exact store revision that
+// must be used for its next mutation.
+type StoredSession struct {
+	record   *SessionRecord
+	revision Revision
+}
+
+func NewStoredSession(record *SessionRecord, revision Revision) (StoredSession, error) {
+	copy, err := record.clone()
+	if err != nil || !revision.valid() || revision.absent {
+		return StoredSession{}, ErrInvalidCredential
+	}
+	return StoredSession{record: copy, revision: revision}, nil
+}
+
+func (s StoredSession) Record() (*SessionRecord, error) { return s.record.clone() }
+func (s StoredSession) Revision() Revision              { return s.revision }
+func (StoredSession) String() string                    { return "StoredSession{REDACTED}" }
+func (StoredSession) GoString() string                  { return "StoredSession{REDACTED}" }
+
+func validUTCmillisecond(value time.Time) bool {
+	return !value.IsZero() && value.Location() == time.UTC && value.Equal(value.Truncate(time.Millisecond))
+}
+
+func validOpaque(value string, maximum int) bool {
+	return value != "" && len(value) <= maximum && asciiVisible(value)
+}
+
+func asciiVisible(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] < 0x21 || value[index] > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func zeroThumbprint(value [32]byte) bool {
+	var combined byte
+	for _, item := range value {
+		combined |= item
+	}
+	return combined == 0
 }
 
 func validateProfile(profile string) error {
@@ -146,4 +223,15 @@ func validateProfile(profile string) error {
 	return nil
 }
 
-var _ fmt.Stringer = (*SessionCredentials)(nil)
+func sanitizeStoreError(err error) error {
+	switch {
+	case errors.Is(err, ErrCredentialMissing):
+		return ErrCredentialMissing
+	case errors.Is(err, ErrCredentialConflict):
+		return ErrCredentialConflict
+	default:
+		return ErrCredentialStore
+	}
+}
+
+var _ fmt.Stringer = (*SessionRecord)(nil)
