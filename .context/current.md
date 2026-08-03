@@ -2,11 +2,11 @@
 
 - Updated: 2026-08-03
 - Governing implementation issue: #5
-- Last merged pull request: #31
-- Active pull request: #32 for the session bootstrap implementation
+- Last merged pull request: #32
+- Active branch: `agent/identity-dpop-provider-rfc`
 - Runtime decisions: RFC-0003 through RFC-0009 Accepted
-- Current increment: accepted session bootstrap contract implementation
-- Next decision gate: identity and DPoP provider design
+- Current increment: RFC-0010 identity and DPoP provider contract review
+- Next qualified increment: strict JOSE verifier after owner acceptance
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
