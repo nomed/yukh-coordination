@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-10: JetStream adapter bootstrap
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #25
 - Status: Active
 
 ## Objective
