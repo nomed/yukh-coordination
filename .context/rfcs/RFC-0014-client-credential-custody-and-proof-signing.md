@@ -188,8 +188,13 @@ cannot turn failure into success.
 
 The first client profile has no public session-revocation endpoint, so the CLI
 must not claim immediate remote revocation after a local delete. `session leave`
-removes local access, requests signer cleanup where supported and reports only
-what it can prove. Adding relay revocation requires a separate HTTP contract.
+removes only the exact current session record through revision-checked CAS and
+reports only what it can prove. It never retires the participant-profile signer.
+Signer rotation or retirement is a separate, explicit profile-lifecycle
+operation and is not part of the v1 command surface. Only a newly provisioned
+signer belonging to a bootstrap attempt that failed before creating a relay
+session is eligible for automatic bounded retirement. Adding relay revocation
+requires a separate HTTP contract.
 
 ## Root identity and remote-backend authentication
 
@@ -334,6 +339,8 @@ The neutral refactor must prove with deterministic fakes:
 - bootstrap partial failures never report a usable session;
 - cleanup ambiguity cannot retire a pre-existing signer or create key
   substitution or credential fallback;
+- `session leave` deletes only the exact session revision and never retires the
+  participant-profile signer;
 - sequential session renewal may retain the exact profile key, while concurrent
   profile sharing and implicit rotation are rejected;
 - two profiles cannot be tried for one operation;
