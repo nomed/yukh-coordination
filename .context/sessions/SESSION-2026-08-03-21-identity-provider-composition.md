@@ -3,6 +3,7 @@
 - Date: 2026-08-03
 - Governing issue: #5
 - Accepted decisions: RFC-0009 and RFC-0010
+- Pull request: #36
 - Branch: `agent/identity-provider-composition`
 
 ## Outcome

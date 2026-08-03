@@ -3,7 +3,7 @@
 - Updated: 2026-08-03
 - Governing implementation issue: #5
 - Last merged pull request: #35
-- Active branch: `agent/identity-provider-composition`
+- Active pull request: #36 for identity provider and mandatory audit composition
 - Runtime decisions: RFC-0003 through RFC-0010 Accepted
 - Current increment: RFC-0009 identity provider and mandatory audit port
 - Next qualified increment: durable security-audit store and checkpoint
