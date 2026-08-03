@@ -2,7 +2,7 @@
 
 - Date: 2026-08-03
 - Governing issue: #6
-- Pull request: pending
+- Pull request: #52
 - Accepted decision: RFC-0013
 - Scope: first read-only implementation increment
 
