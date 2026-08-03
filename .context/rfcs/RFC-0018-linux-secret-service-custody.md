@@ -32,7 +32,8 @@ The adapter is constructed from one closed, non-secret configuration:
 
 - an opaque profile identifier generated independently of user, repository,
   tenant and project names;
-- the exact D-Bus service name, collection object path and root-item schema;
+- an already-established caller-owned D-Bus connection, the exact service
+  name, collection object path and root-item schema;
 - an absolute SQLite path beneath a caller-owned private directory;
 - fixed operation, prompt and shutdown policy values selected by this RFC.
 
@@ -40,6 +41,13 @@ It connects only to the caller's D-Bus session bus and the configured Secret
 Service. It never discovers a desktop service, changes collection aliases,
 tries a second collection, reads provider environment variables or falls back
 to files, plaintext, another keyring or an in-memory profile.
+
+The adapter never resolves a bus address. Runtime composition must establish
+and authenticate the exact session-bus connection and pass that live
+connection into the constructor. In particular the adapter does not read
+`DBUS_SESSION_BUS_ADDRESS`, inspect well-known runtime directories or open a
+default bus. Connection acquisition and executable configuration remain a
+separate gate.
 
 The composition implements `CredentialStore` and `ProofSignerStore`. It does
 not implement `ExternalTokenSource`. A future bootstrap composition must bind
@@ -92,8 +100,8 @@ second root item.
 
 ## Secret transfer and prompt policy
 
-The Secret Service session is bound to the adapter's D-Bus connection and is
-closed on completion. The implementation must use one transfer algorithm
+The Secret Service session is bound to the caller-provided D-Bus connection and
+is closed on completion. The implementation must use one transfer algorithm
 selected and qualified for the exact service implementation. It cannot retry
 with `plain` after negotiation failure. Transfer encryption is defense in
 depth; the Secret Service specification does not make it an authenticated
@@ -118,8 +126,16 @@ tables:
 
 The root key is expanded with HKDF-SHA-256 into independent 256-bit AEAD keys
 for session and signer domains. The salt binds the database schema and opaque
-profile identifier; the info value binds the exact object domain. AES-256-GCM
-uses a fresh cryptographically random 96-bit nonce for every encryption.
+profile identifier; the info value binds the exact object domain.
+XChaCha20-Poly1305 uses a fresh cryptographically random 192-bit nonce for every
+encryption. AES-GCM and nonce-size negotiation are not part of this profile.
+
+The database metadata counts every successfully committed encryption under the
+root key. Increment and ciphertext commit occur in the same transaction. The
+profile permits at most 2^32 committed encryptions under one root key and then
+fails closed before encryption. V1 has no automatic root rotation or counter
+reset; reaching the limit requires a separately designed migration. The count
+is a conservative operational bound, not the source of nonce uniqueness.
 
 Canonical associated data binds at least:
 
@@ -203,6 +219,14 @@ no network filesystem support and durability settings fixed by the
 implementation qualification. The adapter accepts no caller-supplied SQL,
 pragma, DSN query or extension.
 
+Restoring or replacing the database with an older valid encrypted copy is a
+rollback that this local profile cannot detect: Secret Service supplies custody
+but no monotonic compare-and-set anchor. Database backup, restore, copying and
+rollback recovery are therefore unsupported in v1. A restored session may be
+rejected by the relay or expire, but the adapter cannot claim that as local
+rollback detection. A future backup profile requires a separately accepted
+anti-rollback authority and migration contract.
+
 Two compliant processes may open the same profile. SQLite transactions and
 exact revisions serialize mutations; stale writers receive conflict. Sharing
 the same profile across hosts is forbidden and unsupported.
@@ -229,7 +253,8 @@ integration evidence prove:
   `Prompt`;
 - absence of provider discovery and plaintext fallback;
 - encrypted SQLite, WAL and shared-memory secret scanning;
-- AEAD domain, nonce, associated-data, revision and key-reference tampering;
+- AEAD domain, nonce, associated-data, revision and key-reference tampering,
+  cross-domain substitution and the 2^32 encryption limit;
 - absent-create, replacement and deletion CAS under concurrent processes;
 - crash and commit ambiguity before, during and after SQLite commit;
 - signer uniqueness, immutable references, local signature verification and
@@ -237,7 +262,9 @@ integration evidence prove:
 - wrong curve, changed key, corrupt PKCS #8 and session/signer substitution;
 - permission, ownership, symlink, full-disk and database-lock failures;
 - bounded redacted errors and absence of secrets in formatting and output;
-- restart recovery without key substitution or implicit profile sharing.
+- restart recovery without key substitution or implicit profile sharing;
+- rejection and explicit reporting of unsupported database restore and
+  rollback scenarios.
 
 Real-service evidence is required for at least GNOME Keyring and KeePassXC
 Secret Service integration on supported Linux versions. Each implementation's
@@ -273,10 +300,16 @@ After implementation qualification, separate decisions are still required for:
   relocking ineffective for subsequent operations.
 - **Raw profile names in Secret Service attributes:** attributes are not secret
   and may disclose adopter structure.
+- **Random-nonce AES-GCM without a lifecycle budget:** its smaller nonce space
+  makes long-lived root-key safety depend on a tighter collision budget; this
+  profile fixes XChaCha20-Poly1305 and still enforces a conservative use limit.
+- **Claiming backup support without an anti-rollback anchor:** authenticated
+  encryption detects modification, not replacement by an older valid snapshot.
 
 ## References
 
 - [Freedesktop Secret Service API](https://specifications.freedesktop.org/secret-service/latest-single/)
 - [RFC 5869: HMAC-based Extract-and-Expand Key Derivation Function](https://www.rfc-editor.org/rfc/rfc5869)
-- [NIST SP 800-38D: Galois/Counter Mode](https://csrc.nist.gov/pubs/sp/800/38/d/final)
+- [XChaCha and XChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha)
+- [RFC 8439: ChaCha20 and Poly1305 for IETF Protocols](https://www.rfc-editor.org/rfc/rfc8439)
 - [PKCS #8 / RFC 5958](https://www.rfc-editor.org/rfc/rfc5958)
