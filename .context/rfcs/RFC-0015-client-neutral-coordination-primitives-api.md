@@ -1,10 +1,16 @@
 # RFC-0015: Client-neutral coordination primitives API
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #55
 - Governing architecture: ADR-0001, RFC-0002, RFC-0009, RFC-0011 and RFC-0012
+
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes the separately reviewed implementation and deterministic
+qualification described here. It does not authorize deployment, a public
+listener, production credentials, protected-operation policy, live apply or a
+release.
 
 ## Decision requested
 
