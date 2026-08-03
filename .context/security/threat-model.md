@@ -257,6 +257,29 @@ Infrastructure provisioning, credential minting, listener exposure, live
 traffic, MCP connection, provider execution, mutation and production use remain
 separately gated.
 
+### RFC-0022 authentication-foundation implementation review — 2026-08-03
+
+Issue #95 implements only the pre-listener security foundation. Configuration
+is closed and bounded, accepts only an explicit HTTPS origin and private or
+loopback literal binds, and validates absolute non-symlink-controlled paths.
+Secret descriptors use a distinct supervisor-only, non-serializable API. The signed canonical
+registration fixes one identity, five actions, token digest, DPoP thumbprint,
+key identifier and a validity interval of at most fifteen minutes.
+
+Request admission verifies strict ES256 DPoP headers and claims, exact POST
+method and target URI, token hash binding, registration expiry and key
+thumbprint before durably reserving `(thumbprint, jti)`. The SQLite replay store
+uses a single-writer `BEGIN IMMEDIATE` transaction, WAL plus full synchronous
+writes, a bounded entry count, durable clock high-water fencing and fail-closed
+readiness. Concurrent and restart tests require exactly one admission for one
+proof. Secret-bearing values expose only redacted string forms and reject JSON
+marshalling.
+
+This evidence does not qualify a network boundary: no listener, route parser,
+TLS runtime, operations endpoint, JetStream adapter, capability key, audit
+composition, deployment or MCP traffic exists in #95. Those controls require a
+separate reviewed increment before any connection can be exercised.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
