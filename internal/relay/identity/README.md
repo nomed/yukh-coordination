@@ -1,8 +1,9 @@
-# Identity verification
+# Identity boundary
 
-This package implements the verification-only increment of accepted RFC-0010.
-It validates the strict external JWT/JWKS profile and RFC 9449 DPoP proofs but
-does not issue or persist a relay session.
+This directory contains the first two isolated increments of accepted
+RFC-0010. The root package owns strict JWT/JWKS and RFC 9449 DPoP verification
+plus the closed identity lifecycle types. The `sqlite` subpackage owns the
+separate durable identity registry.
 
 The boundary is intentionally layered:
 
@@ -15,7 +16,7 @@ The boundary is intentionally layered:
 - DPoP signatures are checked before claims are trusted, and `ath`, public URI,
   method, time and JWK thumbprint are verified explicitly.
 
-The package has no SQLite schema, proof replay state, audit implementation,
-session-token generator, revocation scheduler or process configuration. Those
-remain later RFC-0010 increments. A cryptographically valid proof is therefore
-not yet a complete admitted request.
+The directory still has no audit implementation, session-token generator,
+provider composition, HTTP wiring or process configuration. A cryptographically
+valid proof and a registry transaction are therefore not yet a complete
+admitted request.
