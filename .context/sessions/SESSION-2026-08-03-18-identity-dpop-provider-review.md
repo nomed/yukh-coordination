@@ -3,6 +3,7 @@
 - Date: 2026-08-03
 - Governing issues: #3 and #5
 - Proposed decision: RFC-0010
+- Pull request: #33
 - Branch: `agent/identity-dpop-provider-rfc`
 
 ## Outcome
