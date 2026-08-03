@@ -3,6 +3,7 @@
 - Date: 2026-08-03
 - Governing issue: #5
 - Accepted decision: RFC-0010
+- Pull request: #34
 - Branch: `agent/strict-jose-verifier`
 
 ## Outcome
