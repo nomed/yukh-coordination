@@ -3,7 +3,7 @@
 - Updated: 2026-08-03
 - Governing implementation issue: #5
 - Last merged pull request: #18
-- Active pull request: pending for HTTP/SSE contract review
+- Active pull request: #19
 - Runtime decision: RFC-0003 Accepted
 - Current increment: HTTP/SSE binding contract review
 - Next qualified increment: executable HTTP/SSE application edge after RFC acceptance
