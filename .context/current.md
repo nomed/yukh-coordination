@@ -1,7 +1,7 @@
 # Current context
 
 - Updated: 2026-08-03
-- Governing issue: #90
+- Governing issue: #6
 - Last delivery pull request: #109
 - Active increment: #110 immutable RFC-0022 implementation record and
   redacted deployment plan
