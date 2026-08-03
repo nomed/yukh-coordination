@@ -1,10 +1,16 @@
 # RFC-0020: Google Cloud workload custody profile
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #77
 - Governing architecture: RFC-0014
+
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes only the separately reviewed implementation increments described
+below. It does not provision resources, grant IAM access, introduce
+credentials, select an external-token source, bootstrap a relay session, wire
+commands or authorize deployment.
 
 ## Decision requested
 
