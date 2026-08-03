@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { canonicalize, parseJson } from "../js/lib/canonical-json.mjs";
-import { domainDigest, replay, TranscriptError } from "../js/lib/replay.mjs";
+import { canonicalize, parseJson } from "../lib/canonical-json.mjs";
+import { domainDigest, replay, TranscriptError } from "../lib/replay.mjs";
 
 const CHANNEL = "https://coord.example/channels/project-release";
 const WORK = "https://example.test/issues/42";

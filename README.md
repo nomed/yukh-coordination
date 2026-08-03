@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://nomed.github.io/system/coordination/"><img src="docs/assets/repository-mark.svg" width="96" alt="Yukh Coordination"></a>
+  <a href="https://nomed.github.io/system/coordination/"><img src=".github/assets/repository-mark.svg" width="96" alt="Yukh Coordination"></a>
 </p>
 
 <h1 align="center">Yukh Coordination</h1>
@@ -44,14 +44,16 @@ The MVP succeeds when two real isolated sessions, with at least four agents in t
 7. transfer ownership through an explicit handoff;
 8. release the claim with a replayable transcript.
 
-See [CHARTER.md](CHARTER.md), [PROTOCOL.md](PROTOCOL.md), and [ADR-0001](docs/adr/0001-protocol-not-control-plane.md).
+See [CHARTER.md](CHARTER.md), [PROTOCOL.md](PROTOCOL.md), the
+[context map](.context/README.md), and
+[ADR-0001](.context/decisions/ADR-0001-protocol-not-control-plane.md).
 
 ## Reference relay
 
 The reference relay is being built in Go behind a transport-neutral append
 port. HTTP/SSE is the public edge, SQLite is the first durable single-node
 adapter, and NATS JetStream is the first distributed adapter. See
-[RFC-0003](docs/rfc/0003-reference-relay-runtime.md) for the boundaries and
+[RFC-0003](.context/rfcs/RFC-0003-reference-relay-runtime.md) for the boundaries and
 delivery order.
 
 Run the current relay contract tests with:

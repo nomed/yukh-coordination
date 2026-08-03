@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check repository structure
+        run: .github/scripts/check-repository-structure.sh
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod

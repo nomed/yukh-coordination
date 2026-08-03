@@ -18,8 +18,8 @@ the first distributed relay adapter. Matrix is a later human bridge and is not
 part of the relay's persistence boundary.
 
 This RFC authorizes implementation behind the protocol and security boundaries
-already accepted in [RFC-0001](0001-protocol-v0.1.md) and
-[RFC-0002](0002-mvp-security-boundary.md). It does not authorize deployment or
+already accepted in [RFC-0001](RFC-0001-protocol-v0.1.md) and
+[RFC-0002](RFC-0002-mvp-security-boundary.md). It does not authorize deployment or
 production operation.
 
 ## Why this shape
