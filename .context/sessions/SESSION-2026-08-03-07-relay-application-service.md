@@ -1,7 +1,7 @@
 # SESSION-2026-08-03-07: Relay application service
 
 - Governing issue: #5
-- Pull request: pending
+- Pull request: #22
 - Status: Active
 
 ## Objective
