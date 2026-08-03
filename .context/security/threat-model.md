@@ -228,6 +228,35 @@ After relay compromise, transcript attribution after the last independently trus
 - advanced abuse detection and public channels;
 - untrusted adapters and formal penetration test.
 
+## Accepted private primitives staging profile — 2026-08-03
+
+- Governing issue: #90
+- Accepted architecture: RFC-0022
+- Scope: one private-network, direct-TLS primitives process with registered
+  short-lived DPoP workload identity, fixed authorization, JetStream KV,
+  capability sealing, security audit and loopback operations
+
+The accepted profile introduces a real but explicitly non-production network and
+credential boundary. It does not reuse relay sessions and grants no authority
+over MCP policy, approval, providers or protected targets.
+
+| Threat | Accepted control | Residual risk / dependency |
+|---|---|---|
+| server or target substitution | private explicit trust root, direct TLS 1.3, exact public base URI, no forwarding-header authority | private root and supervisor compromise remain staging failure domains |
+| stolen workload credential | short-lived random token bound to one ephemeral P-256 DPoP key; no bearer fallback | simultaneous token/key theft within the validity window can impersonate the workload |
+| DPoP replay or URI confusion | strict proof profile, durable replay reservation, exact configured `htu`/`htm`, ignored Host/forwarded headers | replay database loss fails readiness and requires accountable recovery |
+| authorization broadening | signed expiring closed registration and route-derived five-action allowlist | offline policy-key compromise can authorize the one staging service |
+| secret or capability disclosure | inherited descriptors, bounded one-time reads, redacted wrappers, closed audit/log schemas | plaintext exists in process memory; this is not HSM-backed production custody |
+| cross-tenant or storage confused deputy | authenticated tenant-derived store keys and least-privilege fixed KV configuration | JetStream/operator compromise remains outside consumer isolation |
+| restore or stale fence reuse | exact positive restore epoch across service and buckets; mismatch denies readiness | recovery availability is lost until epoch evidence is restored |
+| audit omission | mandatory RFC-0011-compatible append before decisions and fail-closed readiness | one-host audit is tamper-evident, not independently witnessed |
+| timeout repeats an ambiguous mutation | one bounded request, no retry, explicit consumer reconciliation | availability loss can halt the qualification lifecycle |
+
+RFC-0022 authorizes implementation and hermetic qualification only.
+Infrastructure provisioning, credential minting, listener exposure, live
+traffic, MCP connection, provider execution, mutation and production use remain
+separately gated.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
