@@ -285,7 +285,8 @@ separate reviewed increment before any connection can be exercised.
 Issue #99 composes the existing RFC-0015 HTTP handler behind a direct TLS 1.3
 runtime. The server certificate and private key must form one pair, the leaf
 must verify to the explicit configured trust bundle for the exact public URI
-host, dynamic TLS callbacks and client-certificate identity are disabled, and
+host, file identity is rechecked across bounded reads to reject replacement or
+symlink races, dynamic TLS callbacks and client-certificate identity are disabled, and
 the listener addresses must equal the closed configuration. Request authority
 continues to derive only from the configured public base URI: `Host`,
 `Forwarded` and `X-Forwarded-*` values do not affect DPoP target binding.

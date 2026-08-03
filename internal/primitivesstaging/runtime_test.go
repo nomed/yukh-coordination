@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -173,6 +174,27 @@ func TestRuntimeRejectsTLS12AndMismatchedListeners(t *testing.T) {
 	second, _ := NewRuntime(config, handler, ready, tlsConfig)
 	if err := second.Serve(context.Background(), wrongPublic, wrongOperations); err != ErrInvalid {
 		t.Fatalf("mismatched listener error = %v", err)
+	}
+}
+
+func TestTLSLoaderRejectsSymlinkReplacement(t *testing.T) {
+	publicListener := testListener(t)
+	operationsListener := testListener(t)
+	defer publicListener.Close()
+	defer operationsListener.Close()
+	config, _ := runtimeConfig(t, publicListener.Addr().String(), operationsListener.Addr().String(), time.Now().UTC().Truncate(time.Millisecond))
+	replacement := filepath.Join(t.TempDir(), "replacement.pem")
+	if err := os.WriteFile(replacement, []byte("not a certificate"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(config.value.TLSCertificatePath, config.value.TLSCertificatePath+".original"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(replacement, config.value.TLSCertificatePath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadServerTLSConfig(config); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("symlink replacement error = %v", err)
 	}
 }
 

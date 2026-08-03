@@ -258,13 +258,18 @@ func validServerTLS(config *tls.Config) bool {
 }
 
 func boundedFile(path string) ([]byte, error) {
+	before, err := os.Lstat(path)
+	if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0o022 != 0 {
+		return nil, ErrInvalid
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || info.Size() < 1 || info.Size() > maxTLSFileBytes {
+	after, afterErr := os.Lstat(path)
+	if err != nil || afterErr != nil || !info.Mode().IsRegular() || !os.SameFile(before, info) || !os.SameFile(info, after) || info.Size() < 1 || info.Size() > maxTLSFileBytes {
 		return nil, ErrInvalid
 	}
 	buffer := make([]byte, info.Size())
