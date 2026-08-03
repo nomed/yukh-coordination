@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -14,22 +15,28 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+	"github.com/google/uuid"
 )
 
 const maxJWKSBytes = 256 * 1024
 
+var authorityReferencePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$`)
+
 type JWKSConfig struct {
-	URL            string
-	Roots          *x509.CertPool
-	Algorithms     []jose.SignatureAlgorithm
-	SoftRefresh    time.Duration
-	HardMaxAge     time.Duration
-	RequestTimeout time.Duration
+	URL                string
+	Roots              *x509.CertPool
+	Algorithms         []jose.SignatureAlgorithm
+	SoftRefresh        time.Duration
+	HardMaxAge         time.Duration
+	RequestTimeout     time.Duration
+	AuthorityReference string
+	Auditor            Auditor
 }
 
 type jwksCache struct {
@@ -43,11 +50,13 @@ type jwksCache struct {
 	keys               map[string]jose.JSONWebKey
 	fetchedAt          time.Time
 	lastUnknownRefresh time.Time
+	authorityReference string
+	auditor            Auditor
 }
 
 func newJWKSCache(ctx context.Context, config JWKSConfig, now func() time.Time) (*jwksCache, error) {
 	parsed, err := url.Parse(config.URL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != config.URL || config.Roots == nil || config.SoftRefresh <= 0 || config.HardMaxAge <= config.SoftRefresh || config.HardMaxAge > 5*time.Minute || config.RequestTimeout <= 0 || config.RequestTimeout > 30*time.Second || now == nil {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != config.URL || config.Roots == nil || config.SoftRefresh <= 0 || config.HardMaxAge <= config.SoftRefresh || config.HardMaxAge > 5*time.Minute || config.RequestTimeout <= 0 || config.RequestTimeout > 30*time.Second || now == nil || nilDependency(config.Auditor) || !authorityReferencePattern.MatchString(config.AuthorityReference) {
 		return nil, errUnavailable
 	}
 	algorithms := make(map[jose.SignatureAlgorithm]struct{}, len(config.Algorithms))
@@ -69,9 +78,10 @@ func newJWKSCache(ctx context.Context, config JWKSConfig, now func() time.Time) 
 	}
 	cache := &jwksCache{
 		url: config.URL, algorithms: algorithms, softRefresh: config.SoftRefresh, hardMaxAge: config.HardMaxAge, now: now,
-		client: &http.Client{Transport: transport, Timeout: config.RequestTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errUnavailable }},
+		client:             &http.Client{Transport: transport, Timeout: config.RequestTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errUnavailable }},
+		authorityReference: config.AuthorityReference, auditor: config.Auditor,
 	}
-	keys, err := cache.fetch(ctx)
+	keys, err := cache.refresh(ctx, now().UTC().Truncate(time.Millisecond))
 	if err != nil {
 		transport.CloseIdleConnections()
 		return nil, errUnavailable
@@ -106,7 +116,7 @@ func (c *jwksCache) key(ctx context.Context, kid string, algorithm jose.Signatur
 	refreshFailed := false
 	if age >= c.softRefresh {
 		refreshAttempted = true
-		if keys, err := c.fetch(ctx); err == nil {
+		if keys, err := c.refresh(ctx, now.Truncate(time.Millisecond)); err == nil {
 			c.keys = keys
 			c.fetchedAt = now
 			age = 0
@@ -134,7 +144,7 @@ func (c *jwksCache) key(ctx context.Context, kid string, algorithm jose.Signatur
 		return jose.JSONWebKey{}, errInvalid
 	}
 	c.lastUnknownRefresh = now
-	keys, err := c.fetch(ctx)
+	keys, err := c.refresh(ctx, now.Truncate(time.Millisecond))
 	if err != nil {
 		return jose.JSONWebKey{}, errUnavailable
 	}
@@ -147,30 +157,52 @@ func (c *jwksCache) key(ctx context.Context, kid string, algorithm jose.Signatur
 	return key, nil
 }
 
-func (c *jwksCache) fetch(ctx context.Context) (map[string]jose.JSONWebKey, error) {
+func (c *jwksCache) refresh(ctx context.Context, at time.Time) (map[string]jose.JSONWebKey, error) {
+	keys, digest, fetchErr := c.fetch(ctx)
+	operationID, idErr := uuid.NewV7()
+	if idErr != nil {
+		return nil, errUnavailable
+	}
+	record := AuditRecord{ProfileVersion: 1, OperationID: operationID.String(), Operation: AuditJWKSRefresh, DecisionTime: at, AuthorityReference: c.authorityReference}
+	if fetchErr == nil {
+		record.Outcome, record.Reason, record.JWKSSetDigest, record.HasJWKSSetDigest = AuditAllow, AuditReasonRefreshed, digest, true
+	} else {
+		record.Outcome, record.Reason = AuditUnavailable, AuditReasonOperationUnavailable
+	}
+	if _, auditErr := c.auditor.Record(ctx, record); auditErr != nil || fetchErr != nil {
+		return nil, errUnavailable
+	}
+	return keys, nil
+}
+
+func (c *jwksCache) fetch(ctx context.Context) (map[string]jose.JSONWebKey, [sha256.Size]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
 	if err != nil {
-		return nil, errUnavailable
+		return nil, [sha256.Size]byte{}, errUnavailable
 	}
 	request.Header.Set("Accept", "application/jwk-set+json, application/json")
 	request.Header.Set("Accept-Encoding", "identity")
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, errUnavailable
+		return nil, [sha256.Size]byte{}, errUnavailable
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.Uncompressed || response.ContentLength > maxJWKSBytes {
-		return nil, errUnavailable
+		return nil, [sha256.Size]byte{}, errUnavailable
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || (mediaType != "application/json" && mediaType != "application/jwk-set+json") {
-		return nil, errUnavailable
+		return nil, [sha256.Size]byte{}, errUnavailable
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxJWKSBytes+1))
 	if err != nil || len(body) > maxJWKSBytes {
-		return nil, errUnavailable
+		return nil, [sha256.Size]byte{}, errUnavailable
 	}
-	return parseJWKS(body, c.algorithms)
+	keys, err := parseJWKS(body, c.algorithms)
+	if err != nil {
+		return nil, [sha256.Size]byte{}, err
+	}
+	return keys, sha256.Sum256(body), nil
 }
 
 func parseJWKS(data []byte, algorithms map[jose.SignatureAlgorithm]struct{}) (map[string]jose.JSONWebKey, error) {

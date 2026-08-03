@@ -9,6 +9,16 @@ conformance/canonical/audit-merkle.canonical.json
 conformance/canonical/audit-merkle.input.json
 conformance/canonical/audit-receipt.canonical.json
 conformance/canonical/audit-receipt.input.json
+conformance/canonical/audit-record-checkpoint.canonical.json
+conformance/canonical/audit-record-checkpoint.input.json
+conformance/canonical/audit-record-jwks-refresh.canonical.json
+conformance/canonical/audit-record-jwks-refresh.input.json
+conformance/canonical/audit-record-key-lifecycle.canonical.json
+conformance/canonical/audit-record-key-lifecycle.input.json
+conformance/canonical/audit-record-restore-fence.canonical.json
+conformance/canonical/audit-record-restore-fence.input.json
+conformance/canonical/audit-record-revocation.canonical.json
+conformance/canonical/audit-record-revocation.input.json
 conformance/canonical/audit-record.canonical.json
 conformance/canonical/audit-record.input.json
 conformance/canonical/audit-recovery-manifest.canonical.json

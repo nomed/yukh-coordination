@@ -1,6 +1,6 @@
 # SQLite security-audit ledger
 
-This package owns RFC-0011 steps 1 through 4: a separate STRICT SQLite database,
+This package owns the RFC-0011 SQLite provider: a separate STRICT SQLite database,
 canonical records, atomic idempotent sequence allocation, local SHA-256 chain
 receipts, deterministic Merkle nodes and historical inclusion/consistency
 proofs. Schema v2 atomically commits each leaf, every newly completed perfect
@@ -29,12 +29,21 @@ verified before immutable commit. A witness acknowledgement proves only the
 configured witness contract, not universal transparency. The package contains
 no signer implementation, private key or process composition.
 
-Step 4 intentionally exposes no restore-completion API: a validated backup
-remains fenced across restarts. Step 5 must define and persist the canonical
-`restore_fence` audit record, apply the identity epoch floors, verify both facts
-and only then perform the sole transition back to admitted operation.
-`OperationalReady` verifies persisted evidence,
+Verification-key installation commits its closed lifecycle record in the same
+ledger transaction. Checkpoint creation precomputes a closed checkpoint record,
+signs the tree that includes it, then atomically commits both record and signed
+checkpoint after proving the head did not move. This avoids asking a checkpoint
+to contain its own reference.
+
+`CommitRestore` is the only audit restore-completion transition. In one SQLite
+transaction it appends the canonical manifest-bound `restore_fence` record,
+persists the signed recovery manifest and admits the audit ledger. Identity
+remains independently fenced until it consumes that exact receipt. The runtime
+coordinator orders and safely resumes this saga without claiming a transaction
+across SQLite files. `OperationalReady` verifies persisted evidence,
 wall-clock monotonicity, checkpoint freshness, active signing-key health,
 optional witness evidence and explicit entry/database capacity ceilings. The
-simpler `Ready` method remains local structural verification until step 5
-supplies mandatory operational policy and external probes.
+simpler `Ready` method intentionally remains local structural verification and
+is not the runtime adapter. `OperationalProvider` is the runtime-facing
+identity audit adapter and always uses the stronger gate; this does not claim
+that an operated deployment has passed production qualification.

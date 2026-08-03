@@ -130,6 +130,25 @@ func TestRuntimeComposesRealRequestAndStopsInReverseOrder(t *testing.T) {
 	}
 }
 
+func TestRuntimeFailsBeforeServingWhenSecurityProviderIsUnready(t *testing.T) {
+	fixture := newRuntimeFixture(t)
+	fixture.config.Bootstrapper.(*testBootstrapper).readyErr = errors.New("audit checkpoint stale")
+	closed := false
+	fixture.config.Resources = []Resource{{Name: "security", Close: func(context.Context) error { closed = true; return nil }}}
+	runtime, err := New(fixture.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Run(context.Background()); err == nil || runtime.State() != StateFailed || !closed {
+		t.Fatalf("readiness failure = %v, state=%s, closed=%v", err, runtime.State(), closed)
+	}
+	select {
+	case <-runtime.Ready():
+		t.Fatal("unready runtime announced readiness")
+	default:
+	}
+}
+
 func TestRuntimeForcesBlockedRequestAtDeadline(t *testing.T) {
 	fixture := newRuntimeFixture(t)
 	block := make(chan struct{})
@@ -357,7 +376,9 @@ func newRuntimeFixtureWithListener(t *testing.T, listener net.Listener) runtimeF
 	}}
 }
 
-type testBootstrapper struct{}
+type testBootstrapper struct{ readyErr error }
+
+func (b *testBootstrapper) Ready(context.Context) error { return b.readyErr }
 
 func (*testBootstrapper) Bootstrap(context.Context, httpapi.BootstrapAuthentication) (httpapi.IssuedSession, error) {
 	return httpapi.IssuedSession{}, httpapi.ErrUnauthenticated

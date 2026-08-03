@@ -1,0 +1,1 @@
+{"decision_time":"2026-08-03T09:05:00.000Z","operation_id":"0198f56b-0c00-7000-8000-000000000017","operation_kind":"audit_checkpoint","outcome":"allow","profile":"yukh-security-audit/v1","reason":"checkpoint_committed","signing_key_reference":"signing-key:rfc8032-checkpoint-1:1"}

@@ -58,6 +58,46 @@
     "name": "audit-record"
   },
   {
+    "canonical": "conformance/canonical/audit-record-checkpoint.canonical.json",
+    "digest": "sha-256:6ccbea920ba21a58dc2ed6f117165433daaf91ed27c3339e20b37293084541cd",
+    "domain_digest": "sha-256:cb8d678f3f60ac9cc060399415ac77d59694ba16bb1746a9f2b6a98845279b96",
+    "domain_prefix": "yukh-coordination:audit-record:v1\n",
+    "input": "conformance/canonical/audit-record-checkpoint.input.json",
+    "name": "audit-record-checkpoint"
+  },
+  {
+    "canonical": "conformance/canonical/audit-record-jwks-refresh.canonical.json",
+    "digest": "sha-256:3f72e4c7010c617f068402e2dfafadfadcf44dca164742ca58f3b5a077ee1d19",
+    "domain_digest": "sha-256:f92480e74456446b01a9e0414f7e3a39e3dccf2fed77397a25055c63844a80a6",
+    "domain_prefix": "yukh-coordination:audit-record:v1\n",
+    "input": "conformance/canonical/audit-record-jwks-refresh.input.json",
+    "name": "audit-record-jwks-refresh"
+  },
+  {
+    "canonical": "conformance/canonical/audit-record-key-lifecycle.canonical.json",
+    "digest": "sha-256:844f5c18470bc8d8ebca5685294fcc14e9caab06c36ab8fdcb67c366a01ac005",
+    "domain_digest": "sha-256:9d59dc13f55f0425ddb39accce2b461b495224cbe3fd0b2b246ec691224f09af",
+    "domain_prefix": "yukh-coordination:audit-record:v1\n",
+    "input": "conformance/canonical/audit-record-key-lifecycle.input.json",
+    "name": "audit-record-key-lifecycle"
+  },
+  {
+    "canonical": "conformance/canonical/audit-record-restore-fence.canonical.json",
+    "digest": "sha-256:639157b9376a98fc23e9f94ff18cb6a4701c355dbf0793c5b9eec35608a58a15",
+    "domain_digest": "sha-256:688f1288a08b42b9c8806992f12eab65d5e7638f4ed5cecb5fa9e2ff6180dc19",
+    "domain_prefix": "yukh-coordination:audit-record:v1\n",
+    "input": "conformance/canonical/audit-record-restore-fence.input.json",
+    "name": "audit-record-restore-fence"
+  },
+  {
+    "canonical": "conformance/canonical/audit-record-revocation.canonical.json",
+    "digest": "sha-256:82f0d8e0b14b2fb7fd9a35334771caea1bf9856f57ef15987bd0f186213d8466",
+    "domain_digest": "sha-256:1b8f7ea3af7ee6afa005d425519ddc7e0a72ef9dac207006415625180f0857dd",
+    "domain_prefix": "yukh-coordination:audit-record:v1\n",
+    "input": "conformance/canonical/audit-record-revocation.input.json",
+    "name": "audit-record-revocation"
+  },
+  {
     "canonical": "conformance/canonical/audit-receipt.canonical.json",
     "digest": "sha-256:9b9011ecaf07f6066c0f9483999c46b7273e9256258013fc957e7460bfadfc75",
     "input": "conformance/canonical/audit-receipt.input.json",

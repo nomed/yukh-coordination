@@ -62,6 +62,10 @@ type Config struct {
 	Resources     []Resource
 }
 
+type readinessProbe interface {
+	Ready(context.Context) error
+}
+
 type Runtime struct {
 	mu        sync.RWMutex
 	state     State
@@ -70,6 +74,7 @@ type Runtime struct {
 	listener  net.Listener
 	shutdown  time.Duration
 	resources []Resource
+	readiness readinessProbe
 	ready     chan struct{}
 	done      chan struct{}
 }
@@ -77,6 +82,10 @@ type Runtime struct {
 func New(config Config) (*Runtime, error) {
 	if isNil(config.Store) || isNil(config.Subscriptions) || isNil(config.Bootstrapper) || isNil(config.Authenticator) ||
 		isNil(config.Authorizer) || isNil(config.Signer) || config.Validator == nil || isNil(config.Listener) {
+		return nil, relay.ErrInvalidArgument
+	}
+	readiness, ok := config.Bootstrapper.(readinessProbe)
+	if !ok || isNil(readiness) {
 		return nil, relay.ErrInvalidArgument
 	}
 	if err := validateServerConfig(config.Server); err != nil {
@@ -107,7 +116,7 @@ func New(config Config) (*Runtime, error) {
 	}
 	return &Runtime{
 		state: StateConstructed, server: server, listener: config.Listener,
-		shutdown: config.Server.ShutdownTimeout, resources: resources,
+		shutdown: config.Server.ShutdownTimeout, resources: resources, readiness: readiness,
 		ready: make(chan struct{}), done: make(chan struct{}),
 	}, nil
 }
@@ -136,6 +145,22 @@ func (r *Runtime) Run(parent context.Context) error {
 	defer close(r.done)
 
 	baseContext, cancelRequests := context.WithCancel(parent)
+	if err := r.readiness.Ready(baseContext); err != nil {
+		cancelRequests()
+		_ = r.listener.Close()
+		cleanupContext, cancelCleanup := context.WithTimeout(context.Background(), r.shutdown)
+		defer cancelCleanup()
+		var lifecycleErrors []error
+		lifecycleErrors = append(lifecycleErrors, stageError{stage: "readiness", err: err})
+		for index := len(r.resources) - 1; index >= 0; index-- {
+			resource := r.resources[index]
+			if closeErr := resource.Close(cleanupContext); closeErr != nil {
+				lifecycleErrors = append(lifecycleErrors, stageError{stage: "close", resource: resource.Name, err: closeErr})
+			}
+		}
+		r.setState(StateFailed)
+		return errors.Join(lifecycleErrors...)
+	}
 	r.server.BaseContext = func(net.Listener) context.Context { return baseContext }
 	serveErrors := make(chan error, 1)
 	go func() {

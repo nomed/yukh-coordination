@@ -19,7 +19,8 @@ The boundary is intentionally layered:
 
 The provider generates opaque session tokens, but this directory does not own
 their audit storage, checkpoint signing, policy, process wiring or external
-configuration. The mandatory `Auditor` remains a port. RFC-0011 step 1 supplies
-a durable adapter under `internal/relay/audit/sqlite`, but production
-composition cannot claim audit readiness until the later checkpoint, recovery
-and explicit wiring increments are qualified.
+configuration. The mandatory `Auditor` remains a port. The provider also
+requires durable audit completion for exact-idempotent revocation, while JWKS
+initialization and refresh record the configured authority reference and exact
+set digest. The runtime adapter and strong readiness gate live under
+`internal/relay/audit/sqlite`; runtime owns explicit composition.

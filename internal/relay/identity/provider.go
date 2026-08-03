@@ -26,6 +26,7 @@ type Registry interface {
 	ActivateBootstrap(context.Context, string, string) (ActiveSession, error)
 	Authenticate(context.Context, AuthenticationReservation) (ActiveSession, error)
 	Status(context.Context) (RegistryStatus, error)
+	Revoke(context.Context, Revocation) error
 }
 
 type TokenVerifier interface {
@@ -178,6 +179,23 @@ func (p *Provider) Ready(ctx context.Context) error {
 	return nil
 }
 
+// Revoke commits the registry transition first and reports success only after
+// the same caller-supplied operation ID has a durable audit receipt. Exact
+// registry retries are idempotent, making crash recovery safe.
+func (p *Provider) Revoke(ctx context.Context, request Revocation) error {
+	if p == nil || ctx == nil {
+		return httpapi.ErrAuthenticationUnavailable
+	}
+	if err := p.registry.Revoke(ctx, request); err != nil {
+		return httpapi.ErrAuthenticationUnavailable
+	}
+	record := AuditRecord{ProfileVersion: 1, OperationID: request.OperationID, Operation: AuditRevocation, Outcome: AuditAllow, Reason: AuditReasonRevoked, DecisionTime: p.now().UTC().Truncate(time.Millisecond), TenantID: request.Key.TenantID, ParticipantInstanceID: request.Key.ParticipantInstanceID, SessionEpoch: request.Key.SessionEpoch, AuthorityReference: request.AuthorityReceipt}
+	if _, err := p.recordAudit(ctx, record); err != nil {
+		return httpapi.ErrAuthenticationUnavailable
+	}
+	return nil
+}
+
 func (p *Provider) generateSessionMaterial() (string, [sha256.Size]byte, string, string, error) {
 	secret := make([]byte, 32)
 	if _, err := io.ReadFull(p.random, secret); err != nil {
@@ -266,6 +284,10 @@ func validAuditRecord(record AuditRecord) bool {
 	operationID, err := uuid.Parse(record.OperationID)
 	if err != nil || operationID.Version() != 7 || operationID.String() != record.OperationID || record.ProfileVersion != providerProfileVersion || record.DecisionTime.Location() != time.UTC || !record.DecisionTime.Equal(record.DecisionTime.Truncate(time.Millisecond)) {
 		return false
+	}
+	if record.Operation == AuditRevocation {
+		participant, participantErr := uuid.Parse(record.ParticipantInstanceID)
+		return record.Outcome == AuditAllow && record.Reason == AuditReasonRevoked && tenantPattern.MatchString(record.TenantID) && record.PrincipalID == "" && participantErr == nil && participant.Version() == 7 && participant.String() == record.ParticipantInstanceID && record.SessionEpoch > 0 && record.SessionEpoch <= maxSafeSessionEpoch && record.AuthorityReference != "" && !record.HasDPoPThumbprint && !record.HasJWKSSetDigest && record.CheckpointReference == "" && record.SigningKeyReference == "" && record.RecoveryReference == ""
 	}
 	if record.Operation != AuditBootstrap && record.Operation != AuditAuthentication {
 		return false

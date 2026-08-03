@@ -121,8 +121,18 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 	if err := requireAdmitted(ctx, tx.conn); err != nil {
 		return audit.Receipt{}, err
 	}
+	receipt, err := appendRecord(ctx, tx.conn, record, canonical)
+	if err != nil {
+		return audit.Receipt{}, err
+	}
+	if err := tx.commit(ctx); err != nil {
+		return audit.Receipt{}, audit.ErrUnavailable
+	}
+	return receipt, nil
+}
 
-	if existing, found, err := lookupOperation(ctx, tx.conn, record.OperationID); err != nil {
+func appendRecord(ctx context.Context, conn *sql.Conn, record identity.AuditRecord, canonical []byte) (audit.Receipt, error) {
+	if existing, found, err := lookupOperation(ctx, conn, record.OperationID); err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	} else if found {
 		if !bytes.Equal(existing.record, canonical) {
@@ -134,13 +144,13 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 	var ledgerID string
 	var lastSequence, merkleSize uint64
 	var previousBytes, merkleRootBytes []byte
-	if err := tx.conn.QueryRowContext(ctx, "SELECT ledger_id, last_sequence, chain_head, merkle_size, merkle_root FROM audit_metadata WHERE singleton = 1").Scan(&ledgerID, &lastSequence, &previousBytes, &merkleSize, &merkleRootBytes); err != nil || len(previousBytes) != sha256.Size || len(merkleRootBytes) != sha256.Size || lastSequence >= audit.MaxJSONSafeSequence || merkleSize != lastSequence {
+	if err := conn.QueryRowContext(ctx, "SELECT ledger_id, last_sequence, chain_head, merkle_size, merkle_root FROM audit_metadata WHERE singleton = 1").Scan(&ledgerID, &lastSequence, &previousBytes, &merkleSize, &merkleRootBytes); err != nil || len(previousBytes) != sha256.Size || len(merkleRootBytes) != sha256.Size || lastSequence >= audit.MaxJSONSafeSequence || merkleSize != lastSequence {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
-	if err := verifyHead(ctx, tx.conn, ledgerID, lastSequence, previousBytes); err != nil {
+	if err := verifyHead(ctx, conn, ledgerID, lastSequence, previousBytes); err != nil {
 		return audit.Receipt{}, err
 	}
-	if root, err := subtreeHash(ctx, tx.conn, 0, merkleSize); err != nil || !bytes.Equal(root[:], merkleRootBytes) {
+	if root, err := subtreeHash(ctx, conn, 0, merkleSize); err != nil || !bytes.Equal(root[:], merkleRootBytes) {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
 	sequence := lastSequence + 1
@@ -159,20 +169,20 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 	if err != nil {
 		return audit.Receipt{}, err
 	}
-	if _, err := tx.conn.ExecContext(ctx, `INSERT INTO audit_entries
+	if _, err := conn.ExecContext(ctx, `INSERT INTO audit_entries
 		(sequence, operation_id, canonical_record, record_digest, previous_chain_digest, chain_digest, canonical_receipt)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sequence, record.OperationID, canonical, recordDigest[:], previous[:], chainDigest[:], canonicalReceipt); err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
 	leafHash, err := audit.MerkleLeafHash(sequence, chainDigest)
-	if err != nil || insertMerkleLeaf(ctx, tx.conn, sequence-1, leafHash) != nil {
+	if err != nil || insertMerkleLeaf(ctx, conn, sequence-1, leafHash) != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
-	merkleRoot, err := subtreeHash(ctx, tx.conn, 0, sequence)
+	merkleRoot, err := subtreeHash(ctx, conn, 0, sequence)
 	if err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
-	result, err := tx.conn.ExecContext(ctx, `UPDATE audit_metadata SET last_sequence = ?, chain_head = ?, merkle_size = ?, merkle_root = ?
+	result, err := conn.ExecContext(ctx, `UPDATE audit_metadata SET last_sequence = ?, chain_head = ?, merkle_size = ?, merkle_root = ?
 		WHERE singleton = 1 AND last_sequence = ? AND chain_head = ? AND merkle_size = ? AND merkle_root = ?`,
 		sequence, chainDigest[:], sequence, merkleRoot[:], lastSequence, previous[:], merkleSize, merkleRootBytes)
 	if err != nil {
@@ -180,9 +190,6 @@ func (l *Ledger) Append(ctx context.Context, record identity.AuditRecord) (audit
 	}
 	rows, err := result.RowsAffected()
 	if err != nil || rows != 1 {
-		return audit.Receipt{}, audit.ErrUnavailable
-	}
-	if err := tx.commit(ctx); err != nil {
 		return audit.Receipt{}, audit.ErrUnavailable
 	}
 	return receipt, nil

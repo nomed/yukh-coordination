@@ -85,8 +85,25 @@ func TestBootstrapAuthenticationReplayAndRevocationLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Revoke(context.Background(), identity.Revocation{Key: key, Reason: "operator-request", AuthorityReceipt: "audit:revoke:1"}); err != nil {
+	revocationID, err := uuid.NewV7()
+	if err != nil {
 		t.Fatal(err)
+	}
+	revocation := identity.Revocation{OperationID: revocationID.String(), Key: key, Reason: "operator-request", AuthorityReceipt: "audit:revoke:1"}
+	if err := registry.Revoke(context.Background(), revocation); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Revoke(context.Background(), revocation); err != nil {
+		t.Fatalf("revocation retry = %v", err)
+	}
+	changedID, err := uuid.NewV7()
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := revocation
+	changed.OperationID = changedID.String()
+	if err := registry.Revoke(context.Background(), changed); !errors.Is(err, identity.ErrSessionConflict) {
+		t.Fatalf("revocation operation replacement = %v", err)
 	}
 	select {
 	case <-inactive:
@@ -281,12 +298,26 @@ func TestRestoreFenceRequiresCompleteMonotonicFloors(t *testing.T) {
 	if _, err := registry.ReserveBootstrap(context.Background(), bootstrapRequest(t, clock.read(), 2)); !errors.Is(err, identity.ErrRegistryFenced) {
 		t.Fatalf("restored database admitted before checkpoint: %v", err)
 	}
-	if err := registry.ApplyRestoreFloors(context.Background(), status.DatabaseID, "audit:restore:bad", nil); !errors.Is(err, identity.ErrRegistryInvalid) {
+	manifestReference := "audit-recovery:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	if err := registry.StageRestoreFloors(context.Background(), status.DatabaseID, manifestReference, status.WallHighWater, nil); !errors.Is(err, identity.ErrRegistryInvalid) {
 		t.Fatalf("missing principal floor accepted: %v", err)
 	}
 	floors := []identity.EpochFloor{{TenantID: first.TenantID, PrincipalID: first.PrincipalID, Epoch: first.SessionEpoch + 9}}
-	if err := registry.ApplyRestoreFloors(context.Background(), status.DatabaseID, "audit:restore:1", floors); err != nil {
+	if err := registry.StageRestoreFloors(context.Background(), status.DatabaseID, manifestReference, status.WallHighWater, floors); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := registry.ReserveBootstrap(context.Background(), bootstrapRequest(t, clock.read(), 2)); !errors.Is(err, identity.ErrRegistryFenced) {
+		t.Fatalf("staged floors admitted identity: %v", err)
+	}
+	if err := registry.CompleteRestore(context.Background(), status.DatabaseID, manifestReference, "audit:restore:1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.CompleteRestore(context.Background(), status.DatabaseID, manifestReference, "audit:restore:1"); err != nil {
+		t.Fatalf("completion retry = %v", err)
+	}
+	snapshot, err := registry.RecoverySnapshot(context.Background())
+	if err != nil || len(snapshot.EpochFloors) != 1 || snapshot.EpochFloors[0].Epoch != first.SessionEpoch+9 {
+		t.Fatalf("restored recovery snapshot = %#v, %v", snapshot, err)
 	}
 	next, err := registry.ReserveBootstrap(context.Background(), bootstrapRequest(t, clock.read(), 2))
 	if err != nil {

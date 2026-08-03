@@ -11,6 +11,11 @@ type AuditOperation string
 const (
 	AuditBootstrap      AuditOperation = "bootstrap"
 	AuditAuthentication AuditOperation = "session_authentication"
+	AuditRevocation     AuditOperation = "revocation"
+	AuditJWKSRefresh    AuditOperation = "jwks_refresh"
+	AuditRestoreFence   AuditOperation = "restore_fence"
+	AuditCheckpoint     AuditOperation = "audit_checkpoint"
+	AuditKeyLifecycle   AuditOperation = "audit_key_lifecycle"
 )
 
 type AuditOutcome string
@@ -31,6 +36,12 @@ const (
 	AuditReasonVerificationUnavailable AuditReason = "verification_unavailable"
 	AuditReasonRegistryUnavailable     AuditReason = "registry_unavailable"
 	AuditReasonMaterialCollision       AuditReason = "material_collision"
+	AuditReasonRevoked                 AuditReason = "revoked"
+	AuditReasonRefreshed               AuditReason = "refreshed"
+	AuditReasonRestoreVerified         AuditReason = "restore_verified"
+	AuditReasonCheckpointCommitted     AuditReason = "checkpoint_committed"
+	AuditReasonKeyLifecycleCommitted   AuditReason = "key_lifecycle_committed"
+	AuditReasonOperationUnavailable    AuditReason = "operation_unavailable"
 )
 
 type AuditRecord struct {
@@ -46,6 +57,12 @@ type AuditRecord struct {
 	SessionEpoch          uint64
 	DPoPThumbprint        [sha256.Size]byte
 	HasDPoPThumbprint     bool
+	AuthorityReference    string
+	JWKSSetDigest         [sha256.Size]byte
+	HasJWKSSetDigest      bool
+	CheckpointReference   string
+	SigningKeyReference   string
+	RecoveryReference     string
 }
 
 type Auditor interface {

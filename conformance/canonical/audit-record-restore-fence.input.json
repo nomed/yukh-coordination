@@ -1,0 +1,10 @@
+{
+  "checkpoint_reference": "audit-checkpoint:ciLVHmYlmHAylKq0SHZ1cmWijlvuMBCaXGRuOrV3VYE",
+  "decision_time": "2026-08-03T09:02:00.000Z",
+  "operation_id": "0198f56b-0c00-7000-8000-000000000014",
+  "operation_kind": "restore_fence",
+  "outcome": "allow",
+  "profile": "yukh-security-audit/v1",
+  "reason": "restore_verified",
+  "recovery_reference": "audit-recovery:mNlOuRruflqKK7uFDCLYVkiC_xXm6cw3Ev-Hn7pd6ps"
+}
