@@ -15,6 +15,7 @@ func (externalCredentialStore) Load(context.Context, string) (clientauth.StoredS
 }
 func (externalCredentialStore) Save(_ context.Context, _ string, expected clientauth.Revision, record *clientauth.SessionRecord) (clientauth.Revision, error) {
 	_, _ = expected.ProviderValue()
+	_ = expected.IsAbsent()
 	_, _, _ = record.Credential(), record.ProofKeyReference(), record.ProofJWKThumbprint()
 	return clientauth.Revision{}, clientauth.ErrCredentialStore
 }
