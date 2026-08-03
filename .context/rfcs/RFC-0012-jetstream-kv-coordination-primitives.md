@@ -1,10 +1,14 @@
 # RFC-0012: JetStream KV coordination primitives
 
-- Status: Proposed
+- Status: Accepted
 - Author: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #43
 - Governing architecture: ADR-0001, RFC-0002, RFC-0006 and RFC-0011
+
+The project owner accepted this RFC on 2026-08-03. Acceptance authorizes the
+separate JetStream KV adapter implementation and synthetic/conformance
+qualification. It does not modify RFC-0006 or authorize deployment or live apply.
 
 ## Decision requested
 
