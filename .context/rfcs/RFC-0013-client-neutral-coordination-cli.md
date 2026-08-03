@@ -1,10 +1,15 @@
 # RFC-0013: Client-neutral coordination CLI
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #6
 - Governing architecture: RFC-0001, RFC-0002, RFC-0004, RFC-0008 and RFC-0009
+
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes the separately reviewed client implementation and qualification
+described here; it does not authorize a server binary, deployment or insecure
+development profile.
 
 ## Decision requested
 

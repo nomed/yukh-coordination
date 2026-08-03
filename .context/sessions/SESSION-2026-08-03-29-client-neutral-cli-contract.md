@@ -3,7 +3,7 @@
 - Date: 2026-08-03
 - Governing issue: #6
 - Pull request: #51
-- Status: proposed contract
+- Status: accepted contract
 
 ## Objective
 
@@ -25,7 +25,9 @@ credential adapter, server profile or deployment was added.
 
 ## Context impact
 
-RFC-0013 remains Proposed. Owner acceptance is required before implementation.
+The owner explicitly accepted RFC-0013 on 2026-08-03. A separately reviewable
+client implementation under issue #6 is now authorized within the accepted
+boundary.
 
 ## Risks and unresolved work
 
