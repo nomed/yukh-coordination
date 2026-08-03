@@ -3,13 +3,15 @@
 - Updated: 2026-08-03
 - Governing issue: #6
 - Last delivery pull request: #53
-- Active increment: Linux credential-store adapter selection not yet started
-- Runtime decisions: RFC-0003 through RFC-0013 Accepted
+- Active increment: RFC-0014 neutral client-authentication refactor not yet
+  started
+- Runtime decisions: RFC-0003 through RFC-0014 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, and its DPoP credential foundation in
   #53
-- Next action: evaluate and freeze the explicit Linux secret-service backend
-  and its custody contract before implementing the adapter; bootstrap, watch,
+- Accepted design: RFC-0014 client credential custody and proof signing in #56
+- Next action: refactor the combined credential/key foundation behind separate
+  store, signer and external-token ports; concrete adapters, bootstrap, watch,
   mutations and a process executable remain separate increments
 
 This file is a navigation aid, not an authority record. GitHub issues and the
