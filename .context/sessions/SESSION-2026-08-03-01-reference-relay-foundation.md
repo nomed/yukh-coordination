@@ -2,7 +2,7 @@
 
 - Governing issue: #5
 - Pull request: #16
-- Status: Active
+- Status: Completed
 
 ## Objective
 

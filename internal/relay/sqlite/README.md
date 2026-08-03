@@ -1,0 +1,41 @@
+# SQLite reference adapter
+
+This package is the durable single-node implementation of the neutral relay
+store port. It is qualification evidence for issue #5, not an operated service
+or production topology.
+
+## Frozen candidate profile
+
+- Go module: `modernc.org/sqlite` at the exact version in `go.mod` and `go.sum`;
+- SQLite journal mode: WAL;
+- durability: `synchronous=FULL`;
+- referential integrity: foreign keys enabled;
+- writer contention bound: 5-second SQLite busy timeout;
+- process model: one database connection, serializing sequence allocation;
+- schema: STRICT tables with `PRAGMA user_version=1`;
+- tenant/channel predicates on every identity, append and replay query.
+
+Channel identity is immutable across transcript epochs. Event IDs are unique
+within a tenant/channel identity across all epochs. Receipt IDs are globally
+unique. Event material, bindings, sequence, digest, receipt identity and
+unsigned receipt preimage commit in one `BEGIN IMMEDIATE` transaction.
+
+Any failed `COMMIT` is reported as `relay.ErrCommitIndeterminate`; callers must
+not manufacture a replacement append. An exact retry resolves the outcome by
+the original event ID and canonical bytes.
+
+## Recovery evidence
+
+The tests cover clean close/reopen and abrupt process termination:
+
+- exit after commit preserves the exact record and sequence;
+- exit during record preparation rolls back and does not consume a sequence;
+- exact retries after restart return the original receipt identity;
+- concurrent appends remain gap-free;
+- changed bytes and cross-epoch ID reuse collide;
+- tenant-scoped replay does not cross identity boundaries.
+
+The database file and its `-wal`/`-shm` sidecars form one live SQLite failure
+domain. Copying only the main file while the database is open is not a valid
+backup procedure. Backup, restore, retention and deletion qualification remain
+open gates of issue #5.
