@@ -175,41 +175,47 @@ func TestDeterministicRawAEADFakeRequiresExactVersionAndIntegrity(t *testing.T) 
 	version, _ := NewKeyVersion(encryptionResource)
 	other, _ := NewKeyVersion(stringsReplaceVersion(encryptionResource, "8"))
 	fake := newFakeRawAEAD(t, version)
-	aad, _ := fixtureAAD(t).Canonical()
-	plaintext := []byte("bounded session record")
-	sealed, err := fake.Encrypt(ctx, version, plaintext, aad, Checksum(plaintext), Checksum(aad))
+	aad := fixtureAAD(t)
+	plaintextBytes := []byte("bounded session record")
+	plaintext, err := NewPlaintext(plaintextBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, checksum, err := fake.Decrypt(ctx, version, sealed, aad, Checksum(aad))
-	if err != nil || !bytes.Equal(opened, plaintext) || !checksum.Matches(opened) {
-		t.Fatalf("decrypt = %q, %v", opened, err)
+	sealed, err := fake.Encrypt(ctx, version, plaintext, aad)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := fake.Encrypt(ctx, other, plaintext, aad, Checksum(plaintext), Checksum(aad)); !errors.Is(err, ErrConflict) {
+	opened, err := fake.Decrypt(ctx, version, sealed, aad)
+	openedBytes, checksum, ok := opened.ProviderValue()
+	if err != nil || !ok || !bytes.Equal(openedBytes, plaintextBytes) || !checksum.Matches(openedBytes) {
+		t.Fatalf("decrypt = %q, %v", openedBytes, err)
+	}
+	if _, err := fake.Encrypt(ctx, other, plaintext, aad); !errors.Is(err, ErrConflict) {
 		t.Fatalf("wrong encryption version = %v", err)
 	}
-	if _, _, err := fake.Decrypt(ctx, other, sealed, aad, Checksum(aad)); !errors.Is(err, ErrConflict) {
+	if _, err := fake.Decrypt(ctx, other, sealed, aad); !errors.Is(err, ErrConflict) {
 		t.Fatalf("wrong decryption version = %v", err)
 	}
-	envelope, err := NewEnvelope(sealed.KeyVersion(), sealed.IV(), sealed.TagLength(), sealed.Ciphertext(), aad)
+	canonicalAAD, _ := aad.Canonical()
+	envelope, err := NewEnvelope(sealed.KeyVersion(), sealed.IV(), sealed.TagLength(), sealed.Ciphertext(), canonicalAAD)
 	if err != nil {
 		t.Fatal(err)
 	}
 	canonical, err := envelope.Canonical()
-	if err != nil || bytes.Contains(canonical, plaintext) {
+	if err != nil || bytes.Contains(canonical, plaintextBytes) {
 		t.Fatal("plaintext crossed the stored-envelope boundary")
 	}
 	oversized := bytes.Repeat([]byte{1}, maximumPlaintextBytes+1)
-	if _, err := fake.Encrypt(ctx, version, oversized, aad, Checksum(oversized), Checksum(aad)); !errors.Is(err, ErrIntegrity) {
-		t.Fatalf("oversized plaintext = %v", err)
+	if _, err := NewPlaintext(oversized); !errors.Is(err, ErrInvalidContract) {
+		t.Fatalf("oversized plaintext accepted = %v", err)
 	}
 	tampered := sealed
 	tampered.ciphertext = clone(sealed.ciphertext)
 	tampered.ciphertext[0] ^= 1
-	if _, _, err := fake.Decrypt(ctx, version, tampered, aad, Checksum(aad)); !errors.Is(err, ErrIntegrity) {
+	if _, err := fake.Decrypt(ctx, version, tampered, aad); !errors.Is(err, ErrIntegrity) {
 		t.Fatalf("tampered ciphertext = %v", err)
 	}
-	if fmt.Sprint(sealed, checksum) != "RawCiphertext{REDACTED} CRC32C{REDACTED}" {
+	if fmt.Sprint(sealed, checksum, plaintext) != "RawCiphertext{REDACTED} CRC32C{REDACTED} Plaintext{REDACTED}" {
 		t.Fatal("provider result leaked through formatting")
 	}
 }
@@ -320,28 +326,31 @@ func newFakeRawAEAD(t *testing.T, version KeyVersion) *fakeRawAEAD {
 	return &fakeRawAEAD{version: version, aead: aead, iv: bytes.Repeat([]byte{0x44}, aead.NonceSize())}
 }
 
-func (f *fakeRawAEAD) Encrypt(_ context.Context, version KeyVersion, plaintext, aad []byte, plaintextChecksum, aadChecksum CRC32C) (RawCiphertext, error) {
+func (f *fakeRawAEAD) Encrypt(_ context.Context, version KeyVersion, plaintext Plaintext, aad AssociatedData) (RawCiphertext, error) {
 	if version.value != f.version.value {
 		return RawCiphertext{}, ErrConflict
 	}
-	if len(plaintext) == 0 || len(plaintext) > maximumPlaintextBytes || !plaintextChecksum.Matches(plaintext) || !aadChecksum.Matches(aad) {
-		return RawCiphertext{}, ErrIntegrity
+	plaintextBytes, plaintextChecksum, ok := plaintext.ProviderValue()
+	aadBytes, err := aad.Canonical()
+	if !ok || err != nil || !plaintextChecksum.Matches(plaintextBytes) || len(plaintextBytes)+len(aadBytes) > 8192 {
+		return RawCiphertext{}, ErrInvalidContract
 	}
-	return NewRawCiphertext(version, f.iv, standardTagBytes, f.aead.Seal(nil, f.iv, plaintext, aad))
+	return NewRawCiphertext(version, f.iv, standardTagBytes, f.aead.Seal(nil, f.iv, plaintextBytes, aadBytes))
 }
 
-func (f *fakeRawAEAD) Decrypt(_ context.Context, version KeyVersion, sealed RawCiphertext, aad []byte, aadChecksum CRC32C) ([]byte, CRC32C, error) {
+func (f *fakeRawAEAD) Decrypt(_ context.Context, version KeyVersion, sealed RawCiphertext, aad AssociatedData) (Plaintext, error) {
 	if version.value != f.version.value || sealed.version.value != f.version.value {
-		return nil, CRC32C{}, ErrConflict
+		return Plaintext{}, ErrConflict
 	}
-	if !aadChecksum.Matches(aad) {
-		return nil, CRC32C{}, ErrIntegrity
-	}
-	opened, err := f.aead.Open(nil, sealed.iv, sealed.ciphertext, aad)
+	aadBytes, err := aad.Canonical()
 	if err != nil {
-		return nil, CRC32C{}, ErrIntegrity
+		return Plaintext{}, ErrInvalidContract
 	}
-	return opened, Checksum(opened), nil
+	opened, err := f.aead.Open(nil, sealed.iv, sealed.ciphertext, aadBytes)
+	if err != nil {
+		return Plaintext{}, ErrIntegrity
+	}
+	return NewPlaintext(opened)
 }
 
 func stringsReplaceVersion(resource, version string) string {

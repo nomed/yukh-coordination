@@ -292,11 +292,34 @@ func (o StoredObject) Body() []byte           { return clone(o.body) }
 func (o StoredObject) Generation() Generation { return o.generation }
 func (o StoredObject) Checksum() CRC32C       { return o.checksum }
 
-// RawAEAD models only exact-version AES-256-GCM raw encryption. Provider
-// authentication, retries and response verification belong to a later adapter.
+// Plaintext is bounded sensitive input for one raw-encryption operation.
+type Plaintext struct{ value []byte }
+
+func NewPlaintext(value []byte) (Plaintext, error) {
+	if len(value) == 0 || len(value) > maximumPlaintextBytes {
+		return Plaintext{}, ErrInvalidContract
+	}
+	return Plaintext{value: clone(value)}, nil
+}
+
+func (Plaintext) String() string   { return "Plaintext{REDACTED}" }
+func (Plaintext) GoString() string { return "Plaintext{REDACTED}" }
+func (p Plaintext) ProviderValue() ([]byte, CRC32C, bool) {
+	if len(p.value) == 0 || len(p.value) > maximumPlaintextBytes {
+		return nil, CRC32C{}, false
+	}
+	value := clone(p.value)
+	return value, Checksum(value), true
+}
+
+// RawAEAD models only exact-version AES-256-GCM raw encryption. A successful
+// implementation result asserts that provider verified request CRC32C fields,
+// returned the configured name and protection level, and supplied matching
+// ciphertext, IV and plaintext integrity evidence. Authentication, bounded
+// retries and those provider checks belong inside the later adapter.
 type RawAEAD interface {
-	Encrypt(context.Context, KeyVersion, []byte, []byte, CRC32C, CRC32C) (RawCiphertext, error)
-	Decrypt(context.Context, KeyVersion, RawCiphertext, []byte, CRC32C) ([]byte, CRC32C, error)
+	Encrypt(context.Context, KeyVersion, Plaintext, AssociatedData) (RawCiphertext, error)
+	Decrypt(context.Context, KeyVersion, RawCiphertext, AssociatedData) (Plaintext, error)
 }
 
 type RawCiphertext struct {
