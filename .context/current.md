@@ -2,8 +2,8 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #114
-- Active increment: #115 builds the closed RFC-0022 primitives executable;
+- Last delivery pull request: #121
+- Active increment: #122 publishes task-first component documentation;
   #117 owns the separate accountable bucket-bootstrap successor
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
@@ -33,9 +33,10 @@
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next action: deliver and review #115 without bucket-bootstrap authority;
-  after it merges, proceed separately with #117. Both increments must then
-  supersede the immutable candidate and reconcile the deployment plan.
+- Next action: deliver and review #122 without deployment or credential
+  authority; proceed separately with #117. The executable and bucket-bootstrap
+  increments must then supersede the immutable candidate and reconcile the
+  deployment plan.
   Provisioning approval is premature until both artifacts exist. Live
   infrastructure, credentials, listener exposure, MCP traffic, protected
   mutations and production use remain separately gated

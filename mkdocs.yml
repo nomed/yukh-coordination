@@ -1,0 +1,54 @@
+site_name: Yukh Coordination
+site_description: Client-neutral coordination across isolated sessions.
+site_url: https://nomed.github.io/yukh-coordination/
+repo_url: https://github.com/nomed/yukh-coordination
+repo_name: nomed/yukh-coordination
+docs_dir: documentation
+
+theme:
+  name: material
+  logo: assets/repository-mark.svg
+  favicon: assets/repository-mark.svg
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: cyan
+      accent: cyan
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: cyan
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Tutorial:
+      - Replay the first transcript: tutorials/first-replay.md
+  - How-to:
+      - Validate the conformance corpus: how-to/validate-conformance.md
+  - Reference:
+      - Protocol surface: reference/protocol.md
+      - Replay CLI: reference/replay-cli.md
+  - Explanation:
+      - Claims are not locks: explanation/claims-not-locks.md
+      - Component boundary: explanation/component-boundary.md
+  - Security:
+      - Security boundary: security/boundary.md
