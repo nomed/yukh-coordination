@@ -1,0 +1,12 @@
+{
+  "algorithm": "Ed25519",
+  "domain_prefix": "yukh-coordination:audit-checkpoint:v1\n",
+  "key_id": "rfc8032-checkpoint-1",
+  "preimage": "conformance/canonical/audit-checkpoint.canonical.json",
+  "preimage_bytes": 360,
+  "preimage_digest": "sha-256:c6c122653a77a5792e7b932902f2a1a100840e7462d447deb753a5c9e2a5ef7f",
+  "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "signature_hex": "9e542c8e30450f0ee09426d7cee33e9b9e500c6f18ea9688d5749cceb4f8effec8c76a327c92c1b7f29ede0c40a6a2d6db03d97e43f876e36ac6c570359a7509",
+  "source": "RFC 8032 test vector 1 seed/public key; signature independently derived with OpenSSL for the frozen checkpoint preimage"
+}

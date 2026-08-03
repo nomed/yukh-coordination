@@ -1,8 +1,9 @@
-# Receipt signature vector
+# Signature vectors
 
-The vector reuses RFC 8032 test vector 1's seed and public key, then signs the
-protocol's exact domain prefix plus the committed JCS receipt preimage. Test
-keys are public fixtures and must never be used operationally.
+The vectors reuse RFC 8032 test vector 1's seed and public key, then sign each
+protocol's exact domain prefix plus its committed JCS preimage. They cover the
+event receipt and RFC-0011 audit checkpoint boundaries. Test keys are public
+fixtures and must never be used operationally.
 
 Verification uses only Python's standard library and the local OpenSSL 3.x CLI:
 

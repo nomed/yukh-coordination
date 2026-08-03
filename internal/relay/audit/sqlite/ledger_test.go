@@ -104,7 +104,7 @@ func TestSchemaIsStrictImmutableAndConfigured(t *testing.T) {
 	}
 	var version int
 	var journal, synchronous string
-	if err := ledger.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 2 {
+	if err := ledger.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 3 {
 		t.Fatalf("schema version = %d, %v", version, err)
 	}
 	if err := ledger.db.QueryRow("PRAGMA journal_mode").Scan(&journal); err != nil || journal != "wal" {
@@ -242,6 +242,11 @@ func TestVersionOneLedgerMigratesAndRebuildsMerkleState(t *testing.T) {
 	}
 	db := rawDB(t, path)
 	statements := []string{
+		"DROP TRIGGER audit_witnesses_no_update", "DROP TRIGGER audit_witnesses_no_delete",
+		"DROP TRIGGER audit_checkpoints_no_update", "DROP TRIGGER audit_checkpoints_no_delete",
+		"DROP TRIGGER audit_checkpoint_authority_no_update", "DROP TRIGGER audit_checkpoint_authority_no_delete",
+		"DROP TRIGGER audit_verification_keys_no_update", "DROP TRIGGER audit_verification_keys_no_delete",
+		"DROP TABLE audit_witness_acknowledgements", "DROP TABLE audit_checkpoints", "DROP TABLE audit_checkpoint_authority", "DROP TABLE audit_verification_key_statements",
 		"DROP TRIGGER merkle_nodes_no_update", "DROP TRIGGER merkle_nodes_no_delete",
 		"DROP TRIGGER audit_metadata_append_only", "DROP TRIGGER audit_metadata_no_delete",
 		"DROP TABLE merkle_nodes",
