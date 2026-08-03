@@ -121,6 +121,10 @@ func (g *AuditGate) RecordCapabilityKeyLifecycle(ctx context.Context, loaded boo
 	return g.record(ctx, identity.AuditStagingLifecycle, identity.AuditAllow, reason, "", "")
 }
 
+func (g *AuditGate) RecordStorageEpochValidated(ctx context.Context) error {
+	return g.record(ctx, identity.AuditStagingLifecycle, identity.AuditAllow, identity.AuditReasonStorageEpochValidated, "", "")
+}
+
 func (g *AuditGate) Ready() bool {
 	return g != nil && !g.failed.Load() && g.auditor != nil && g.auditor.Ready(context.Background()) == nil
 }

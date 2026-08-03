@@ -44,6 +44,7 @@ type Store struct {
 	leases atomicKV
 	config Config
 	now    func() time.Time
+	probe  func(context.Context) error
 }
 
 func (store *Store) ConfiguredEpoch() uint64 { return store.config.Epoch }
@@ -107,7 +108,27 @@ func Open(ctx context.Context, connection *nats.Conn, config Config) (*Store, er
 	if err != nil {
 		return nil, err
 	}
-	return &Store{nonces: nonces, leases: leases, config: config, now: time.Now}, nil
+	probe := func(probeContext context.Context) error {
+		for _, item := range []struct {
+			kv       natsjs.KeyValue
+			expected natsjs.KeyValueConfig
+		}{{nonces, expected(NonceBucket, "Yukh external nonce replay protection", config)}, {leases, expected(LeaseBucket, "Yukh external fenced leases", config)}} {
+			status, statusErr := item.kv.Status(probeContext)
+			if statusErr != nil || !matchingStatus(status, item.expected) {
+				return coordination.ErrUnavailable
+			}
+		}
+		return nil
+	}
+	return &Store{nonces: nonces, leases: leases, config: config, now: time.Now, probe: probe}, nil
+}
+
+// Probe revalidates the exact immutable bucket profile and restore epoch.
+func (store *Store) Probe(ctx context.Context) error {
+	if store == nil || store.probe == nil || ctx == nil {
+		return coordination.ErrUnavailable
+	}
+	return store.probe(ctx)
 }
 
 func matchingStatus(status natsjs.KeyValueStatus, expectedConfig natsjs.KeyValueConfig) bool {

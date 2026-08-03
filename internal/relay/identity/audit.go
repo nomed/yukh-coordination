@@ -54,6 +54,7 @@ const (
 	AuditReasonStopped                 AuditReason = "stopped"
 	AuditReasonCapabilityKeyLoaded     AuditReason = "capability_key_loaded"
 	AuditReasonCapabilityKeyZeroed     AuditReason = "capability_key_zeroed"
+	AuditReasonStorageEpochValidated   AuditReason = "storage_epoch_validated"
 )
 
 type AuditRecord struct {

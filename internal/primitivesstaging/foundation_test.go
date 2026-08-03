@@ -126,7 +126,9 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 		RegistrationPath: filepath.Join(dir, "registration.json"), RegistrationSignaturePath: filepath.Join(dir, "registration.sig"), ReplayDatabasePath: filepath.Join(dir, "replays.db"),
 		AuditDatabasePath: filepath.Join(dir, "audit.db"),
 		RegistrationKeyID: "coordination-staging-1", RegistrationPublicKey: base64.RawURLEncoding.EncodeToString(make([]byte, 32)),
-		RequestDeadlineMS: 1000, MaxConcurrentRequests: 16, MaxReplayEntries: 1024, MaxLeaseLifetimeMS: 60_000, Epoch: 1,
+		RequestDeadlineMS: 1000, MaxConcurrentRequests: 16, MaxReplayEntries: 1024, MaxLeaseLifetimeMS: 60_000,
+		NATSServerURI: "nats://127.0.0.1:4222", NATSConnectTimeoutMS: 1000, NATSRequestTimeoutMS: 1000, NATSReplicas: 1,
+		NATSReplaySafetyWindowMS: 300_000, NATSRetentionMS: 3_600_000, CapabilityLimit: 8, CapabilityPendingTTLMS: 500, Epoch: 1,
 	}
 	raw, _ := json.Marshal(value)
 	config, err := ParseConfig(raw)
@@ -141,9 +143,21 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 	if _, err := ParseConfig(raw); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("public bind error = %v", err)
 	}
+	value.PublicBind = "10.0.0.8:8443"
+	value.NATSServerURI = "tls://nats.staging.example:4222"
+	raw, _ = json.Marshal(value)
+	if _, err := ParseConfig(raw); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("implicit NATS trust error = %v", err)
+	}
 	descriptors, err := NewSecretDescriptors(3, 4)
-	if err != nil || descriptors.NATSCredential() != 3 {
+	if err != nil {
 		t.Fatalf("valid descriptors rejected: %v", err)
+	}
+	if descriptor, ok := descriptors.takeNATSCredential(); !ok || descriptor != 3 {
+		t.Fatalf("NATS descriptor = %d, %v", descriptor, ok)
+	}
+	if _, ok := descriptors.takeNATSCredential(); ok {
+		t.Fatal("NATS descriptor was reusable")
 	}
 	if _, err := json.Marshal(descriptors); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("descriptors serialized: %v", err)

@@ -360,6 +360,36 @@ zeroization.
 JetStream/epoch composition, provisioning and MCP traffic remain separate
 gates.
 
+### RFC-0022 JetStream/epoch composition implementation review — 2026-08-03
+
+Issue #108 composes only the accepted RFC-0012 nonce, fenced-lease and bounded
+capability-accounting KV stores. The closed staging configuration fixes one
+NATS server URI, connection and request timeouts, replicas, retention, replay
+safety, capability bounds and the same positive restore epoch consumed by the
+primitives service. Normal opening always disables bucket bootstrap and the
+existing adapter revalidates every immutable bucket property and epoch.
+
+The NATS credential is read once from the supervisor descriptor under a fixed
+byte bound, the descriptor is closed immediately, and the held credential is
+best-effort memory locked until the owned connection closes and the buffer is
+cleared. The client disables reconnect and maps connection, authentication,
+bucket and probe details to one redacted unavailable result. This increment
+permits only a literal loopback `nats://` target; remote or TLS NATS requires a
+later contract with an explicit NATS trust bundle and is not silently delegated
+to system roots.
+
+Storage epoch validation commits through the mandatory staging audit gate.
+Readiness requires the live connection and fresh exact probes for the nonce,
+lease and budget buckets. Runtime shutdown removes readiness, closes the
+dependency set in reverse order, closes NATS ownership, then zeroes capability
+custody before the final stopped audit. Tests cover descriptor closure and
+reuse, epoch mismatch, audit failure, dependency loss, redaction and backing
+credential bounds and zeroization; the existing disposable-JetStream suite continues to
+qualify exact buckets, restart and rollback rejection.
+
+This increment does not create buckets, provision infrastructure, mint a
+credential, expose a listener or send MCP traffic. Those remain later gates.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

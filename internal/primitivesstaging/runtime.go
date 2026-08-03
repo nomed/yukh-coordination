@@ -28,6 +28,11 @@ type Readiness interface {
 	Ready() bool
 }
 
+type RuntimeDependency interface {
+	Readiness
+	Close(context.Context) error
+}
+
 type LifecycleAuditor interface {
 	RecordLifecycle(context.Context, identity.AuditReason) error
 	RecordDependencyUnavailable(context.Context) error
@@ -67,10 +72,25 @@ func (set *ReadinessSet) Ready() bool {
 	return true
 }
 
+func (set *ReadinessSet) Close(ctx context.Context) error {
+	if set == nil {
+		return ErrInvalid
+	}
+	var result error
+	for index := len(set.probes) - 1; index >= 0; index-- {
+		if closer, ok := set.probes[index].(interface{ Close(context.Context) error }); ok {
+			if err := closer.Close(ctx); err != nil {
+				result = ErrUnavailable
+			}
+		}
+	}
+	return result
+}
+
 type Runtime struct {
 	config     *Config
 	handler    *primitiveshttp.Handler
-	dependency Readiness
+	dependency RuntimeDependency
 	tlsConfig  *tls.Config
 	audit      LifecycleAuditor
 	custody    SecretCustody
@@ -133,7 +153,7 @@ func LoadServerTLSConfig(config *Config) (*tls.Config, error) {
 	}, nil
 }
 
-func NewRuntime(config *Config, handler *primitiveshttp.Handler, dependency Readiness, tlsConfig *tls.Config, audit LifecycleAuditor, custody SecretCustody) (*Runtime, error) {
+func NewRuntime(config *Config, handler *primitiveshttp.Handler, dependency RuntimeDependency, tlsConfig *tls.Config, audit LifecycleAuditor, custody SecretCustody) (*Runtime, error) {
 	if config == nil || handler == nil || dependency == nil || audit == nil || custody == nil || !validServerTLS(tlsConfig) {
 		return nil, ErrInvalid
 	}
@@ -210,6 +230,9 @@ func (r *Runtime) Serve(ctx context.Context, publicListener, operationsListener 
 	}
 	auditCtx, auditCancel := context.WithTimeout(context.Background(), r.config.RequestDeadline())
 	defer auditCancel()
+	if err := r.dependency.Close(auditCtx); err != nil {
+		result = ErrUnavailable
+	}
 	if err := r.custody.Close(auditCtx); err != nil {
 		result = ErrUnavailable
 	}

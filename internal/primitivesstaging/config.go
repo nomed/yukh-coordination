@@ -44,6 +44,14 @@ type configJSON struct {
 	MaxConcurrentRequests     int    `json:"max_concurrent_requests"`
 	MaxReplayEntries          int    `json:"max_replay_entries"`
 	MaxLeaseLifetimeMS        int    `json:"max_lease_lifetime_ms"`
+	NATSServerURI             string `json:"nats_server_uri"`
+	NATSConnectTimeoutMS      int    `json:"nats_connect_timeout_ms"`
+	NATSRequestTimeoutMS      int    `json:"nats_request_timeout_ms"`
+	NATSReplicas              int    `json:"nats_replicas"`
+	NATSReplaySafetyWindowMS  int    `json:"nats_replay_safety_window_ms"`
+	NATSRetentionMS           int    `json:"nats_retention_ms"`
+	CapabilityLimit           int    `json:"capability_limit"`
+	CapabilityPendingTTLMS    int    `json:"capability_pending_ttl_ms"`
 	Epoch                     uint64 `json:"epoch"`
 }
 
@@ -54,6 +62,7 @@ type Config struct{ value configJSON }
 type SecretDescriptors struct {
 	natsCredential  int
 	capabilityKey   int
+	natsTaken       atomic.Bool
 	capabilityTaken atomic.Bool
 }
 
@@ -71,7 +80,7 @@ func ParseConfig(raw []byte) (*Config, error) {
 	var value configJSON
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.MaxLeaseLifetimeMS < 1 || value.MaxLeaseLifetimeMS > 900_000 || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 {
+	if decoder.Decode(&value) != nil || value.Profile != Profile || !exactHTTPSOrigin(value.PublicBaseURI) || !privateBind(value.PublicBind) || !loopbackBind(value.OperationsBind) || !exactNATSServer(value.NATSServerURI) || !opaque(value.RegistrationKeyID, 128) || !base64url(value.RegistrationPublicKey, 43) || value.RequestDeadlineMS < 1 || value.RequestDeadlineMS > 5_000 || value.MaxConcurrentRequests < 1 || value.MaxConcurrentRequests > 256 || value.MaxReplayEntries < 1 || value.MaxReplayEntries > 100_000 || value.MaxLeaseLifetimeMS < 1 || value.MaxLeaseLifetimeMS > 900_000 || value.NATSConnectTimeoutMS < 1 || value.NATSConnectTimeoutMS > 5_000 || value.NATSRequestTimeoutMS < 1 || value.NATSRequestTimeoutMS > 5_000 || value.NATSReplicas < 1 || value.NATSReplicas > 5 || value.NATSReplaySafetyWindowMS < value.MaxLeaseLifetimeMS || value.NATSReplaySafetyWindowMS > 86_400_000 || value.NATSRetentionMS <= value.MaxLeaseLifetimeMS+value.NATSReplaySafetyWindowMS || value.NATSRetentionMS > 604_800_000 || value.CapabilityLimit < 1 || value.CapabilityLimit > 32 || value.CapabilityPendingTTLMS < 1 || value.CapabilityPendingTTLMS > value.NATSRequestTimeoutMS || value.Epoch == 0 || value.Epoch > 9_007_199_254_740_991 {
 		return nil, ErrInvalid
 	}
 	paths := []string{value.TLSCertificatePath, value.TLSPrivateKeyPath, value.TLSTrustBundlePath, value.RegistrationPath, value.RegistrationSignaturePath, value.ReplayDatabasePath, value.AuditDatabasePath}
@@ -126,15 +135,33 @@ func (c *Config) MaxReplayEntries() int      { return c.value.MaxReplayEntries }
 func (c *Config) MaxLeaseLifetime() time.Duration {
 	return time.Duration(c.value.MaxLeaseLifetimeMS) * time.Millisecond
 }
+func (c *Config) NATSServerURI() string { return c.value.NATSServerURI }
+func (c *Config) NATSConnectTimeout() time.Duration {
+	return time.Duration(c.value.NATSConnectTimeoutMS) * time.Millisecond
+}
+func (c *Config) NATSRequestTimeout() time.Duration {
+	return time.Duration(c.value.NATSRequestTimeoutMS) * time.Millisecond
+}
+func (c *Config) NATSReplicas() int { return c.value.NATSReplicas }
+func (c *Config) NATSReplaySafetyWindow() time.Duration {
+	return time.Duration(c.value.NATSReplaySafetyWindowMS) * time.Millisecond
+}
+func (c *Config) NATSRetention() time.Duration {
+	return time.Duration(c.value.NATSRetentionMS) * time.Millisecond
+}
+func (c *Config) CapabilityLimit() int { return c.value.CapabilityLimit }
+func (c *Config) CapabilityPendingTTL() time.Duration {
+	return time.Duration(c.value.CapabilityPendingTTLMS) * time.Millisecond
+}
 func (c *Config) Epoch() uint64              { return c.value.Epoch }
 func (*Config) String() string               { return "Config{REDACTED}" }
 func (*Config) GoString() string             { return "Config{REDACTED}" }
 func (*Config) MarshalJSON() ([]byte, error) { return nil, ErrInvalid }
-func (s *SecretDescriptors) NATSCredential() int {
-	if s == nil {
-		return -1
+func (s *SecretDescriptors) takeNATSCredential() (int, bool) {
+	if s == nil || !s.natsTaken.CompareAndSwap(false, true) {
+		return -1, false
 	}
-	return s.natsCredential
+	return s.natsCredential, true
 }
 func (s *SecretDescriptors) takeCapabilityKey() (int, bool) {
 	if s == nil || !s.capabilityTaken.CompareAndSwap(false, true) {
@@ -149,6 +176,20 @@ func (*SecretDescriptors) MarshalJSON() ([]byte, error) { return nil, ErrInvalid
 func exactHTTPSOrigin(value string) bool {
 	parsed, err := url.Parse(value)
 	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil && parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == "" && parsed.String() == value
+}
+
+func exactNATSServer(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" || parsed.Host == "" {
+		return false
+	}
+	host, port, splitErr := net.SplitHostPort(parsed.Host)
+	ip := net.ParseIP(host)
+	parsedPort, portErr := strconv.Atoi(port)
+	if splitErr != nil || portErr != nil || parsedPort < 1 || parsedPort > 65535 {
+		return false
+	}
+	return parsed.Scheme == "nats" && ip != nil && ip.IsLoopback() && parsed.String() == value
 }
 
 func privateBind(value string) bool {

@@ -39,6 +39,7 @@ type CapabilityBudget struct {
 	pendingTTL time.Duration
 	epoch      uint64
 	now        func() time.Time
+	probe      func(context.Context) error
 }
 
 func (budget *CapabilityBudget) ConfiguredEpoch() uint64 { return budget.epoch }
@@ -66,7 +67,22 @@ func OpenCapabilityBudget(ctx context.Context, connection *nats.Conn, config Con
 	if err != nil || !matchingStatus(status, expectedConfig) {
 		return nil, coordination.ErrInvalidArgument
 	}
-	return &CapabilityBudget{kv: kv, limit: limit, pendingTTL: pendingTTL, epoch: config.Epoch, now: time.Now}, nil
+	probe := func(probeContext context.Context) error {
+		status, statusErr := kv.Status(probeContext)
+		if statusErr != nil || !matchingStatus(status, expectedConfig) {
+			return coordination.ErrUnavailable
+		}
+		return nil
+	}
+	return &CapabilityBudget{kv: kv, limit: limit, pendingTTL: pendingTTL, epoch: config.Epoch, now: time.Now, probe: probe}, nil
+}
+
+// Probe revalidates the exact immutable bucket profile and restore epoch.
+func (budget *CapabilityBudget) Probe(ctx context.Context) error {
+	if budget == nil || budget.probe == nil || ctx == nil {
+		return coordination.ErrUnavailable
+	}
+	return budget.probe(ctx)
 }
 
 func (budget *CapabilityBudget) Reserve(ctx context.Context, principal coordination.Digest, token coordination.CapabilityTokenID, expires time.Time, epoch uint64) error {
