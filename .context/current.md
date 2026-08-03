@@ -2,8 +2,9 @@
 
 - Updated: 2026-08-03
 - Governing issue: #6
-- Last delivery pull request: #106
-- Active increment: #108 exact RFC-0022 JetStream/epoch composition
+- Last delivery pull request: #109
+- Active increment: #110 publishes the immutable RFC-0022 implementation
+  record and redacted deployment plan
 - Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -23,17 +24,18 @@
   DPoP authentication and durable replay foundation was delivered in #96, and
   its private TLS listener and primitives pipeline composition in #100, and
   its mandatory fail-closed audit gate in #103, and its descriptor-delivered
-  capability-key custody in #106
+  capability-key custody in #106, and its exact loopback JetStream/epoch
+  composition in #109
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92
-- Next action after #108: publish the immutable RFC-0022 implementation commit
-  and a redacted deployment plan for separate review; any RFC-0020 WIF and
-  isolated-cloud qualification must be a new, separately owned increment. Live
-  infrastructure, credentials, external-token selection, bootstrap, protected
-  mutations and production use remain separately gated
+- Next action after review of #110: obtain a new explicit owner approval before
+  provisioning any private-staging dependency or ephemeral credential; any
+  RFC-0020 WIF and isolated-cloud qualification must be a new, separately owned
+  increment. Live traffic, MCP connection, protected mutations and production
+  use remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
