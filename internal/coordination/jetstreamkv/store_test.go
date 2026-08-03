@@ -168,6 +168,43 @@ type failingKV struct {
 	gets    int
 }
 
+type fixedEntry struct {
+	key      string
+	value    []byte
+	revision uint64
+}
+
+func (entry fixedEntry) Bucket() string         { return LeaseBucket }
+func (entry fixedEntry) Key() string            { return entry.key }
+func (entry fixedEntry) Value() []byte          { return entry.value }
+func (entry fixedEntry) Revision() uint64       { return entry.revision }
+func (fixedEntry) Created() time.Time           { return time.Time{} }
+func (fixedEntry) Delta() uint64                { return 0 }
+func (fixedEntry) Operation() natsjs.KeyValueOp { return natsjs.KeyValuePut }
+
+type resumeKV struct {
+	entry   natsjs.KeyValueEntry
+	err     error
+	creates int
+	updates int
+	gets    int
+}
+
+func (store *resumeKV) Create(context.Context, string, []byte, ...natsjs.KVCreateOpt) (uint64, error) {
+	store.creates++
+	return 0, errors.New("unexpected create")
+}
+
+func (store *resumeKV) Update(context.Context, string, []byte, uint64) (uint64, error) {
+	store.updates++
+	return 0, errors.New("unexpected update")
+}
+
+func (store *resumeKV) Get(context.Context, string) (natsjs.KeyValueEntry, error) {
+	store.gets++
+	return store.entry, store.err
+}
+
 func (failure *failingKV) Create(context.Context, string, []byte, ...natsjs.KVCreateOpt) (uint64, error) {
 	failure.creates++
 	return 0, context.DeadlineExceeded
@@ -267,6 +304,99 @@ func TestTimeoutFailsClosedWithBoundedCalls(t *testing.T) {
 	if failure.updates != 1 || failure.gets != 1 {
 		t.Fatalf("lease timeout calls: update=%d get=%d", failure.updates, failure.gets)
 	}
+}
+
+func TestResumeUsesOneReadAndZeroMutations(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	expires := now.Add(30 * time.Second)
+	raw, err := encode("lease", testHolder, expires, 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &resumeKV{entry: fixedEntry{key: string(testKey), value: raw, revision: 17}}
+	store := &Store{leases: provider, config: testConfig(1), now: func() time.Time { return now }}
+	resumed, err := store.Resume(context.Background(), testKey, mustResumeValue(t, testHolder, expires, 1, 17))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.FencingToken() != 17 || provider.gets != 1 || provider.creates != 0 || provider.updates != 0 {
+		t.Fatalf("resume calls/token: token=%d get=%d create=%d update=%d", resumed.FencingToken(), provider.gets, provider.creates, provider.updates)
+	}
+
+	for _, token := range []uint64{16, 18} {
+		provider.gets = 0
+		if _, err := store.Resume(context.Background(), testKey, mustResumeValue(t, testHolder, expires, 1, token)); !errors.Is(err, coordination.ErrConflict) {
+			t.Fatalf("mismatched fence %d: %v", token, err)
+		}
+		if provider.gets != 1 || provider.creates != 0 || provider.updates != 0 {
+			t.Fatalf("stale calls: get=%d create=%d update=%d", provider.gets, provider.creates, provider.updates)
+		}
+	}
+}
+
+func TestResumeFailuresAreBoundedAndRedacted(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	expires := now.Add(30 * time.Second)
+	provider := &resumeKV{err: context.DeadlineExceeded}
+	store := &Store{leases: provider, config: testConfig(1), now: func() time.Time { return now }}
+	resume := mustResumeValue(t, testHolder, expires, 1, 9)
+	if _, err := store.Resume(context.Background(), testKey, resume); !errors.Is(err, coordination.ErrUnavailable) || strings.Contains(err.Error(), "private") {
+		t.Fatalf("provider failure: %v", err)
+	}
+	if provider.gets != 1 || provider.creates != 0 || provider.updates != 0 {
+		t.Fatalf("failure calls: get=%d create=%d update=%d", provider.gets, provider.creates, provider.updates)
+	}
+
+	provider.gets = 0
+	if _, err := store.Resume(context.Background(), testKey, coordination.LeaseResumeValue{}); !errors.Is(err, coordination.ErrInvalidArgument) {
+		t.Fatalf("invalid expiry: %v", err)
+	}
+	if provider.gets != 0 {
+		t.Fatalf("invalid input reached provider: %d", provider.gets)
+	}
+
+	provider.err = natsjs.ErrKeyNotFound
+	if _, err := store.Resume(context.Background(), testKey, resume); !errors.Is(err, coordination.ErrConflict) {
+		t.Fatalf("missing lease: %v", err)
+	}
+}
+
+func TestResumeAgainstDisposableNATSAndRestart(t *testing.T) {
+	connection := startServer(t, "14318")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	store, err := Open(ctx, connection, testConfig(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	store.now = func() time.Time { return now }
+	expires := now.Add(30 * time.Second)
+	held, err := store.Acquire(ctx, testKey, coordination.LeaseValue{HolderDigest: testHolder, ExpiresAt: expires, Epoch: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealedState := mustResumeValue(t, testHolder, expires, 1, held.FencingToken())
+	restarted := &Store{leases: store.leases, nonces: store.nonces, config: store.config, now: store.now}
+	resumed, err := restarted.Resume(ctx, testKey, sealedState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resumed.Renew(ctx, now.Add(40*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := held.Release(ctx); !errors.Is(err, coordination.ErrConflict) {
+		t.Fatalf("stale pre-restart handle released: %v", err)
+	}
+}
+
+func mustResumeValue(t *testing.T, holder coordination.Digest, expires time.Time, epoch, token uint64) coordination.LeaseResumeValue {
+	t.Helper()
+	value, err := coordination.NewLeaseResumeValue(holder, expires, epoch, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
 
 func TestOpenRejectsMismatchedBucket(t *testing.T) {

@@ -75,6 +75,20 @@ func (store *Store) Acquire(_ context.Context, key coordination.Digest, value co
 	return &lease{store: store, key: key, holder: value.HolderDigest, expires: value.ExpiresAt, revision: current.revision}, nil
 }
 
+func (store *Store) Resume(_ context.Context, key coordination.Digest, value coordination.LeaseResumeValue) (coordination.Lease, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if !digestPattern.MatchString(string(key)) || value.Epoch() != store.Epoch {
+		return nil, coordination.ErrInvalidArgument
+	}
+	current, exists := store.leases[key]
+	if !exists || current.released || current.holder != value.HolderDigest() || current.expires != value.ExpiresAt() ||
+		current.epoch != value.Epoch() || current.revision != value.FencingToken() || !current.expires.After(store.Now().UTC()) {
+		return nil, coordination.ErrConflict
+	}
+	return &lease{store: store, key: key, holder: current.holder, expires: current.expires, revision: current.revision}, nil
+}
+
 type lease struct {
 	store    *Store
 	key      coordination.Digest

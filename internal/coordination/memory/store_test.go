@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -43,4 +44,90 @@ func TestConformance(t *testing.T) {
 	if second.FencingToken() <= first.FencingToken() {
 		t.Fatal("fencing token did not advance")
 	}
+}
+
+func TestResumeReconstructsExactLeaseAndRejectsStaleState(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	store, err := New(time.Minute, 7, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := coordination.Digest("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	holder := coordination.Digest("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	expires := now.Add(30 * time.Second)
+	acquired, err := store.Acquire(context.Background(), key, coordination.LeaseValue{HolderDigest: holder, ExpiresAt: expires, Epoch: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume := mustResumeValue(t, holder, expires, 7, acquired.FencingToken())
+	reconstructed, err := store.Resume(context.Background(), key, resume)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid, validErr := reconstructed.Valid(context.Background()); validErr != nil || !valid {
+		t.Fatalf("resumed validity: %v, %v", valid, validErr)
+	}
+	if err := reconstructed.Renew(context.Background(), now.Add(40*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Resume(context.Background(), key, resume); !errors.Is(err, coordination.ErrConflict) {
+		t.Fatalf("old fence resumed after renew: %v", err)
+	}
+	resume = mustResumeValue(t, holder, now.Add(40*time.Second), 7, reconstructed.FencingToken())
+	reconstructed, err = store.Resume(context.Background(), key, resume)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reconstructed.Release(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	resume = mustResumeValue(t, holder, now.Add(40*time.Second), 7, reconstructed.FencingToken())
+	if _, err := store.Resume(context.Background(), key, resume); !errors.Is(err, coordination.ErrConflict) {
+		t.Fatalf("released lease resumed: %v", err)
+	}
+}
+
+func TestResumeRejectsInvalidAndExpiredState(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	store, err := New(time.Minute, 1, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := coordination.Digest("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	holder := coordination.Digest("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	expires := now.Add(20 * time.Second)
+	held, err := store.Acquire(context.Background(), key, coordination.LeaseValue{HolderDigest: holder, ExpiresAt: expires, Epoch: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := mustResumeValue(t, holder, expires, 1, held.FencingToken())
+	if _, err := store.Resume(context.Background(), key, coordination.LeaseResumeValue{}); !errors.Is(err, coordination.ErrInvalidArgument) {
+		t.Fatalf("zero resume: %v", err)
+	}
+	if _, err := coordination.NewLeaseResumeValue(holder, expires.Add(time.Nanosecond), 1, held.FencingToken()); !errors.Is(err, coordination.ErrInvalidArgument) {
+		t.Fatalf("non-millisecond expiry: %v", err)
+	}
+	changed := mustResumeValue(t, coordination.Digest("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"), expires, 1, held.FencingToken())
+	if _, err := store.Resume(context.Background(), key, changed); !errors.Is(err, coordination.ErrConflict) {
+		t.Fatalf("changed holder: %v", err)
+	}
+	store.Now = func() time.Time { return expires }
+	if _, err := store.Resume(context.Background(), key, valid); !errors.Is(err, coordination.ErrConflict) {
+		t.Fatalf("expired resume: %v", err)
+	}
+	if got := valid.String(); got != "LeaseResumeValue{REDACTED}" {
+		t.Fatalf("unsafe formatting: %q", got)
+	}
+	if _, err := json.Marshal(valid); !errors.Is(err, coordination.ErrInvalidArgument) {
+		t.Fatalf("resume value serialized: %v", err)
+	}
+}
+
+func mustResumeValue(t *testing.T, holder coordination.Digest, expires time.Time, epoch, token uint64) coordination.LeaseResumeValue {
+	t.Helper()
+	value, err := coordination.NewLeaseResumeValue(holder, expires, epoch, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
