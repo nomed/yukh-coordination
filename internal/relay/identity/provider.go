@@ -18,6 +18,7 @@ const (
 	providerProfileVersion = 1
 	maxSessionLifetime     = 15 * time.Minute
 	maxGenerationAttempts  = 3
+	maxSafeSessionEpoch    = uint64(9_007_199_254_740_991)
 )
 
 type Registry interface {
@@ -115,7 +116,7 @@ func (p *Provider) Bootstrap(ctx context.Context, material httpapi.BootstrapAuth
 		record.PrincipalID = pending.PrincipalID
 		record.ParticipantInstanceID = pending.ParticipantInstanceID
 		record.SessionEpoch = pending.SessionEpoch
-		receipt, auditErr := p.auditor.Record(ctx, record)
+		receipt, auditErr := p.recordAudit(ctx, record)
 		if auditErr != nil {
 			return httpapi.IssuedSession{}, httpapi.ErrAuthenticationUnavailable
 		}
@@ -154,7 +155,7 @@ func (p *Provider) Authenticate(ctx context.Context, material httpapi.SessionAut
 	record.PrincipalID = active.PrincipalID
 	record.ParticipantInstanceID = active.ParticipantInstanceID
 	record.SessionEpoch = active.SessionEpoch
-	if _, err := p.auditor.Record(ctx, record); err != nil {
+	if _, err := p.recordAudit(ctx, record); err != nil {
 		return httpapi.Identity{}, httpapi.ErrAuthenticationUnavailable
 	}
 	return httpapi.Identity{
@@ -222,7 +223,7 @@ func classifyRegistry(err error) failure {
 	switch {
 	case errors.Is(err, ErrProofReplay):
 		return failure{AuditDeny, AuditReasonProofReplay, httpapi.ErrUnauthenticated}
-	case errors.Is(err, ErrSessionNotFound), errors.Is(err, ErrSessionConflict), errors.Is(err, ErrRegistryInvalid):
+	case errors.Is(err, ErrSessionNotFound), errors.Is(err, ErrSessionConflict):
 		return failure{AuditDeny, AuditReasonInactiveSession, httpapi.ErrUnauthenticated}
 	default:
 		return failure{AuditUnavailable, AuditReasonRegistryUnavailable, httpapi.ErrAuthenticationUnavailable}
@@ -248,10 +249,73 @@ func (p *Provider) recordFailure(ctx context.Context, operationID string, operat
 		record.TenantID = external.TenantID
 		record.PrincipalID = external.PrincipalID
 	}
-	if _, err := p.auditor.Record(ctx, record); err != nil {
+	if _, err := p.recordAudit(ctx, record); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (p *Provider) recordAudit(ctx context.Context, record AuditRecord) (string, error) {
+	if !validAuditRecord(record) {
+		return "", httpapi.ErrAuthenticationUnavailable
+	}
+	return p.auditor.Record(ctx, record)
+}
+
+func validAuditRecord(record AuditRecord) bool {
+	operationID, err := uuid.Parse(record.OperationID)
+	if err != nil || operationID.Version() != 7 || operationID.String() != record.OperationID || record.ProfileVersion != providerProfileVersion || record.DecisionTime.Location() != time.UTC || !record.DecisionTime.Equal(record.DecisionTime.Truncate(time.Millisecond)) {
+		return false
+	}
+	if record.Operation != AuditBootstrap && record.Operation != AuditAuthentication {
+		return false
+	}
+	switch record.Outcome {
+	case AuditAllow:
+		if record.Reason != AuditReasonAllowed || !validTenantAuditIdentity(record, true) || !record.HasDPoPThumbprint {
+			return false
+		}
+	case AuditDeny:
+		if record.Reason != AuditReasonInvalidCredential && record.Reason != AuditReasonProofReplay && record.Reason != AuditReasonInactiveSession {
+			return false
+		}
+		if !validTenantAuditIdentity(record, false) {
+			return false
+		}
+	case AuditUnavailable:
+		if record.Reason != AuditReasonVerificationUnavailable && record.Reason != AuditReasonRegistryUnavailable && record.Reason != AuditReasonMaterialCollision {
+			return false
+		}
+		if !validTenantAuditIdentity(record, false) {
+			return false
+		}
+	default:
+		return false
+	}
+	return record.HasDPoPThumbprint || record.DPoPThumbprint == ([sha256.Size]byte{})
+}
+
+func validTenantAuditIdentity(record AuditRecord, required bool) bool {
+	hasTenant := record.TenantID != "" || record.PrincipalID != ""
+	if hasTenant && (!tenantPattern.MatchString(record.TenantID) || !validAuditDigest(record.PrincipalID)) {
+		return false
+	}
+	hasSession := record.ParticipantInstanceID != "" || record.SessionEpoch != 0
+	if hasSession {
+		participant, err := uuid.Parse(record.ParticipantInstanceID)
+		if err != nil || participant.Version() != 7 || participant.String() != record.ParticipantInstanceID || record.SessionEpoch == 0 || record.SessionEpoch > maxSafeSessionEpoch || !hasTenant {
+			return false
+		}
+	}
+	return !required || (hasTenant && hasSession)
+}
+
+func validAuditDigest(value string) bool {
+	if len(value) != 43 {
+		return false
+	}
+	decoded, err := base64.RawURLEncoding.Strict().DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
 }
 
 func auditRecord(operationID string, operation AuditOperation, outcome AuditOutcome, reason AuditReason, at time.Time, thumbprint *[sha256.Size]byte) AuditRecord {

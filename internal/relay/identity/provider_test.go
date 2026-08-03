@@ -275,6 +275,49 @@ func TestProviderReadinessRequiresAllThreeBoundaries(t *testing.T) {
 	}
 }
 
+func TestProviderTreatsRegistryInvariantFailureAsUnavailable(t *testing.T) {
+	provider, _, registry, auditor, _ := providerFixture(t)
+	registry.authenticateErr = ErrRegistryInvalid
+	response := httptest.NewRecorder()
+	providerHandler(t, provider).ServeHTTP(response, resourceHTTPRequest())
+	if response.Code != http.StatusServiceUnavailable || len(auditor.records) != 1 || auditor.records[0].Outcome != AuditUnavailable || auditor.records[0].Reason != AuditReasonRegistryUnavailable {
+		t.Fatalf("registry invariant became public denial: status=%d audit=%#v", response.Code, auditor.records)
+	}
+}
+
+func TestProviderRejectsTypedNilDependencies(t *testing.T) {
+	var verifier *fakeTokenVerifier
+	var registry *fakeRegistry
+	var auditor *fakeAuditor
+	if _, err := NewProvider(verifier, &fakeRegistry{}, &fakeAuditor{}); !errors.Is(err, httpapi.ErrAuthenticationUnavailable) {
+		t.Fatalf("typed-nil verifier accepted: %v", err)
+	}
+	if _, err := NewProvider(&fakeTokenVerifier{}, registry, &fakeAuditor{}); !errors.Is(err, httpapi.ErrAuthenticationUnavailable) {
+		t.Fatalf("typed-nil registry accepted: %v", err)
+	}
+	if _, err := NewProvider(&fakeTokenVerifier{}, &fakeRegistry{}, auditor); !errors.Is(err, httpapi.ErrAuthenticationUnavailable) {
+		t.Fatalf("typed-nil auditor accepted: %v", err)
+	}
+}
+
+func TestAuditRecordProfileIsClosed(t *testing.T) {
+	provider, _, _, auditor, now := providerFixture(t)
+	record := AuditRecord{
+		ProfileVersion: providerProfileVersion, OperationID: "01890f3e-7b00-7000-8000-000000000001",
+		Operation: AuditAuthentication, Outcome: AuditAllow, Reason: AuditReasonAllowed, DecisionTime: now,
+		TenantID: "tenant:example", PrincipalID: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		ParticipantInstanceID: "01890f3e-7b00-7000-8000-000000000002", SessionEpoch: 1,
+		HasDPoPThumbprint: true, DPoPThumbprint: sha256.Sum256([]byte("key")),
+	}
+	if _, err := provider.recordAudit(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	record.Reason = AuditReasonInvalidCredential
+	if _, err := provider.recordAudit(context.Background(), record); !errors.Is(err, httpapi.ErrAuthenticationUnavailable) || len(auditor.records) != 1 {
+		t.Fatalf("malformed audit record crossed port: err=%v records=%d", err, len(auditor.records))
+	}
+}
+
 func providerFixture(t *testing.T) (*Provider, *fakeTokenVerifier, *fakeRegistry, *fakeAuditor, time.Time) {
 	t.Helper()
 	now := time.Date(2026, 8, 3, 9, 0, 0, 0, time.UTC)
