@@ -1,6 +1,6 @@
 # RFC-0009: Session bootstrap and request authentication contract
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #5

@@ -2,12 +2,12 @@
 
 - Date: 2026-08-03
 - Governing issue: #5
-- Proposed decision: RFC-0009
+- Accepted decision: RFC-0009
 - Branch: `agent/session-bootstrap-contract`
 
 ## Outcome
 
-Proposed the public session bootstrap and request-aware authentication contract
+Accepted the public session bootstrap and request-aware authentication contract
 for the accepted single-node process profile.
 
 The review separates external principal bootstrap from ordinary relay-session
@@ -19,7 +19,8 @@ authentication material rather than raw HTTP requests.
 
 This session changes documentation only. It introduces no handler route, Go
 port, JWT/DPoP dependency, identity database, provider, configuration schema or
-binary. Owner acceptance is required before the contract implementation.
+binary. The next authorized increment is the contract implementation with
+deterministic fakes and boundary tests.
 
 ## Qualification plan
 
