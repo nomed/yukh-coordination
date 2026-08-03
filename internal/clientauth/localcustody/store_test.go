@@ -187,8 +187,12 @@ func TestTamperWrongRootAndProvisionalRetirementFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	if _, err := reopened.Open(context.Background(), provisioned.Signer().KeyReference()); !errors.Is(err, clientauth.ErrProofSigner) {
-		t.Fatalf("wrong root: %v", err)
+	wrongRootSigner, err := reopened.Open(context.Background(), provisioned.Signer().KeyReference())
+	if err != nil {
+		t.Fatalf("open public signer metadata with wrong root: %v", err)
+	}
+	if _, err := wrongRootSigner.SignES256(context.Background(), []byte("header.payload")); !errors.Is(err, clientauth.ErrProofSigner) {
+		t.Fatalf("wrong root signed: %v", err)
 	}
 }
 
