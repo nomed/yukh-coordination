@@ -1,6 +1,6 @@
 # RFC-0005: Relay application contract
 
-- Status: Proposed
+- Status: Accepted
 - Author: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #5
@@ -15,6 +15,8 @@ open by RFC-0004 before application code is written.
 
 Acceptance authorizes implementation and repository qualification only. It
 does not authorize a provider, executable server, deployment or production use.
+
+The project owner accepted this contract on 2026-08-03 after review in PR #21.
 
 ## Boundary
 

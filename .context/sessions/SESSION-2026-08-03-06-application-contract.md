@@ -2,7 +2,7 @@
 
 - Governing issue: #5
 - Pull request: #21
-- Status: Active
+- Status: Complete
 
 ## Objective
 
@@ -26,5 +26,5 @@ code or new dependency is introduced before owner acceptance.
 
 ## Next
 
-Obtain owner review of RFC-0005, then implement it as a separate application
-increment governed by issue #5.
+The owner accepted RFC-0005 on 2026-08-03. Implement it as a separate
+application increment governed by issue #5.
