@@ -1,12 +1,13 @@
 # RFC-0019: Bounded capability accounting and terminal lease inspection
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #75
 - Governing architecture: ADR-0001, RFC-0012, RFC-0015, RFC-0016 and RFC-0017
 
-Acceptance authorizes only the separately reviewed neutral ports, memory and
+The project owner explicitly accepted this RFC on 2026-08-03. Acceptance
+authorizes only the separately reviewed neutral ports, memory and
 JetStream KV adapters, application integration and deterministic qualification
 described here. It does not authorize deployment, a public listener, production
 credentials, publication, protected consumer use or live apply.
