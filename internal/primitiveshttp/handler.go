@@ -23,14 +23,15 @@ type Handler struct {
 	baseURI  string
 	epoch    uint64
 	deadline time.Duration
+	slots    chan struct{}
 }
 
-func NewHandler(bridge *Bridge, baseURI string, epoch uint64, deadline time.Duration) (*Handler, error) {
+func NewHandler(bridge *Bridge, baseURI string, epoch uint64, deadline time.Duration, maxConcurrent int) (*Handler, error) {
 	parsed, err := url.Parse(baseURI)
-	if bridge == nil || err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.HasSuffix(baseURI, "/") || epoch == 0 || deadline <= 0 || deadline > 5*time.Second {
+	if bridge == nil || err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.HasSuffix(baseURI, "/") || epoch == 0 || deadline <= 0 || deadline > 5*time.Second || maxConcurrent < 1 {
 		return nil, primitivesauth.ErrInvalidArgument
 	}
-	return &Handler{bridge: bridge, baseURI: baseURI, epoch: epoch, deadline: deadline}, nil
+	return &Handler{bridge: bridge, baseURI: baseURI, epoch: epoch, deadline: deadline, slots: make(chan struct{}, maxConcurrent)}, nil
 }
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -39,6 +40,15 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		writeProblem(writer, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	select {
+	case handler.slots <- struct{}{}:
+		defer func() { <-handler.slots }()
+	default:
+		writeProblem(writer, http.StatusServiceUnavailable, "temporarily_unavailable")
+		return
+	}
+	ctx, cancel := context.WithTimeout(request.Context(), handler.deadline)
+	defer cancel()
 	authentication, err := requestAuthentication(request, handler.baseURI+request.URL.EscapedPath())
 	if err != nil {
 		writeProblem(writer, http.StatusUnauthorized, "unauthenticated")
@@ -49,8 +59,6 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		writeProblem(writer, http.StatusBadRequest, "invalid_request")
 		return
 	}
-	ctx, cancel := context.WithTimeout(request.Context(), handler.deadline)
-	defer cancel()
 	response, err := handler.dispatch(ctx, request.URL.Path, authentication, body)
 	if err != nil {
 		writeMappedProblem(writer, err)

@@ -46,8 +46,7 @@ export class PrimitivesClient {
     if (!response || response.type === "opaqueredirect" || response.status >= 300 && response.status < 400) throw stable("temporarily_unavailable");
     const contentType = response.headers?.get?.("content-type")?.split(";").map((part) => part.trim()).join(";");
     if (contentType !== MEDIA_TYPE) throw stable("invariant_violation");
-    const text = await response.text();
-    if (Buffer.byteLength(text, "utf8") > 4096) throw stable("invariant_violation");
+    const text = await readBoundedBody(response, 4096);
     let parsed; try { parsed = parseJson(text); } catch { throw stable("invariant_violation"); }
     if (canonicalize(parsed) !== text) throw stable("invariant_violation");
     if (!response.ok) throw stable(typeof parsed.code === "string" ? parsed.code : "temporarily_unavailable");
@@ -67,5 +66,41 @@ function validateBody(body) {
   }
 }
 function stable(code) { const error = new Error(code); error.code = code; return error; }
+
+async function readBoundedBody(response, limit) {
+  const reader = response?.body?.getReader?.();
+  if (!reader) throw stable("invariant_violation");
+  const chunks = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!(value instanceof Uint8Array)) throw stable("invariant_violation");
+      length += value.byteLength;
+      if (length > limit) {
+        await reader.cancel();
+        throw stable("invariant_violation");
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error?.code === "invariant_violation") throw error;
+    throw stable("temporarily_unavailable");
+  } finally {
+    reader.releaseLock?.();
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw stable("invariant_violation");
+  }
+}
 
 export { MEDIA_TYPE };
