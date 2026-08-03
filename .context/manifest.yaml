@@ -1,0 +1,44 @@
+schema_version: 1
+project: yukh-coordination
+context_root: .context
+
+precedence:
+  - current_human_instruction
+  - accepted_decisions
+  - accepted_rfcs
+  - security_and_quality_models
+  - project_charter_and_protocol
+  - nearest_agents_md
+  - governing_issue_and_pull_request
+  - latest_applicable_handoff
+  - sessions
+  - temporary_notes
+
+records:
+  decisions:
+    path: .context/decisions
+    id_pattern: "ADR-{number:04d}"
+    immutable_after_acceptance: true
+  rfcs:
+    path: .context/rfcs
+    id_pattern: "RFC-{number:04d}"
+    immutable_after_acceptance: true
+  security:
+    path: .context/security
+  handoffs:
+    path: .context/handoffs
+    id_pattern: "HANDOFF-{date}-{sequence:02d}"
+  sessions:
+    path: .context/sessions
+    id_pattern: "SESSION-{date}-{sequence:02d}"
+    authoritative: false
+
+write_policy:
+  sessions: agents_allowed
+  handoffs: agents_allowed
+  decisions: proposal_allowed_human_acceptance_required
+  rfcs: proposal_allowed_human_acceptance_required
+  architecture_change_without_record: forbidden
+  security_change_without_record: forbidden
+  undocumented_top_level_directory: forbidden
+  secrets_or_private_reasoning: forbidden

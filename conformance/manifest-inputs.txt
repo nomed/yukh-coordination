@@ -1,3 +1,5 @@
+.context/rfcs/RFC-0001-protocol-v0.1.md
+.context/rfcs/RFC-0002-mvp-security-boundary.md
 .gitignore
 conformance/CHANGES.md
 conformance/README.md
@@ -154,11 +156,10 @@ conformance/standards-requirements.txt
 conformance/standards-schema.py
 conformance/update-manifest-allowlist.py
 conformance/validate.py
-docs/rfc/0001-protocol-v0.1.md
-docs/rfc/0002-mvp-security-boundary.md
 js/bin/replay.mjs
 js/lib/canonical-json.mjs
 js/lib/replay.mjs
+js/test/replay.test.mjs
 package.json
 schema/channel-metadata-0.1.schema.json
 schema/diagnostic-0.1.schema.json
@@ -181,4 +182,3 @@ schema/problem-0.1.schema.json
 schema/projection-0.1.schema.json
 schema/receipt-0.1.schema.json
 schema/test-vectors/diagnostic-derivation-0.1.json
-test/replay.test.mjs

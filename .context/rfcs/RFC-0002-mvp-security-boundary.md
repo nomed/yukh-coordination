@@ -9,7 +9,7 @@
 
 This RFC freezes the minimum security decisions required to design the Yukh Coordination MVP. It consolidates the owner-approved identity, admission, receipt, retention, persistence, and isolation boundaries.
 
-It is governed by [ADR-0001](../adr/0001-protocol-not-control-plane.md), aligns with [RFC-0001](0001-protocol-v0.1.md) from governing issue #2, and is supported by the detailed [MVP threat model](../security/threat-model.md). RFC-0001 remains responsible for the protocol envelope, canonical event representation, signal schemas, and compatibility contract; this RFC constrains their security semantics. The RFC-0001 link resolves when the issue #2 record is integrated; this branch does not duplicate or redefine that record.
+It is governed by [ADR-0001](../decisions/ADR-0001-protocol-not-control-plane.md), aligns with [RFC-0001](RFC-0001-protocol-v0.1.md) from governing issue #2, and is supported by the detailed [MVP threat model](../security/threat-model.md). RFC-0001 remains responsible for the protocol envelope, canonical event representation, signal schemas, and compatibility contract; this RFC constrains their security semantics. The RFC-0001 link resolves when the issue #2 record is integrated; this branch does not duplicate or redefine that record.
 
 Acceptance of this repository-only security boundary does **not** authorize implementation, a production identity provider, relay operation, deployment, public admission, or production use.
 
