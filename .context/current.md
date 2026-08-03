@@ -2,11 +2,11 @@
 
 - Updated: 2026-08-03
 - Governing implementation issue: #5
-- Last merged pull request: #29
-- Active pull request: #30 for the single-node process profile
-- Runtime decisions: RFC-0003 through RFC-0008 Accepted
-- Current increment: accepted single-node process profile
-- Next qualified increment: session bootstrap and authentication-material contract
+- Last merged pull request: #30
+- Active pull request: #31 for the session bootstrap contract
+- Runtime decisions: RFC-0003 through RFC-0009 Accepted
+- Current increment: accepted session bootstrap contract
+- Next qualified increment: session bootstrap contract implementation
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
