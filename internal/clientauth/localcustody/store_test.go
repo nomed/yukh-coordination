@@ -54,6 +54,9 @@ func TestEncryptedStoreSignerAndExactCAS(t *testing.T) {
 	if _, err := store.Save(context.Background(), "profile-a", clientauth.AbsentRevision(), record); !errors.Is(err, clientauth.ErrCredentialConflict) {
 		t.Fatalf("duplicate create: %v", err)
 	}
+	if _, err := store.Save(context.Background(), "profile-other", clientauth.Revision{}, record); !errors.Is(err, clientauth.ErrCredentialConflict) {
+		t.Fatalf("invalid revision treated as absent: %v", err)
+	}
 	loaded, err := store.Load(context.Background(), "profile-a")
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +92,7 @@ func TestEncryptedStoreSignerAndExactCAS(t *testing.T) {
 	}
 
 	assertNoPlaintext(t, path, record.Credential())
+	assertPrivateModes(t, path)
 }
 
 func TestConcurrentAbsentCreateHasOneWinner(t *testing.T) {
@@ -251,6 +255,22 @@ func assertNoPlaintext(t *testing.T, path, secret string) {
 		}
 		if bytes.Contains(raw, []byte(secret)) {
 			t.Fatalf("plaintext found in %s", filepath.Base(candidate))
+		}
+	}
+}
+
+func assertPrivateModes(t *testing.T, path string) {
+	t.Helper()
+	for _, candidate := range []string{path, path + "-wal", path + "-shm"} {
+		info, err := os.Lstat(candidate)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s mode is %04o", filepath.Base(candidate), info.Mode().Perm())
 		}
 	}
 }

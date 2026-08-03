@@ -10,6 +10,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
@@ -60,6 +61,7 @@ type Store struct {
 	db      *sql.DB
 	root    RootKeySource
 	entropy io.Reader
+	path    string
 }
 
 var (
@@ -82,11 +84,21 @@ func open(path string, root RootKeySource, entropy io.Reader) (*Store, error) {
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 || !ownedByEffectiveUser(info) {
 		return nil, ErrInvalidConfiguration
 	}
+	created := false
 	if existing, statErr := os.Lstat(path); statErr == nil {
-		if !existing.Mode().IsRegular() || existing.Mode()&os.ModeSymlink != 0 || !ownedByEffectiveUser(existing) {
+		if !existing.Mode().IsRegular() || existing.Mode()&os.ModeSymlink != 0 || existing.Mode().Perm()&0o077 != 0 || !ownedByEffectiveUser(existing) {
 			return nil, ErrInvalidConfiguration
 		}
-	} else if !errors.Is(statErr, os.ErrNotExist) {
+	} else if errors.Is(statErr, os.ErrNotExist) {
+		file, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+		if createErr != nil {
+			return nil, clientauth.ErrCredentialStore
+		}
+		if closeErr := file.Close(); closeErr != nil {
+			return nil, clientauth.ErrCredentialStore
+		}
+		created = true
+	} else {
 		return nil, ErrInvalidConfiguration
 	}
 
@@ -97,12 +109,15 @@ func open(path string, root RootKeySource, entropy io.Reader) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	store := &Store{db: db, root: root, entropy: entropy}
+	store := &Store{db: db, root: root, entropy: entropy, path: path}
 	if err := store.initialize(context.Background()); err != nil {
 		_ = db.Close()
+		if created {
+			_ = os.Remove(path)
+		}
 		return nil, err
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := store.validateFiles(); err != nil {
 		_ = db.Close()
 		return nil, clientauth.ErrCredentialStore
 	}
@@ -160,6 +175,19 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+func (s *Store) validateFiles() error {
+	for _, path := range []string{s.path, s.path + "-wal", s.path + "-shm"} {
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 || !ownedByEffectiveUser(info) {
+			return ErrInvalidConfiguration
+		}
+	}
+	return nil
+}
+
 type sessionPlaintext struct {
 	SpecVersion           string `json:"spec_version"`
 	ParticipantInstanceID string `json:"participant_instance_id"`
@@ -214,6 +242,9 @@ func (s *Store) Save(ctx context.Context, profile string, expected clientauth.Re
 		return clientauth.Revision{}, clientauth.ErrCredentialStore
 	}
 	expectedValue, expectedPresent := expected.ProviderValue()
+	if !expectedPresent && !expected.IsAbsent() {
+		return clientauth.Revision{}, clientauth.ErrCredentialConflict
+	}
 	plaintext, err := encodeSession(record)
 	if err != nil {
 		return clientauth.Revision{}, clientauth.ErrCredentialStore
@@ -391,6 +422,12 @@ func (s *Store) Open(ctx context.Context, reference string) (clientauth.ProofSig
 	if !ok || key.Curve != elliptic.P256() || key.D == nil || key.D.Sign() <= 0 || key.D.Cmp(key.Params().N) >= 0 {
 		return nil, clientauth.ErrProofSigner
 	}
+	canonical, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil || len(canonical) != len(der) || subtle.ConstantTimeCompare(canonical, der) != 1 {
+		clear(canonical)
+		return nil, clientauth.ErrProofSigner
+	}
+	clear(canonical)
 	return softwareSigner(reference, key)
 }
 

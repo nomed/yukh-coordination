@@ -157,6 +157,10 @@ func (r Revision) valid() bool    { return r.absent != (r.value != "") }
 func (Revision) String() string   { return "Revision{REDACTED}" }
 func (Revision) GoString() string { return "Revision{REDACTED}" }
 
+// IsAbsent reports only the explicit absent revision used for first creation.
+// A zero or otherwise invalid Revision is not absent.
+func (r Revision) IsAbsent() bool { return r.valid() && r.absent }
+
 // ProviderValue is restricted to a credential-store adapter's CAS call. The
 // boolean is false for the explicit absent revision.
 func (r Revision) ProviderValue() (string, bool) {
