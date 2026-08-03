@@ -4,7 +4,7 @@
 - Governing issue: #6
 - Last delivery pull request: #82
 - Active increment: no implementation increment is currently active
-- Runtime decisions: RFC-0003 through RFC-0020 Accepted
+- Runtime decisions: RFC-0003 through RFC-0021 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017
@@ -13,11 +13,13 @@
   bounded capability-accounting design in #76; the RFC-0020 Google Cloud
   workload custody profile was accepted in #79; the RFC-0015/16/17/19
   client-neutral primitives boundary and qualification were delivered in #71;
-  the RFC-0020 envelope and provider-contract foundation was delivered in #82
+  the RFC-0020 envelope and provider-contract foundation was delivered in #82;
+  RFC-0021 clarifies lease-acquisition contention as `409 conflict` in #83
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
-  Cloud workload custody in #79
+  Cloud workload custody in #79; RFC-0021 contention-response clarification in
+  #83
 - Next action: open the bounded RFC-0020 Cloud Storage `CredentialStore`
   adapter increment against the accepted provider contracts and deterministic
   AEAD fake. Cloud KMS, WIF, composition, live qualification, external-token
