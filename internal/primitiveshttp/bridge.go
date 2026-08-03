@@ -71,6 +71,9 @@ func (flow *publicFlow) Run(ctx context.Context, identity primitivesauth.Identit
 		flow.nonce, err = flow.service.ConsumeNonce(ctx, core, scope, flow.value, flow.expires)
 	case primitivesauth.LeaseAcquire:
 		flow.lease, err = flow.service.Acquire(ctx, core, scope, flow.holder, flow.expires)
+		if errors.Is(err, primitives.ErrConflict) {
+			return primitivesauth.ErrConflict
+		}
 	default:
 		return primitivesauth.ErrInvalidArgument
 	}

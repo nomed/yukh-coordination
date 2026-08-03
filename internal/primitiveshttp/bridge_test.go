@@ -114,6 +114,8 @@ func TestHandlerExercisesEveryRouteAndStableLeaseOutcomes(t *testing.T) {
 
 	acquired := perform(t, handler, "/coordination-primitives/v1/leases:acquire", map[string]any{"epoch": 1, "expires_at": expires, "holder_digest": holder, "scope_digest": scope})
 	assertOutcome(t, acquired, http.StatusOK, "acquired")
+	contended := perform(t, handler, "/coordination-primitives/v1/leases:acquire", map[string]any{"epoch": 1, "expires_at": expires, "holder_digest": strings.Repeat("d", 64), "scope_digest": scope})
+	assertProblem(t, contended, http.StatusConflict, "conflict")
 	var acquiredBody map[string]any
 	if err := json.Unmarshal(acquired.Body.Bytes(), &acquiredBody); err != nil {
 		t.Fatal(err)
