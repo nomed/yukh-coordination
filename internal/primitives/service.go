@@ -70,14 +70,15 @@ type Service struct {
 	leases coordination.FencedLeaseStore
 	sealer CapabilitySealer
 	tokens TokenIDSource
+	budget coordination.CapabilityBudget
 	epoch  uint64
 }
 
-func NewService(nonces coordination.NonceStore, leases coordination.FencedLeaseStore, sealer CapabilitySealer, tokens TokenIDSource, epoch uint64) (*Service, error) {
-	if nonces == nil || leases == nil || sealer == nil || tokens == nil || epoch == 0 || epoch > maxSafeInteger {
+func NewService(nonces coordination.NonceStore, leases coordination.FencedLeaseStore, budget coordination.CapabilityBudget, sealer CapabilitySealer, tokens TokenIDSource, epoch uint64) (*Service, error) {
+	if nonces == nil || leases == nil || budget == nil || sealer == nil || tokens == nil || epoch == 0 || epoch > maxSafeInteger {
 		return nil, ErrInvalidArgument
 	}
-	return &Service{nonces: nonces, leases: leases, sealer: sealer, tokens: tokens, epoch: epoch}, nil
+	return &Service{nonces: nonces, leases: leases, budget: budget, sealer: sealer, tokens: tokens, epoch: epoch}, nil
 }
 
 func (service *Service) ConsumeNonce(ctx context.Context, identity Identity, scope, value coordination.Digest, expiresAt time.Time) (coordination.NonceOutcome, error) {
@@ -123,28 +124,49 @@ func (service *Service) Acquire(ctx context.Context, identity Identity, scope, h
 	if err != nil || !validDigest(holder) {
 		return LeaseResult{}, ErrInvalidArgument
 	}
+	token, budgetToken, principal, err := service.newBudgetToken(identity)
+	if err != nil {
+		return LeaseResult{}, err
+	}
+	if err := service.budget.Reserve(ctx, principal, budgetToken, expiresAt, service.epoch); err != nil {
+		return LeaseResult{}, mapBudgetError(err)
+	}
 	held, err := service.leases.Acquire(ctx, key, coordination.LeaseValue{HolderDigest: holder, ExpiresAt: expiresAt, Epoch: service.epoch})
 	if err != nil {
+		if cancelErr := service.budget.Cancel(ctx, principal, budgetToken, service.epoch); cancelErr != nil {
+			return LeaseResult{}, ErrUnavailable
+		}
 		return LeaseResult{}, mapStoreError(err)
 	}
-	return service.sealLease(ctx, identity, key, holder, expiresAt, held.FencingToken())
+	result, err := service.sealLease(ctx, identity, key, holder, expiresAt, held.FencingToken(), token)
+	if err != nil {
+		if cancelErr := service.budget.Cancel(ctx, principal, budgetToken, service.epoch); cancelErr != nil {
+			return LeaseResult{}, ErrUnavailable
+		}
+		return LeaseResult{}, err
+	}
+	if err := service.budget.Commit(ctx, principal, budgetToken, service.epoch); err != nil {
+		return LeaseResult{}, mapBudgetError(err)
+	}
+	return result, nil
 }
 
-func (service *Service) Inspect(ctx context.Context, identity Identity, capability string) (bool, error) {
+func (service *Service) Inspect(ctx context.Context, identity Identity, capability string) (coordination.LeaseStatus, error) {
 	opened, err := service.OpenCapability(ctx, identity, capability)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	return service.InspectOpened(ctx, opened)
 }
 
-func (service *Service) InspectOpened(ctx context.Context, opened OpenedCapability) (bool, error) {
-	held, err := service.resumeOpened(ctx, opened)
+func (service *Service) InspectOpened(ctx context.Context, opened OpenedCapability) (coordination.LeaseStatus, error) {
+	state := opened.state
+	value, err := coordination.NewLeaseResumeValue(state.holder, state.expiresAt, state.epoch, state.fencingToken)
 	if err != nil {
-		return false, err
+		return "", ErrInvariant
 	}
-	valid, err := held.Valid(ctx)
-	return valid, mapStoreError(err)
+	status, err := service.leases.Inspect(ctx, state.key, value)
+	return status, mapStoreError(err)
 }
 
 func (service *Service) Renew(ctx context.Context, identity Identity, capability string, expiresAt time.Time) (LeaseResult, error) {
@@ -163,7 +185,19 @@ func (service *Service) RenewOpened(ctx context.Context, identity Identity, open
 	if err := held.Renew(ctx, expiresAt); err != nil {
 		return LeaseResult{}, mapStoreError(err)
 	}
-	return service.sealLease(ctx, identity, opened.state.key, opened.state.holder, expiresAt, held.FencingToken())
+	token, next, principal, err := service.newBudgetToken(identity)
+	if err != nil {
+		return LeaseResult{}, err
+	}
+	result, err := service.sealLease(ctx, identity, opened.state.key, opened.state.holder, expiresAt, held.FencingToken(), token)
+	if err != nil {
+		return LeaseResult{}, err
+	}
+	old, _ := coordination.NewCapabilityTokenID(opened.state.tokenID)
+	if err := service.budget.Replace(ctx, principal, old, next, expiresAt, service.epoch); err != nil {
+		return LeaseResult{}, mapBudgetError(err)
+	}
+	return result, nil
 }
 
 func (service *Service) Release(ctx context.Context, identity Identity, capability string) error {
@@ -171,15 +205,23 @@ func (service *Service) Release(ctx context.Context, identity Identity, capabili
 	if err != nil {
 		return err
 	}
-	return service.ReleaseOpened(ctx, opened)
+	return service.ReleaseOpened(ctx, identity, opened)
 }
 
-func (service *Service) ReleaseOpened(ctx context.Context, opened OpenedCapability) error {
+func (service *Service) ReleaseOpened(ctx context.Context, identity Identity, opened OpenedCapability) error {
 	held, err := service.resumeOpened(ctx, opened)
 	if err != nil {
 		return err
 	}
-	return mapStoreError(held.Release(ctx))
+	if err := held.Release(ctx); err != nil {
+		return mapStoreError(err)
+	}
+	principal, err := derivePrincipal(identity)
+	if err != nil {
+		return ErrInvariant
+	}
+	token, _ := coordination.NewCapabilityTokenID(opened.state.tokenID)
+	return mapBudgetError(service.budget.Retire(ctx, principal, token, service.epoch))
 }
 
 func (service *Service) resumeOpened(ctx context.Context, opened OpenedCapability) (coordination.Lease, error) {
@@ -195,11 +237,7 @@ func (service *Service) resumeOpened(ctx context.Context, opened OpenedCapabilit
 	return held, nil
 }
 
-func (service *Service) sealLease(ctx context.Context, identity Identity, key, holder coordination.Digest, expiresAt time.Time, fence uint64) (LeaseResult, error) {
-	tokenID, err := service.tokens.NewTokenID()
-	if err != nil {
-		return LeaseResult{}, ErrUnavailable
-	}
+func (service *Service) sealLease(ctx context.Context, identity Identity, key, holder coordination.Digest, expiresAt time.Time, fence uint64, tokenID [16]byte) (LeaseResult, error) {
 	state, err := NewCapabilityState(key, holder, expiresAt, service.epoch, fence, tokenID)
 	if err != nil {
 		return LeaseResult{}, ErrInvariant
@@ -212,6 +250,30 @@ func (service *Service) sealLease(ctx context.Context, identity Identity, key, h
 		return LeaseResult{}, ErrInvariant
 	}
 	return LeaseResult{Capability: capability, FencingToken: fence, ExpiresAt: expiresAt}, nil
+}
+
+func (service *Service) newBudgetToken(identity Identity) ([16]byte, coordination.CapabilityTokenID, coordination.Digest, error) {
+	raw, err := service.tokens.NewTokenID()
+	if err != nil {
+		return [16]byte{}, coordination.CapabilityTokenID{}, "", ErrUnavailable
+	}
+	token, err := coordination.NewCapabilityTokenID(raw)
+	if err != nil {
+		return [16]byte{}, coordination.CapabilityTokenID{}, "", ErrInvariant
+	}
+	principal, err := derivePrincipal(identity)
+	if err != nil {
+		return [16]byte{}, coordination.CapabilityTokenID{}, "", ErrInvalidArgument
+	}
+	return raw, token, principal, nil
+}
+
+func derivePrincipal(identity Identity) (coordination.Digest, error) {
+	if !validIdentifier(identity.tenant) || !validIdentifier(identity.principal) {
+		return "", ErrInvalidArgument
+	}
+	digest := sha256.Sum256([]byte("yukh:coordination-capability-budget:v1\n" + identity.tenant + "\n" + identity.principal))
+	return coordination.Digest(hexDigest(digest)), nil
 }
 
 func deriveKey(identity Identity, family string, scope coordination.Digest) (coordination.Digest, error) {
@@ -232,6 +294,17 @@ func mapStoreError(err error) error {
 		return ErrConflict
 	default:
 		return ErrUnavailable
+	}
+}
+
+func mapBudgetError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, coordination.ErrUnavailable):
+		return ErrUnavailable
+	default:
+		return ErrInvariant
 	}
 }
 

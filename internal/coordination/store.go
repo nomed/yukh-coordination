@@ -80,4 +80,14 @@ type Lease interface {
 type FencedLeaseStore interface {
 	Acquire(context.Context, Digest, LeaseValue) (Lease, error)
 	Resume(context.Context, Digest, LeaseResumeValue) (Lease, error)
+	Inspect(context.Context, Digest, LeaseResumeValue) (LeaseStatus, error)
 }
+
+type LeaseStatus string
+
+const (
+	LeaseValid    LeaseStatus = "valid"
+	LeaseExpired  LeaseStatus = "expired"
+	LeaseReleased LeaseStatus = "released"
+	LeaseStale    LeaseStatus = "stale"
+)

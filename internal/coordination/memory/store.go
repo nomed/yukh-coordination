@@ -89,6 +89,31 @@ func (store *Store) Resume(_ context.Context, key coordination.Digest, value coo
 	return &lease{store: store, key: key, holder: current.holder, expires: current.expires, revision: current.revision}, nil
 }
 
+func (store *Store) Inspect(_ context.Context, key coordination.Digest, value coordination.LeaseResumeValue) (coordination.LeaseStatus, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if !digestPattern.MatchString(string(key)) || value.Epoch() != store.Epoch {
+		return "", coordination.ErrInvalidArgument
+	}
+	current, exists := store.leases[key]
+	if !exists {
+		return coordination.LeaseStale, nil
+	}
+	if current.holder != value.HolderDigest() || current.expires != value.ExpiresAt() || current.epoch != value.Epoch() {
+		return coordination.LeaseStale, nil
+	}
+	if current.released && value.FencingToken() < ^uint64(0) && current.revision == value.FencingToken()+1 {
+		return coordination.LeaseReleased, nil
+	}
+	if current.revision != value.FencingToken() || current.released {
+		return coordination.LeaseStale, nil
+	}
+	if !current.expires.After(store.Now().UTC()) {
+		return coordination.LeaseExpired, nil
+	}
+	return coordination.LeaseValid, nil
+}
+
 type lease struct {
 	store    *Store
 	key      coordination.Digest
