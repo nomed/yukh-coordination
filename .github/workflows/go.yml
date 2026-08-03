@@ -31,4 +31,4 @@ jobs:
           npm_config_offline: "true"
           npm_config_audit: "false"
           npm_config_fund: "false"
-        run: npm test
+        run: npm run check:primitives-bundle && npm test

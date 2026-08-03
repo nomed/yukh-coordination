@@ -4,6 +4,9 @@
 !.env.example
 node_modules/
 dist/
+!js/dist/
+!js/dist/primitives-client.mjs
+!js/dist/SHA256SUMS
 coverage/
 *.log
 __pycache__/

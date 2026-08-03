@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:primitives": "node .github/scripts/build-primitives-client.mjs",
+    "check:primitives-bundle": "node .github/scripts/build-primitives-client.mjs --check",
     "test": "node --test js/test/*.test.mjs",
     "replay": "node js/bin/replay.mjs",
     "canonical-vectors": "python3 conformance/cross-runtime/run.py"
