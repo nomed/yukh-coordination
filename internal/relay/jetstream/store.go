@@ -28,9 +28,10 @@ type Config struct {
 }
 
 type Store struct {
-	js     natsjs.JetStream
-	stream natsjs.Stream
-	config Config
+	js          natsjs.JetStream
+	stream      natsjs.Stream
+	config      Config
+	publishHook func(context.Context, string, uint64, []byte) error
 }
 
 func Open(ctx context.Context, connection *nats.Conn, config Config) (*Store, error) {
