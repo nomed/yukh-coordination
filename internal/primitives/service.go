@@ -129,20 +129,24 @@ func (service *Service) Acquire(ctx context.Context, identity Identity, scope, h
 		return LeaseResult{}, err
 	}
 	if err := service.budget.Reserve(ctx, principal, budgetToken, expiresAt, service.epoch); err != nil {
-		return LeaseResult{}, mapStoreError(err)
+		return LeaseResult{}, mapBudgetError(err)
 	}
 	held, err := service.leases.Acquire(ctx, key, coordination.LeaseValue{HolderDigest: holder, ExpiresAt: expiresAt, Epoch: service.epoch})
 	if err != nil {
-		_ = service.budget.Cancel(ctx, principal, budgetToken, service.epoch)
+		if cancelErr := service.budget.Cancel(ctx, principal, budgetToken, service.epoch); cancelErr != nil {
+			return LeaseResult{}, ErrUnavailable
+		}
 		return LeaseResult{}, mapStoreError(err)
 	}
 	result, err := service.sealLease(ctx, identity, key, holder, expiresAt, held.FencingToken(), token)
 	if err != nil {
-		_ = service.budget.Cancel(ctx, principal, budgetToken, service.epoch)
+		if cancelErr := service.budget.Cancel(ctx, principal, budgetToken, service.epoch); cancelErr != nil {
+			return LeaseResult{}, ErrUnavailable
+		}
 		return LeaseResult{}, err
 	}
 	if err := service.budget.Commit(ctx, principal, budgetToken, service.epoch); err != nil {
-		return LeaseResult{}, mapStoreError(err)
+		return LeaseResult{}, mapBudgetError(err)
 	}
 	return result, nil
 }
@@ -191,7 +195,7 @@ func (service *Service) RenewOpened(ctx context.Context, identity Identity, open
 	}
 	old, _ := coordination.NewCapabilityTokenID(opened.state.tokenID)
 	if err := service.budget.Replace(ctx, principal, old, next, expiresAt, service.epoch); err != nil {
-		return LeaseResult{}, mapStoreError(err)
+		return LeaseResult{}, mapBudgetError(err)
 	}
 	return result, nil
 }
@@ -217,7 +221,7 @@ func (service *Service) ReleaseOpened(ctx context.Context, identity Identity, op
 		return ErrInvariant
 	}
 	token, _ := coordination.NewCapabilityTokenID(opened.state.tokenID)
-	return mapStoreError(service.budget.Retire(ctx, principal, token, service.epoch))
+	return mapBudgetError(service.budget.Retire(ctx, principal, token, service.epoch))
 }
 
 func (service *Service) resumeOpened(ctx context.Context, opened OpenedCapability) (coordination.Lease, error) {
@@ -290,6 +294,17 @@ func mapStoreError(err error) error {
 		return ErrConflict
 	default:
 		return ErrUnavailable
+	}
+}
+
+func mapBudgetError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, coordination.ErrUnavailable):
+		return ErrUnavailable
+	default:
+		return ErrInvariant
 	}
 }
 

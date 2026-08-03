@@ -174,3 +174,28 @@ func TestSensitiveValuesAreNotSerializable(t *testing.T) {
 		t.Fatal("unsafe state formatting")
 	}
 }
+
+func TestServiceEnforcesPerPrincipalCapabilityLimit(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	store, _ := memory.New(time.Minute, 1, func() time.Time { return now })
+	budget, _ := memory.NewCapabilityBudget(1, time.Second, 1, func() time.Time { return now })
+	key, _ := NewSealingKey("key-a", bytes.Repeat([]byte{1}, 32))
+	keys := &fixedKeys{active: key, old: map[string]SealingKey{}}
+	sealer, _ := NewAEADSealer(keys, bytes.NewReader(bytes.Repeat([]byte{7}, 512)))
+	service, _ := NewService(store, store, budget, sealer, &tokenSource{}, 1)
+	identity, _ := NewIdentity("tenant-a", "principal-a")
+	first, err := service.Acquire(context.Background(), identity, testScope, testHolder, now.Add(30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherScope := coordination.Digest("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	if _, err := service.Acquire(context.Background(), identity, otherScope, testHolder, now.Add(30*time.Second)); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("budget exhaustion: %v", err)
+	}
+	if err := service.Release(context.Background(), identity, first.Capability); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Acquire(context.Background(), identity, otherScope, testHolder, now.Add(30*time.Second)); err != nil {
+		t.Fatalf("budget not retired: %v", err)
+	}
+}
