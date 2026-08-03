@@ -3,7 +3,7 @@
 - Updated: 2026-08-03
 - Governing implementation issue: #5
 - Last merged pull request: #27
-- Active branch: `agent/relay-runtime-composition-rfc`
+- Active pull request: #28 for proposed RFC-0007
 - Runtime decisions: RFC-0003, RFC-0004, RFC-0005 and RFC-0006 Accepted
 - Current increment: RFC-0007 relay composition and lifecycle contract review
 - Next qualified increment: runtime lifecycle implementation after owner acceptance
