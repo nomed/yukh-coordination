@@ -4,7 +4,7 @@
 - Governing issue: #6
 - Last delivery pull request: #91
 - Active increment: no implementation increment is currently active
-- Runtime decisions: RFC-0003 through RFC-0021 Accepted
+- Runtime decisions: RFC-0003 through RFC-0022 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017
@@ -17,16 +17,19 @@
   RFC-0021 clarifies lease-acquisition contention as `409 conflict` in #83;
   the RFC-0020 Cloud Storage `CredentialStore` adapter was delivered in #87;
   the RFC-0020 Cloud KMS raw-encryption and `ProofSignerStore` adapters were
-  delivered in #91
+  delivered in #91; RFC-0022 selects the private staging primitives service
+  profile in #92
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
-  #83
-- Next action: open the bounded RFC-0020 explicit profile-composition and
-  synthetic end-to-end qualification increment over the delivered Storage and
-  KMS adapters. WIF, live qualification, external-token selection, bootstrap,
-  watch, mutations and a process executable remain separately gated
+  #83; RFC-0022 private staging primitives service profile in #92
+- Next actions ready for separate ownership: the bounded RFC-0020 explicit
+  profile-composition and synthetic end-to-end qualification increment over
+  the delivered Storage and KMS adapters; and the separately reviewed
+  RFC-0022 hermetic private-staging implementation. WIF, live infrastructure,
+  credentials, external-token selection, bootstrap, protected mutations and
+  production use remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
