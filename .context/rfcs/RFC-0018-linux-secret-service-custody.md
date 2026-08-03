@@ -1,10 +1,17 @@
 # RFC-0018: Linux Secret Service custody composition
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #68
 - Governing architecture: RFC-0013 and RFC-0014
+
+The project owner explicitly accepted this RFC on 2026-08-03 after reviewing
+and approving the explicit D-Bus connection boundary, XChaCha20-Poly1305 nonce
+policy and unsupported rollback/restore boundary. Acceptance authorizes only a
+separately reviewed implementation and deterministic conformance work. It does
+not authorize an external-token source, bootstrap composition, executable
+wiring, credentials, live user data, deployment or remote adapters.
 
 ## Decision requested
 
