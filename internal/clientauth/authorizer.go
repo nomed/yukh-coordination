@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,8 +35,12 @@ func NewAuthorizer(store CredentialStore, signerStore ProofSignerStore, profile 
 }
 
 func (a *Authorizer) Authorize(request *http.Request) error {
-	if a == nil || nilInterface(a.store) || nilInterface(a.signerStore) || a.now == nil || a.newJTI == nil || request == nil || request.URL == nil || request.Method == "" || request.Method != strings.ToUpper(request.Method) || request.URL.Scheme != "https" || request.URL.Host == "" || request.URL.User != nil || request.URL.Fragment != "" || len(request.Header.Values("Authorization")) != 0 || len(request.Header.Values("DPoP")) != 0 || len(request.Header.Values("Cookie")) != 0 {
+	if a == nil || nilInterface(a.store) || nilInterface(a.signerStore) || a.now == nil || a.newJTI == nil {
 		return ErrInvalidCredential
+	}
+	target, err := validateAuthorizationRequest(request)
+	if err != nil {
+		return err
 	}
 	stored, err := a.store.Load(request.Context(), a.profile)
 	if err != nil {
@@ -70,17 +74,45 @@ func (a *Authorizer) Authorize(request *http.Request) error {
 		return ErrProofKeyMissing
 	}
 
-	target := *request.URL
-	target.RawQuery = ""
-	target.ForceQuery = false
-	target.Fragment = ""
-	proof, err := createProof(request.Context(), record, signer, jwk, publicKey, request.Method, target.String(), now, a.newJTI)
+	proof, err := createProof(request.Context(), record, signer, jwk, publicKey, request.Method, target, now, a.newJTI)
 	if err != nil {
 		return err
 	}
 	request.Header.Set("Authorization", "DPoP "+record.sessionToken)
 	request.Header.Set("DPoP", proof)
 	return nil
+}
+
+func validateAuthorizationRequest(request *http.Request) (string, error) {
+	if request == nil || request.URL == nil || !validProofMethod(request.Method) || request.RequestURI != "" || request.URL.Scheme != "https" || request.URL.Host == "" || request.URL.User != nil || request.URL.Opaque != "" || request.URL.OmitHost || request.URL.RawPath != "" || request.URL.Fragment != "" || request.URL.RawFragment != "" || len(request.Header.Values("Authorization")) != 0 || len(request.Header.Values("DPoP")) != 0 || len(request.Header.Values("Cookie")) != 0 {
+		return "", ErrInvalidCredential
+	}
+	full := request.URL.String()
+	parsedFull, err := url.Parse(full)
+	if err != nil || parsedFull.String() != full || parsedFull.Scheme != "https" || parsedFull.Host == "" || parsedFull.User != nil || parsedFull.Opaque != "" || parsedFull.Fragment != "" {
+		return "", ErrInvalidCredential
+	}
+	target := *request.URL
+	target.RawQuery = ""
+	target.ForceQuery = false
+	value := target.String()
+	parsedTarget, err := url.Parse(value)
+	if err != nil || parsedTarget.String() != value || parsedTarget.Scheme != "https" || parsedTarget.Host == "" || parsedTarget.User != nil || parsedTarget.Opaque != "" || parsedTarget.RawQuery != "" || parsedTarget.Fragment != "" {
+		return "", ErrInvalidCredential
+	}
+	return value, nil
+}
+
+func validProofMethod(method string) bool {
+	if len(method) < 1 || len(method) > 16 {
+		return false
+	}
+	for index := 0; index < len(method); index++ {
+		if method[index] < 'A' || method[index] > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 type proofHeader struct {

@@ -430,11 +430,18 @@ func TestAuthorizerRejectsUnsafeRequestAndExpiredSession(t *testing.T) {
 	}
 	authorizer.now = func() time.Time { return now }
 	cases := map[string]func(*http.Request){
-		"http":             func(r *http.Request) { r.URL.Scheme = "http" },
-		"lowercase method": func(r *http.Request) { r.Method = "get" },
-		"authorization":    func(r *http.Request) { r.Header.Set("Authorization", "Bearer attacker") },
-		"proof":            func(r *http.Request) { r.Header.Set("DPoP", "attacker") },
-		"cookie":           func(r *http.Request) { r.Header.Set("Cookie", "session=attacker") },
+		"http":              func(r *http.Request) { r.URL.Scheme = "http" },
+		"lowercase method":  func(r *http.Request) { r.Method = "get" },
+		"long method":       func(r *http.Request) { r.Method = "ABCDEFGHIJKLMNOPQ" },
+		"punctuated method": func(r *http.Request) { r.Method = "M-SEARCH" },
+		"control method":    func(r *http.Request) { r.Method = "GET\nX" },
+		"opaque URL":        func(r *http.Request) { r.URL.Opaque = "//attacker.invalid/path" },
+		"raw path":          func(r *http.Request) { r.URL.RawPath = "/coordination/%2fescape" },
+		"request URI":       func(r *http.Request) { r.RequestURI = "/server-only" },
+		"fragment":          func(r *http.Request) { r.URL.Fragment = "secret" },
+		"authorization":     func(r *http.Request) { r.Header.Set("Authorization", "Bearer attacker") },
+		"proof":             func(r *http.Request) { r.Header.Set("DPoP", "attacker") },
+		"cookie":            func(r *http.Request) { r.Header.Set("Cookie", "session=attacker") },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -444,6 +451,9 @@ func TestAuthorizerRejectsUnsafeRequestAndExpiredSession(t *testing.T) {
 				t.Fatalf("got %v", err)
 			}
 		})
+	}
+	if store.loads != 0 || signerStore.opens != 0 || signer.signs != 0 {
+		t.Fatalf("malformed request reached custody: load=%d open=%d sign=%d", store.loads, signerStore.opens, signer.signs)
 	}
 	authorizer.now = record.ExpiresAt
 	if err := authorizer.Authorize(newRequest(t)); !errors.Is(err, ErrCredentialMissing) {
