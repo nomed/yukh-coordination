@@ -1,12 +1,14 @@
 # RFC-0011: Security audit ledger
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed, Codex
 - Created: 2026-08-03
+- Decider: project owner
 - Governing issue: #37
+- Governing pull request: #38
 - Depends on: RFC-0002, RFC-0008, RFC-0009, RFC-0010
 
-## Decision requested
+## Decision
 
 Approve the exact first profile for a separate, durable security-audit ledger:
 
