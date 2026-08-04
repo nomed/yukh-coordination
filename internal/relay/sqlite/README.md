@@ -12,7 +12,7 @@ or production topology.
 - referential integrity: foreign keys enabled;
 - writer contention bound: 5-second SQLite busy timeout;
 - process model: one database connection, serializing sequence allocation;
-- schema: STRICT tables with `PRAGMA user_version=3`;
+- schema: STRICT tables with `PRAGMA user_version=4`;
 - tenant/channel predicates on every identity, append and replay query.
 
 Channel identity is immutable across transcript epochs. Event IDs are unique
@@ -24,6 +24,17 @@ idempotent transaction; a different signature or preimage is a collision.
 Canonical channel metadata, its domain-separated digest and transcript
 lifecycle are persisted per epoch and exposed through the neutral lookup port.
 Migrated rows without those formerly unavailable fields fail closed.
+
+`LifecyclePreparation` is a separately capability-segregated adapter. It
+accepts only policies already verified by the offline manifest provider,
+requires their digest and epoch to match immutable channel metadata, and
+persists policy binding, operation intent, export evidence, marker and receipt
+preimage. Marker persistence and the transcript admission fence commit in the
+same `BEGIN IMMEDIATE` transaction. The adapter never removes payload bytes,
+attaches lifecycle signatures, records backup receipts or completes an
+operation; those destructive capabilities are intentionally outside this
+increment. The lifecycle high-water reference is the exact signed receipt ID
+at the transcript high-water sequence.
 
 Any failed `COMMIT` is reported as `relay.ErrCommitIndeterminate`; callers must
 not manufacture a replacement append. An exact retry resolves the outcome by

@@ -82,12 +82,15 @@ func (v *Validator) ValidateReceipt(raw []byte) error {
 }
 
 type ChannelMetadata struct {
-	TenantID         string
-	ChannelID        string
-	ChannelURI       string
-	ACLPolicyVersion string
-	ACLPolicyDigest  string
-	Digest           string
+	TenantID              string
+	ChannelID             string
+	ChannelURI            string
+	ACLPolicyVersion      string
+	ACLPolicyDigest       string
+	RetentionPolicyDigest string
+	RetentionEpoch        uint64
+	CreatedAt             string
+	Digest                string
 }
 
 func (v *Validator) ValidateChannelMetadata(raw []byte) (ChannelMetadata, error) {
@@ -107,8 +110,11 @@ func (v *Validator) ValidateChannelMetadata(raw []byte) (ChannelMetadata, error)
 	return ChannelMetadata{
 		TenantID: object["tenant_id"].(string), ChannelID: object["channel_id"].(string),
 		ChannelURI: object["channel_uri"].(string), ACLPolicyVersion: object["acl_policy_version"].(string),
-		ACLPolicyDigest: object["acl_policy_digest"].(string),
-		Digest:          fmt.Sprintf("sha-256:%x", digest),
+		ACLPolicyDigest:       object["acl_policy_digest"].(string),
+		RetentionPolicyDigest: object["retention_policy_digest"].(string),
+		RetentionEpoch:        uint64(object["retention_epoch"].(float64)),
+		CreatedAt:             object["created_at"].(string),
+		Digest:                fmt.Sprintf("sha-256:%x", digest),
 	}, nil
 }
 

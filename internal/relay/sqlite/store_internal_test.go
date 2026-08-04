@@ -23,7 +23,7 @@ func TestOpenAppliesDurabilityProfile(t *testing.T) {
 		{"synchronous", "2"},
 		{"foreign_keys", "1"},
 		{"busy_timeout", "5000"},
-		{"user_version", "3"},
+		{"user_version", "4"},
 	}
 	for _, check := range checks {
 		t.Run(check.pragma, func(t *testing.T) {
@@ -76,8 +76,8 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("schema version: got %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("schema version: got %d, want 4", version)
 	}
 	rows, err := store.db.Query("PRAGMA table_info(accepted_records)")
 	if err != nil {
@@ -110,7 +110,7 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer metadataRows.Close()
-	foundMetadata := map[string]bool{"canonical_metadata": false, "metadata_digest": false, "lifecycle": false}
+	foundMetadata := map[string]bool{"canonical_metadata": false, "metadata_digest": false, "lifecycle": false, "completeness": false}
 	for metadataRows.Next() {
 		var cid, notNull, primaryKey int
 		var name, dataType string
@@ -125,6 +125,12 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 	for name, found := range foundMetadata {
 		if !found {
 			t.Fatalf("version-two migration did not add %s column", name)
+		}
+	}
+	for _, table := range []string{"lifecycle_policies", "transcript_policy_bindings", "lifecycle_operations"} {
+		var found string
+		if err := store.db.QueryRow(`SELECT name FROM sqlite_schema WHERE type = 'table' AND name = ?`, table).Scan(&found); err != nil {
+			t.Fatalf("version-three migration did not create %s: %v", table, err)
 		}
 	}
 }

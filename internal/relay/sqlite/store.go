@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 type Store struct {
 	db *sql.DB
@@ -125,6 +125,12 @@ func (s *Store) migrate(ctx context.Context) error {
 				return fmt.Errorf("migrate sqlite channel metadata: %w", err)
 			}
 		}
+		version = 3
+	}
+	if version == 3 {
+		if err := migrateLifecyclePreparation(ctx, tx.conn); err != nil {
+			return err
+		}
 		if _, err := tx.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 			return fmt.Errorf("set sqlite schema version: %w", err)
 		}
@@ -147,10 +153,15 @@ func (s *Store) migrate(ctx context.Context) error {
 			canonical_metadata BLOB NOT NULL,
 			metadata_digest TEXT NOT NULL,
 			lifecycle TEXT NOT NULL CHECK (lifecycle IN ('active', 'redacted', 'deleted')),
+			completeness TEXT NOT NULL CHECK (completeness IN ('complete', 'incomplete')),
 			PRIMARY KEY (tenant_id, channel_id, transcript_epoch),
 			FOREIGN KEY (tenant_id, channel_id)
 				REFERENCES channel_identities (tenant_id, channel_id)
 		) STRICT`,
+		lifecyclePoliciesTable,
+		transcriptPolicyBindingsTable,
+		lifecycleOperationsTable,
+		lifecycleActiveOperationIndex,
 		`CREATE TABLE accepted_records (
 			tenant_id TEXT NOT NULL,
 			channel_id TEXT NOT NULL,
@@ -180,6 +191,70 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 	}
 	return tx.commit(ctx)
+}
+
+const lifecyclePoliciesTable = `CREATE TABLE lifecycle_policies (
+	policy_digest TEXT PRIMARY KEY,
+	policy_id TEXT NOT NULL,
+	policy_epoch INTEGER NOT NULL CHECK (policy_epoch > 0),
+	canonical_policy BLOB NOT NULL,
+	active_retention_millis INTEGER NOT NULL CHECK (active_retention_millis > 0),
+	export_mode TEXT NOT NULL CHECK (export_mode IN ('forbidden', 'permitted', 'required'))
+) STRICT`
+
+const transcriptPolicyBindingsTable = `CREATE TABLE transcript_policy_bindings (
+	tenant_id TEXT NOT NULL,
+	channel_id TEXT NOT NULL,
+	transcript_epoch TEXT NOT NULL,
+	policy_digest TEXT NOT NULL,
+	policy_id TEXT NOT NULL,
+	policy_epoch INTEGER NOT NULL CHECK (policy_epoch > 0),
+	retention_deadline TEXT NOT NULL,
+	PRIMARY KEY (tenant_id, channel_id, transcript_epoch),
+	FOREIGN KEY (tenant_id, channel_id, transcript_epoch)
+		REFERENCES transcripts (tenant_id, channel_id, transcript_epoch),
+	FOREIGN KEY (policy_digest) REFERENCES lifecycle_policies (policy_digest)
+) STRICT`
+
+const lifecycleOperationsTable = `CREATE TABLE lifecycle_operations (
+	operation_id TEXT PRIMARY KEY,
+	intent_digest TEXT NOT NULL,
+	canonical_intent BLOB NOT NULL,
+	tenant_id TEXT NOT NULL,
+	channel_id TEXT NOT NULL,
+	transcript_epoch TEXT NOT NULL,
+	policy_digest TEXT NOT NULL,
+	requested_at TEXT NOT NULL,
+	state TEXT NOT NULL CHECK (state IN (
+		'reserved', 'export_satisfied', 'marker_persisted', 'receipt_signed',
+		'payload_removed', 'backups_pending', 'completed'
+	)),
+	export_manifest_digest TEXT,
+	export_custody_receipt_digest TEXT,
+	canonical_marker BLOB,
+	canonical_receipt_preimage BLOB,
+	FOREIGN KEY (tenant_id, channel_id, transcript_epoch)
+		REFERENCES transcript_policy_bindings (tenant_id, channel_id, transcript_epoch)
+) STRICT`
+
+const lifecycleActiveOperationIndex = `CREATE UNIQUE INDEX lifecycle_one_active_operation
+	ON lifecycle_operations (tenant_id, channel_id, transcript_epoch)
+	WHERE state != 'completed'`
+
+func migrateLifecyclePreparation(ctx context.Context, conn *sql.Conn) error {
+	statements := []string{
+		"ALTER TABLE transcripts ADD COLUMN completeness TEXT NOT NULL DEFAULT 'complete' CHECK (completeness IN ('complete', 'incomplete'))",
+		lifecyclePoliciesTable,
+		transcriptPolicyBindingsTable,
+		lifecycleOperationsTable,
+		lifecycleActiveOperationIndex,
+	}
+	for _, statement := range statements {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("migrate sqlite lifecycle preparation: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) CreateChannel(ctx context.Context, channel relay.Channel) error {
@@ -228,8 +303,8 @@ func (s *Store) CreateChannel(ctx context.Context, channel relay.Channel) error 
 	}
 
 	result, err := tx.conn.ExecContext(ctx,
-		`INSERT INTO transcripts (tenant_id, channel_id, transcript_epoch, canonical_metadata, metadata_digest, lifecycle)
-		 VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+		`INSERT INTO transcripts (tenant_id, channel_id, transcript_epoch, canonical_metadata, metadata_digest, lifecycle, completeness)
+		 VALUES (?, ?, ?, ?, ?, ?, 'complete') ON CONFLICT DO NOTHING`,
 		channel.Key.TenantID, channel.Key.ChannelID, channel.Key.TranscriptEpoch,
 		channel.CanonicalMetadata, channel.MetadataDigest, channel.Lifecycle,
 	)
@@ -302,14 +377,18 @@ func (s *Store) AppendChecked(ctx context.Context, intent relay.AppendIntent, ad
 	defer tx.rollback()
 
 	var sequence uint64
+	var transcriptLifecycle string
 	if err := tx.conn.QueryRowContext(ctx,
-		`SELECT next_sequence FROM transcripts
+		`SELECT next_sequence, lifecycle FROM transcripts
 		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?`,
 		intent.Channel.TenantID, intent.Channel.ChannelID, intent.Channel.TranscriptEpoch,
-	).Scan(&sequence); errors.Is(err, sql.ErrNoRows) {
+	).Scan(&sequence, &transcriptLifecycle); errors.Is(err, sql.ErrNoRows) {
 		return relay.AppendResult{}, relay.ErrChannelNotFound
 	} else if err != nil {
 		return relay.AppendResult{}, fmt.Errorf("read sqlite transcript sequence: %w", err)
+	}
+	if transcriptLifecycle != "active" {
+		return relay.AppendResult{}, relay.ErrTransitionConflict
 	}
 
 	existing, found, err := findRecord(ctx, tx.conn, intent.Channel.TenantID, intent.Channel.ChannelID, intent.EventID)

@@ -637,6 +637,36 @@ removal, signing key, worker, clock scheduling, backup provider, HTTP/SSE
 revision, executable, real data, deployment, Matrix, MCP or production
 authority is introduced.
 
+### RFC-0023 SQLite lifecycle preparation review — 2026-08-04
+
+Issue #143 implements only `TranscriptLifecyclePreparationStore`. The SQLite
+candidate has no signature, removal, backup or completion methods and cannot
+be assigned to the full destructive lifecycle port or to ordinary
+`relay.Store`. Exact retention policies enter through a constructor boundary
+after offline manifest verification; reservation requires their digest and
+epoch to match immutable canonical channel metadata.
+
+STRICT schema version 4 stores canonical policy, immutable intent/digest,
+transcript policy binding, export digests, marker and unsigned receipt
+preimage. One partial unique index permits only one unfinished operation per
+transcript epoch. Exact UUIDv7 retries return the stored operation; changed
+intent, target, policy, tenant, channel, epoch or export evidence conflicts
+without mutation. Required export evidence gates marker persistence and stores
+no provider path, endpoint, account, credential or arbitrary response.
+
+Marker persistence changes transcript lifecycle/completeness and writes the
+exact marker/preimage in one `BEGIN IMMEDIATE` transaction. Append checks that
+durable lifecycle in its own write transaction and fails closed after the
+fence. Forced rollback proves that neither half can survive alone. Generated
+temporary-database tests prove concurrency convergence, epoch-zero transcript
+compatibility, immutable policy-epoch matching, restart identity, bounded due
+inspection, malformed-state rejection and byte-identical payload preservation.
+
+This increment deliberately leaves every accepted payload row intact. It
+introduces no signer, destructive worker, clock scheduler, backup provider,
+HTTP/SSE mutation handle, executable composition, real data, deployment,
+JetStream lifecycle, Matrix, MCP or production authority.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
