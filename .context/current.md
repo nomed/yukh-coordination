@@ -2,7 +2,7 @@
 
 - Updated: 2026-08-04
 - Governing issue: #6
-- Last delivery pull request: #134
+- Last delivery pull request: #139
 - Active Coordination increment: #135 implements the bounded RFC-0023
   lifecycle schema and separate administrative-port foundation
 - Runtime decisions: RFC-0003 through RFC-0023 Accepted
@@ -34,7 +34,9 @@
   the superseding immutable candidate and execution-forbidden deployment plan
   were reconciled in #130; the bounded MCP handoff was recorded in #132;
   RFC-0023 fixed the mandatory transcript lifecycle and retention boundary in
-  #134
+  #134; the RFC-0022 operator packet was prepared in #138 and its first
+  reproducible artifact digests recorded in #139 without authorizing
+  provisioning or live traffic
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google

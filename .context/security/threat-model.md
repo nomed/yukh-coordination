@@ -521,6 +521,33 @@ acceptance would authorize only separately reviewed schemas/port, SQLite,
 worker/recovery and hermetic synthetic implementation increments. Real data,
 backups, relay deployment, Matrix, MCP and production remain excluded.
 
+### RFC-0023 schema and port foundation review — 2026-08-04
+
+Issue #135 implements only the authority-neutral lifecycle contract. Four
+closed schemas fix the finite policy, immutable operation intent, append-only
+marker and unsigned administrative receipt preimage. Domain-separated JCS
+derivation and public byte-exact vectors prevent an adapter or signer from
+reconstructing mutable fields later.
+
+The administrative `TranscriptLifecycleStore` is a distinct Go interface with
+typed requests. It neither embeds nor is type-compatible with ordinary
+`relay.Store`. Cross-binding validation requires one operation ID and intent
+digest across marker, receipt preimage and signature attachment; exact retry
+rejects replacement or target broadening. Policy successor validation rejects
+epoch rollback, while epoch zero remains valid for already defined protocol
+transcripts.
+
+Errors and audit reasons are closed and sanitized. Policy durations are
+positive finite JSON-safe integers, selective-redaction targets are sorted and
+unique, backup deadlines have an exact three-domain order, saga transitions
+are monotonic, and unknown provider detail is rejected by schema and audit
+vocabulary tests.
+
+No adapter implements the port in this increment. No SQLite schema, payload
+removal, signing key, worker, clock scheduling, backup provider, HTTP/SSE
+revision, executable, real data, deployment, Matrix, MCP or production
+authority is introduced.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
