@@ -14,6 +14,7 @@ manifest_digest="$(awk -F= '$1 == "manifest" {sub(/^sha256:/, "", $2); print $2}
 config_digest="$(awk -F= '$1 == "config" {sub(/^sha256:/, "", $2); print $2}' "$first/digests.txt")"
 layer_digest="$(awk -F= '$1 == "layer" {sub(/^sha256:/, "", $2); print $2}' "$first/digests.txt")"
 sbom_digest="$(awk -F= '$1 == "sbom" {sub(/^sha256:/, "", $2); print $2}' "$first/digests.txt")"
+launcher_digest="$(awk -F= '$1 == "launcher" {sub(/^sha256:/, "", $2); print $2}' "$first/digests.txt")"
 
 sha256sum --check --status <<EOF
 $manifest_digest  $first/blobs/sha256/$manifest_digest
@@ -22,8 +23,10 @@ $layer_digest  $first/blobs/sha256/$layer_digest
 $sbom_digest  $first/sbom.spdx.json
 EOF
 grep -q '"User":"65532:65532"' "$first/blobs/sha256/$config_digest"
-grep -q '"Entrypoint":\["/usr/local/bin/yukh-coordination-primitives"\]' \
+grep -q '"Entrypoint":\["/usr/local/bin/yukh-coordination-secret-launcher"\]' \
   "$first/blobs/sha256/$config_digest"
+test "$(tar -xOf "$first/blobs/sha256/$layer_digest" \
+  ./usr/local/bin/yukh-coordination-secret-launcher | sha256sum | cut -d' ' -f1)" = "$launcher_digest"
 
 mapfile -t paths < <(tar -tf "$first/blobs/sha256/$layer_digest" | sort)
 readonly expected=(
@@ -36,6 +39,7 @@ readonly expected=(
   ./usr/local/bin/
   ./usr/local/bin/yukh-coordination-primitives
   ./usr/local/bin/yukh-coordination-primitives-bootstrap
+  ./usr/local/bin/yukh-coordination-secret-launcher
   ./var/
   ./var/empty/
 )
