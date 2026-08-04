@@ -90,6 +90,12 @@ lease and capability-budget KV buckets and only the JetStream operations
 needed by the bootstrap or runtime phase. Bootstrap and runtime credentials
 are distinct and non-overlapping.
 
+The signed-registration field is additionally blocked on Draft RFC-0024. The
+accepted plan currently requires its digest before step 5 while the accepted
+credential profile forbids creating its <=15-minute token/DPoP inputs before
+step 5. No value may replace `PENDING` until that ordering is explicitly
+resolved by an accepted record.
+
 ## Closed limits and epoch
 
 No field has an operational default. The operator records each positive
