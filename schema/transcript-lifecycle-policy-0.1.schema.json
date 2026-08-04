@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/transcript-lifecycle-policy-0.1.schema.json",
+  "title": "Yukh transcript lifecycle policy 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "policy_id", "policy_epoch", "policy_digest", "active_retention_millis", "event_backup_deletion_millis", "identity_backup_deletion_millis", "security_audit_backup_deletion_millis", "export_mode", "redaction_authority_role_id", "deletion_authority_role_id", "integrity_profile", "issued_at", "activated_at", "accountable_policy_approver"],
+  "properties": {
+    "profile": {"const": "yukh-transcript-lifecycle-policy/v0.1"},
+    "policy_id": {"$ref": "#/$defs/identifier"},
+    "policy_epoch": {"$ref": "#/$defs/positiveSafeInteger"},
+    "policy_digest": {"$ref": "#/$defs/digest"},
+    "active_retention_millis": {"$ref": "#/$defs/positiveSafeInteger"},
+    "event_backup_deletion_millis": {"$ref": "#/$defs/positiveSafeInteger"},
+    "identity_backup_deletion_millis": {"$ref": "#/$defs/positiveSafeInteger"},
+    "security_audit_backup_deletion_millis": {"$ref": "#/$defs/positiveSafeInteger"},
+    "export_mode": {"enum": ["forbidden", "permitted", "required"]},
+    "redaction_authority_role_id": {"$ref": "#/$defs/identifier"},
+    "deletion_authority_role_id": {"$ref": "#/$defs/identifier"},
+    "integrity_profile": {"const": "sequence-event-receipt-operation/v0.1"},
+    "issued_at": {"$ref": "#/$defs/time"},
+    "activated_at": {"$ref": "#/$defs/time"},
+    "accountable_policy_approver": {"$ref": "#/$defs/identifier"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,255}$"},
+    "digest": {"type": "string", "pattern": "^sha-256:[0-9a-f]{64}$"},
+    "positiveSafeInteger": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "time": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"}
+  }
+}

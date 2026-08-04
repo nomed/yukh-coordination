@@ -36,4 +36,15 @@ identifier. UUIDv5 is derived metadata, never an event ID.
 `test-vectors/diagnostic-derivation-0.1.json` freezes the initial byte-exact
 UUIDv5, high-water, conflict-trigger, and handoff-acceptance derivation vectors.
 
-Issue #4 owns positive/negative fixtures and independent qualification evidence.
+The four `transcript-lifecycle-*-0.1.schema.json` contracts publish the closed
+RFC-0023 policy, operation intent, append-only marker and unsigned receipt
+preimage shapes. They expose no destructive route or adapter. Semantic
+validation additionally requires exact policy-digest recomputation, UTC
+millisecond ordering, sorted unique selective-redaction sequences, the exact
+three-domain backup deadline order, allowed monotonic lifecycle transitions and
+UUIDv7 operation/receipt identities. The canonical byte and digest fixtures are
+frozen in `test-vectors/transcript-lifecycle-0.1.json`.
+
+Issue #4 owns the core v0.1 protocol fixtures and their independent
+qualification evidence. Issue #135 owns the bounded RFC-0023 lifecycle vectors;
+later adapter and destructive-saga qualification remains separately gated.
