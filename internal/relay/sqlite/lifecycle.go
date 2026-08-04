@@ -315,18 +315,21 @@ type lifecycleOperationRow struct {
 	canonicalIntent            []byte
 	exportManifestDigest       string
 	exportCustodyReceiptDigest string
+	payloadRemovalDigest       string
 }
 
 func loadLifecycleOperation(ctx context.Context, query queryRower, operationID string) (lifecycleOperationRow, bool, error) {
 	var row lifecycleOperationRow
 	var state string
-	var exportManifestDigest, exportCustodyReceiptDigest sql.NullString
+	var exportManifestDigest, exportCustodyReceiptDigest, payloadRemovalDigest sql.NullString
 	err := query.QueryRowContext(ctx, `SELECT intent_digest, canonical_intent, state,
 		export_manifest_digest, export_custody_receipt_digest, canonical_marker,
-		canonical_receipt_preimage FROM lifecycle_operations WHERE operation_id = ?`, operationID).Scan(
+		canonical_receipt_preimage, receipt_signature, payload_removal_digest
+		FROM lifecycle_operations WHERE operation_id = ?`, operationID).Scan(
 		&row.operation.IntentDigest, &row.canonicalIntent, &state,
 		&exportManifestDigest, &exportCustodyReceiptDigest,
-		&row.operation.Marker, &row.operation.Receipt,
+		&row.operation.Marker, &row.operation.Receipt, &row.operation.Signature,
+		&payloadRemovalDigest,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return lifecycleOperationRow{}, false, nil
@@ -336,6 +339,7 @@ func loadLifecycleOperation(ctx context.Context, query queryRower, operationID s
 	}
 	row.exportManifestDigest = exportManifestDigest.String
 	row.exportCustodyReceiptDigest = exportCustodyReceiptDigest.String
+	row.payloadRemovalDigest = payloadRemovalDigest.String
 	if lifecycle.ValidateCanonical(row.canonicalIntent) != nil || json.Unmarshal(row.canonicalIntent, &row.operation.Intent) != nil {
 		return lifecycleOperationRow{}, false, lifecycle.ErrUnavailable
 	}
@@ -344,13 +348,13 @@ func loadLifecycleOperation(ctx context.Context, query queryRower, operationID s
 		return lifecycleOperationRow{}, false, lifecycle.ErrUnavailable
 	}
 	row.operation.State = lifecycle.SagaState(state)
-	if !validStoredPreparation(row) {
+	if !validStoredLifecycle(row) {
 		return lifecycleOperationRow{}, false, lifecycle.ErrUnavailable
 	}
 	return row, true, nil
 }
 
-func validStoredPreparation(row lifecycleOperationRow) bool {
+func validStoredLifecycle(row lifecycleOperationRow) bool {
 	operation := row.operation
 	exportBound := row.exportManifestDigest != "" && row.exportCustodyReceiptDigest != ""
 	exportEmpty := row.exportManifestDigest == "" && row.exportCustodyReceiptDigest == ""
@@ -363,17 +367,37 @@ func validStoredPreparation(row lifecycleOperationRow) bool {
 	}
 	switch operation.State {
 	case lifecycle.Reserved, lifecycle.ExportSatisfied:
-		return len(operation.Marker) == 0 && len(operation.Receipt) == 0 &&
+		return len(operation.Marker) == 0 && len(operation.Receipt) == 0 && len(operation.Signature) == 0 && row.payloadRemovalDigest == "" &&
 			(operation.State != lifecycle.Reserved || operation.Intent.ExportMode == lifecycle.ExportRequired && exportEmpty) &&
 			(operation.State != lifecycle.ExportSatisfied || validExport)
 	case lifecycle.MarkerPersisted:
-		return validExport && lifecycle.ValidateMarkerPersistence(lifecycle.MarkerPersistence{
-			OperationID: operation.Intent.OperationID, IntentDigest: operation.IntentDigest,
-			CanonicalMarker: operation.Marker, CanonicalPreimage: operation.Receipt,
-		}) == nil
+		return validExport && len(operation.Signature) == 0 && row.payloadRemovalDigest == "" && validMarkerPersistence(operation)
+	case lifecycle.ReceiptSigned:
+		return validExport && len(operation.Signature) == 64 && row.payloadRemovalDigest == "" && validMarkerPersistence(operation)
+	case lifecycle.PayloadRemoved:
+		return validExport && len(operation.Signature) == 64 && validLifecycleDigest(row.payloadRemovalDigest) && validMarkerPersistence(operation)
 	default:
 		return false
 	}
+}
+
+func validMarkerPersistence(operation lifecycle.Operation) bool {
+	return lifecycle.ValidateMarkerPersistence(lifecycle.MarkerPersistence{
+		OperationID: operation.Intent.OperationID, IntentDigest: operation.IntentDigest,
+		CanonicalMarker: operation.Marker, CanonicalPreimage: operation.Receipt,
+	}) == nil
+}
+
+func validLifecycleDigest(value string) bool {
+	if len(value) != len("sha-256:")+64 || value[:len("sha-256:")] != "sha-256:" {
+		return false
+	}
+	for _, char := range value[len("sha-256:"):] {
+		if char < '0' || char > '9' && char < 'a' || char > 'f' {
+			return false
+		}
+	}
+	return true
 }
 
 func persistLifecyclePolicy(ctx context.Context, conn *sql.Conn, policy lifecycle.Policy, canonical []byte) error {

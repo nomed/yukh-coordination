@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 type Store struct {
 	db *sql.DB
@@ -131,6 +131,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err := migrateLifecyclePreparation(ctx, tx.conn); err != nil {
 			return err
 		}
+		version = 4
+	}
+	if version == 4 {
+		if err := migrateLifecycleRemoval(ctx, tx.conn); err != nil {
+			return err
+		}
 		if _, err := tx.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 			return fmt.Errorf("set sqlite schema version: %w", err)
 		}
@@ -162,6 +168,9 @@ func (s *Store) migrate(ctx context.Context) error {
 		transcriptPolicyBindingsTable,
 		lifecycleOperationsTable,
 		lifecycleActiveOperationIndex,
+		lifecyclePayloadTombstonesTable,
+		lifecycleIdentifierTombstonesTable,
+		lifecycleReceiptTombstoneIndex,
 		`CREATE TABLE accepted_records (
 			tenant_id TEXT NOT NULL,
 			channel_id TEXT NOT NULL,
@@ -233,6 +242,29 @@ const lifecycleOperationsTable = `CREATE TABLE lifecycle_operations (
 	export_custody_receipt_digest TEXT,
 	canonical_marker BLOB,
 	canonical_receipt_preimage BLOB,
+	receipt_signature BLOB CHECK (receipt_signature IS NULL OR length(receipt_signature) = 64),
+	payload_removal_digest TEXT,
+	FOREIGN KEY (tenant_id, channel_id, transcript_epoch)
+		REFERENCES transcript_policy_bindings (tenant_id, channel_id, transcript_epoch)
+) STRICT`
+
+const lifecycleOperationsTableV4 = `CREATE TABLE lifecycle_operations (
+	operation_id TEXT PRIMARY KEY,
+	intent_digest TEXT NOT NULL,
+	canonical_intent BLOB NOT NULL,
+	tenant_id TEXT NOT NULL,
+	channel_id TEXT NOT NULL,
+	transcript_epoch TEXT NOT NULL,
+	policy_digest TEXT NOT NULL,
+	requested_at TEXT NOT NULL,
+	state TEXT NOT NULL CHECK (state IN (
+		'reserved', 'export_satisfied', 'marker_persisted', 'receipt_signed',
+		'payload_removed', 'backups_pending', 'completed'
+	)),
+	export_manifest_digest TEXT,
+	export_custody_receipt_digest TEXT,
+	canonical_marker BLOB,
+	canonical_receipt_preimage BLOB,
 	FOREIGN KEY (tenant_id, channel_id, transcript_epoch)
 		REFERENCES transcript_policy_bindings (tenant_id, channel_id, transcript_epoch)
 ) STRICT`
@@ -241,17 +273,60 @@ const lifecycleActiveOperationIndex = `CREATE UNIQUE INDEX lifecycle_one_active_
 	ON lifecycle_operations (tenant_id, channel_id, transcript_epoch)
 	WHERE state != 'completed'`
 
+const lifecyclePayloadTombstonesTable = `CREATE TABLE lifecycle_payload_tombstones (
+	operation_id TEXT NOT NULL,
+	tenant_id TEXT NOT NULL,
+	channel_id TEXT NOT NULL,
+	transcript_epoch TEXT NOT NULL,
+	server_sequence INTEGER NOT NULL CHECK (server_sequence > 0),
+	event_id_digest TEXT NOT NULL,
+	event_digest TEXT NOT NULL,
+	receipt_id_digest TEXT NOT NULL,
+	PRIMARY KEY (operation_id, server_sequence),
+	FOREIGN KEY (operation_id) REFERENCES lifecycle_operations (operation_id)
+) STRICT`
+
+const lifecycleIdentifierTombstonesTable = `CREATE TABLE lifecycle_identifier_tombstones (
+	tenant_id TEXT NOT NULL,
+	channel_id TEXT NOT NULL,
+	identifier_kind TEXT NOT NULL CHECK (identifier_kind IN ('event', 'receipt')),
+	identifier_digest TEXT NOT NULL,
+	operation_id TEXT NOT NULL,
+	PRIMARY KEY (tenant_id, channel_id, identifier_kind, identifier_digest),
+	FOREIGN KEY (operation_id) REFERENCES lifecycle_operations (operation_id)
+) STRICT`
+
+const lifecycleReceiptTombstoneIndex = `CREATE UNIQUE INDEX lifecycle_receipt_identifier_nonreuse
+	ON lifecycle_identifier_tombstones (identifier_digest)
+	WHERE identifier_kind = 'receipt'`
+
 func migrateLifecyclePreparation(ctx context.Context, conn *sql.Conn) error {
 	statements := []string{
 		"ALTER TABLE transcripts ADD COLUMN completeness TEXT NOT NULL DEFAULT 'complete' CHECK (completeness IN ('complete', 'incomplete'))",
 		lifecyclePoliciesTable,
 		transcriptPolicyBindingsTable,
-		lifecycleOperationsTable,
+		lifecycleOperationsTableV4,
 		lifecycleActiveOperationIndex,
 	}
 	for _, statement := range statements {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("migrate sqlite lifecycle preparation: %w", err)
+		}
+	}
+	return nil
+}
+
+func migrateLifecycleRemoval(ctx context.Context, conn *sql.Conn) error {
+	statements := []string{
+		"ALTER TABLE lifecycle_operations ADD COLUMN receipt_signature BLOB CHECK (receipt_signature IS NULL OR length(receipt_signature) = 64)",
+		"ALTER TABLE lifecycle_operations ADD COLUMN payload_removal_digest TEXT",
+		lifecyclePayloadTombstonesTable,
+		lifecycleIdentifierTombstonesTable,
+		lifecycleReceiptTombstoneIndex,
+	}
+	for _, statement := range statements {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("migrate sqlite lifecycle removal: %w", err)
 		}
 	}
 	return nil
@@ -390,6 +465,14 @@ func (s *Store) AppendChecked(ctx context.Context, intent relay.AppendIntent, ad
 	if transcriptLifecycle != "active" {
 		return relay.AppendResult{}, relay.ErrTransitionConflict
 	}
+	var reusedEvent int
+	if err := tx.conn.QueryRowContext(ctx, `SELECT 1 FROM lifecycle_identifier_tombstones
+		WHERE tenant_id = ? AND channel_id = ? AND identifier_kind = 'event' AND identifier_digest = ?`,
+		intent.Channel.TenantID, intent.Channel.ChannelID, identifierDigest("event", intent.EventID)).Scan(&reusedEvent); err == nil {
+		return relay.AppendResult{}, relay.ErrEventIDCollision
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return relay.AppendResult{}, fmt.Errorf("check sqlite event tombstone: %w", err)
+	}
 
 	existing, found, err := findRecord(ctx, tx.conn, intent.Channel.TenantID, intent.Channel.ChannelID, intent.EventID)
 	if err != nil {
@@ -418,6 +501,14 @@ func (s *Store) AppendChecked(ctx context.Context, intent relay.AppendIntent, ad
 	}
 	if err := relay.ValidatePreparedRecord(intent, sequence, digest, record); err != nil {
 		return relay.AppendResult{}, err
+	}
+	var reusedReceipt int
+	if err := tx.conn.QueryRowContext(ctx, `SELECT 1 FROM lifecycle_identifier_tombstones
+		WHERE identifier_kind = 'receipt' AND identifier_digest = ?`,
+		identifierDigest("receipt", record.ReceiptID)).Scan(&reusedReceipt); err == nil {
+		return relay.AppendResult{}, relay.ErrTransitionConflict
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return relay.AppendResult{}, fmt.Errorf("check sqlite receipt tombstone: %w", err)
 	}
 
 	if _, err := tx.conn.ExecContext(ctx,
@@ -538,15 +629,32 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 		return []relay.AcceptedRecord{}, nil
 	}
 
-	var exists int
+	var transcriptLifecycle string
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT 1 FROM transcripts
+		`SELECT lifecycle FROM transcripts
 		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?`,
 		key.TenantID, key.ChannelID, key.TranscriptEpoch,
-	).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+	).Scan(&transcriptLifecycle); errors.Is(err, sql.ErrNoRows) {
 		return nil, relay.ErrChannelNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("look up sqlite transcript: %w", err)
+	}
+	if transcriptLifecycle == "deleted" {
+		return []relay.AcceptedRecord{}, nil
+	}
+	cutoff := int64(math.MaxInt64)
+	if transcriptLifecycle == "redacted" {
+		var firstRemoved sql.NullInt64
+		err := s.db.QueryRowContext(ctx, `SELECT MIN(server_sequence) FROM lifecycle_payload_tombstones
+			WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?`,
+			key.TenantID, key.ChannelID, key.TranscriptEpoch).Scan(&firstRemoved)
+		if err != nil {
+			return nil, fmt.Errorf("read sqlite redaction boundary: %w", err)
+		}
+		if !firstRemoved.Valid {
+			return []relay.AcceptedRecord{}, nil
+		}
+		cutoff = firstRemoved.Int64
 	}
 
 	rows, err := s.db.QueryContext(ctx,
@@ -557,9 +665,10 @@ func (s *Store) Read(ctx context.Context, key relay.ChannelKey, after uint64, li
 		 FROM accepted_records
 		 WHERE tenant_id = ? AND channel_id = ? AND transcript_epoch = ?
 		   AND server_sequence > ?
+		   AND server_sequence < ?
 		 ORDER BY server_sequence
 		 LIMIT ?`,
-		key.TenantID, key.ChannelID, key.TranscriptEpoch, after, limit,
+		key.TenantID, key.ChannelID, key.TranscriptEpoch, after, cutoff, limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("read sqlite accepted records: %w", err)
