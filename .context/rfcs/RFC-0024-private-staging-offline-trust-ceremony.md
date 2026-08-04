@@ -1,15 +1,18 @@
 # RFC-0024: Private staging offline trust and policy ceremony
 
-- Status: Draft
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-04
+- Accepted: 2026-08-04
+- Decider: project owner
 - Governing issue: #147
 - Governing architecture: RFC-0022
 
-This proposal resolves an authorization-order ambiguity discovered while
-preparing the RFC-0022 operator packet. It changes no accepted behavior until
-the project owner explicitly accepts it. Drafting and review authorize no key,
-certificate, token, credential, registration, infrastructure or traffic.
+The project owner explicitly accepted this RFC on 2026-08-04. Acceptance
+resolves the authorization-order ambiguity discovered while preparing the
+RFC-0022 operator packet and authorizes only a separately reviewed
+implementation of the ceremony plan. It authorizes no key, certificate,
+token, credential, registration, infrastructure or traffic.
 
 ## Summary
 
@@ -159,8 +162,8 @@ TLS identities. Rotation never changes both authorities without a new packet.
 8. Perform step-6 review.
 9. Obtain a second explicit approval for the bounded synthetic window.
 
-Acceptance of this RFC would authorize only the later separately reviewed
-implementation of the ceremony plan. It would not itself authorize steps 3–9.
+Acceptance of this RFC authorizes only the later separately reviewed
+implementation of the ceremony plan. It does not itself authorize steps 3–9.
 
 ## Threats and controls
 
@@ -178,6 +181,8 @@ implementation of the ceremony plan. It would not itself authorize steps 3–9.
 Residual risk remains because one owner performs both logical checkpoints and
 encrypted custody is software-backed. That risk is acceptable only for this
 bounded private staging proof and cannot be inherited by production.
+Acceptance authorizes separately reviewed implementation only; no ceremony
+execution or secret generation is authorized.
 
 ## Compatibility
 
@@ -186,8 +191,9 @@ consumer contracts do not change. This proposal changes only the order and
 evidence semantics of private deployment preparation. Production requires a
 separate profile.
 
-## Decision requested
+## Decision
 
-The project owner should explicitly accept or revise the two-ceremony split and
-the `DEFERRED_TO_APPROVED_STEP_5` signed-registration state. Silence or approval
-of earlier RFC-0022 work is not acceptance of this draft.
+The project owner accepted the two-ceremony split and the
+`DEFERRED_TO_APPROVED_STEP_5` signed-registration state on 2026-08-04. The next
+increment may implement only the execution-forbidden Ceremony A tooling and
+private runbook. Ceremony execution still requires a new explicit approval.

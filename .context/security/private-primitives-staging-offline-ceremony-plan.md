@@ -1,9 +1,9 @@
 # RFC-0024 offline trust and policy ceremony plan
 
-- Status: draft; execution forbidden
+- Status: accepted design plan; execution forbidden
 - Recorded: 2026-08-04
 - Governing issue: #147
-- Proposed architecture: RFC-0024
+- Accepted architecture: RFC-0024
 - Governing deployment profile: RFC-0022
 
 This redacted plan is review material only. It contains no private target,
@@ -17,7 +17,7 @@ Every item must be `PASS` before a ceremony-execution approval may be asked:
 
 | Check | Required evidence | Current state |
 |---|---|---|
-| RFC-0024 accepted | explicit owner decision and merged accepted record | PENDING |
+| RFC-0024 accepted | explicit owner decision and merged accepted record | PASS AFTER MERGE |
 | exact private server identity | private record review | PENDING PRIVATE REVIEW |
 | volatile workspace | tmpfs, swap excluded and restrictive mount | PENDING EXECUTION REVIEW |
 | network isolation | new namespace with loopback down and no inherited sockets | PENDING EXECUTION REVIEW |
@@ -99,7 +99,7 @@ arbitrary error or private locator.
 
 ## Authorization boundary
 
-Merging this draft plan does not authorize ceremony execution. Generation
-requires RFC-0024 acceptance, a complete private execution record and a new
-explicit owner approval. Registry, target, namespace, provisioning, workload,
-listener and traffic remain outside Ceremony A.
+Merging this accepted design plan does not authorize ceremony execution.
+Generation requires a complete private execution record and a new explicit
+owner approval. Registry, target, namespace, provisioning, workload, listener
+and traffic remain outside Ceremony A.

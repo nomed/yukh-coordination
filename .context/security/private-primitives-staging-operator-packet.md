@@ -78,7 +78,8 @@ input. Digests are evidence references, not substitutes for private review.
 |---|---|---|
 | private-listener identity digest | 64 lowercase hexadecimal characters | PENDING |
 | MCP trust-bundle digest | 64 lowercase hexadecimal characters | PENDING |
-| signed-registration digest | 64 lowercase hexadecimal characters | PENDING |
+| canonical registration-template digest | 64 lowercase hexadecimal characters | PENDING CEREMONY A |
+| signed-registration digest | 64 lowercase hexadecimal characters | DEFERRED_TO_APPROVED_STEP_5 per RFC-0024 |
 | offline policy key ID | closed non-secret identifier | PENDING |
 | five-action policy digest | 64 lowercase hexadecimal characters | PENDING |
 | NATS credential-policy digest | 64 lowercase hexadecimal characters | PENDING |
@@ -90,11 +91,11 @@ lease and capability-budget KV buckets and only the JetStream operations
 needed by the bootstrap or runtime phase. Bootstrap and runtime credentials
 are distinct and non-overlapping.
 
-The signed-registration field is additionally blocked on Draft RFC-0024. The
-accepted plan currently requires its digest before step 5 while the accepted
-credential profile forbids creating its <=15-minute token/DPoP inputs before
-step 5. No value may replace `PENDING` until that ordering is explicitly
-resolved by an accepted record.
+Accepted RFC-0024 resolves the signed-registration ordering. Before step 5 the
+field remains `DEFERRED_TO_APPROVED_STEP_5` and the packet instead binds the
+canonical registration-template digest. The actual signed-registration digest
+is mandatory step-6 evidence after the <=15-minute token/DPoP inputs are
+created during an approved step 5.
 
 ## Closed limits and epoch
 

@@ -483,9 +483,9 @@ This review does not approve image publication, Secret creation, namespace or
 workload creation, bootstrap execution, listener exposure or traffic. Those
 remain behind the complete operator packet and explicit step-5 gate.
 
-### Proposed RFC-0024 offline trust-ceremony impact — 2026-08-04
+### Accepted RFC-0024 offline trust-ceremony impact — 2026-08-04
 
-Draft RFC-0024 identifies a gate-ordering risk: fabricating or prematurely
+RFC-0024 identifies a gate-ordering risk: fabricating or prematurely
 creating a signed-registration digest to satisfy the pre-step-5 packet would
 either misstate evidence or expire the <=15-minute workload credential before
 the no-traffic review. The proposal separates durable trust/policy generation
@@ -500,9 +500,9 @@ canonical documents, deterministic SHA-256 evidence, fail-closed destruction
 and no partial success.
 
 Residual risks are software-backed custody and one human performing both
-logical checkpoints. No control or changed gate in this section is accepted
-until RFC-0024 receives explicit owner acceptance. Drafting creates no key,
-credential, target or traffic authority.
+logical checkpoints. The ordering and evidence semantics are accepted for the
+bounded staging proof, but acceptance creates no key, credential, target or
+traffic authority.
 
 ### RFC-0022 accountable bucket-bootstrap implementation review — 2026-08-03
 

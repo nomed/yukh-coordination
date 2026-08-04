@@ -4,7 +4,7 @@
 
 - Governing issue: #147
 - Accepted deployment design: RFC-0022
-- Proposed clarification: RFC-0024 Draft
+- Accepted clarification: RFC-0024
 - Operator packet: #136, still `REJECT_INCOMPLETE`
 
 ## Delivered proposal
@@ -19,14 +19,14 @@
 
 ## Intentionally incomplete
 
-RFC-0024 is Draft and has not been accepted. No cryptographic material,
+RFC-0024 was explicitly accepted by the project owner. No cryptographic material,
 canonical policy artifact, receipt, registry object, namespace, Secret,
 workload, listener or request is created. Private custody destinations and
 exact server identity remain outside the repository.
 
 ## Next boundary
 
-Review this proposal and ask the project owner to explicitly accept or revise
-RFC-0024. Acceptance would authorize only a separately reviewed implementation
-of the ceremony, not execution. Execution would still require a new explicit
-approval, and RFC-0022 step 5 plus live traffic remain later independent gates.
+After merge, implement only the execution-forbidden Ceremony A tooling and
+private runbook under a new reviewed increment. Execution still requires a new
+explicit approval, and RFC-0022 step 5 plus live traffic remain later
+independent gates.
