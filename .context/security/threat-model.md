@@ -504,6 +504,28 @@ logical checkpoints. The ordering and evidence semantics are accepted for the
 bounded staging proof, but acceptance creates no key, credential, target or
 traffic authority.
 
+### RFC-0024 ceremony-tooling implementation review — 2026-08-04
+
+Issue #149 implements a dependency-minimal offline generator and public-output
+verifier. The generator has one closed configuration and one empty volatile
+output boundary. It uses Go cryptographic randomness, distinct P-256 root/leaf
+and Ed25519 policy keys, fixed staging validity bounds, exact SAN input and
+canonical registration/policy artifacts. Private outputs are mode `0400`;
+public artifacts are mode `0444`.
+
+Generation is all-or-cleanup on write failure. The closed canonical receipt
+contains algorithms, key IDs, validity endpoints and SHA-256 evidence only;
+server identity, tenant, principal, private paths and private bytes are absent.
+The verifier rejects changed digests, noncanonical documents, invalid chains,
+wrong purposes or algorithms. Configuration and operational failures collapse
+to one fixed message.
+
+Hermetic tests generate only disposable synthetic identities in test-owned
+temporary storage, exercise unsafe configuration/output and tamper paths, and
+retain no authority. The executable is built twice with trimmed paths and no
+build ID. This implementation does not authorize or perform the real ceremony,
+Vaultwarden mutation, target access or secret generation for staging.
+
 ### RFC-0022 accountable bucket-bootstrap implementation review — 2026-08-03
 
 Issue #117 adds a second, one-shot administrative executable with no listener,

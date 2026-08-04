@@ -29,6 +29,8 @@ jobs:
         run: .github/scripts/qualify-primitives-executable.sh
       - name: Build reproducible private primitives OCI layout
         run: .github/scripts/qualify-primitives-oci.sh
+      - name: Build reproducible offline ceremony executable
+        run: .github/scripts/qualify-offline-ceremony-executable.sh
       - uses: actions/setup-node@v6
         with:
           node-version: 24
