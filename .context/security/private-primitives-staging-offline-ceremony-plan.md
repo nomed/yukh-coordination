@@ -28,6 +28,28 @@ Every item must be `PASS` before a ceremony-execution approval may be asked:
 
 Any pending or failed precondition stops before key generation.
 
+## Implementation profile
+
+Issue #149 provides one closed Go executable. It accepts exactly an absolute
+private configuration path and an absolute empty mode-`0700` volatile output
+directory. Configuration fixes the RFC-0024 profile, exact private server
+identity, tenant/principal references and distinct root/policy key IDs; unknown
+or duplicate fields, unsafe identities and reused key IDs reject.
+
+The generator uses `crypto/rand`, ECDSA P-256/SHA-256 root and leaf identities,
+an Ed25519 policy signer, fixed 30-day root/policy and 24-hour leaf validity,
+RFC 8785 canonical policy bytes and mode-`0400` private outputs. The verifier
+recomputes every public digest, canonical document and TLS chain. Its receipt
+contains no server identity, tenant, principal or private path.
+
+Tests use only disposable `synthetic.invalid` identities under test-owned
+temporary directories. They are not operator ceremony execution and confer no
+authority.
+
+The locally reproduced execution-tool SHA-256 is
+`ba42a640beb91ac77658b2cb8ce8ae37ca6620afb477150a38aaf0a391fb74bb`;
+independent CI reproduction remains required before review completion.
+
 ## Closed durable artifacts
 
 Ceremony A may produce only these artifacts after separate approval:
