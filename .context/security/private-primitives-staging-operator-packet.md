@@ -29,13 +29,17 @@ public packet.
 | bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` | VERIFIED |
 | hermetic qualification | run `30851387901`, job `91811981779` | VERIFIED |
 | MCP consumer commit | `e303b3671bf9b4c5202ae147b882ab763964d5ed` | VERIFIED |
-| service artifact SHA-256 | 64 lowercase hexadecimal characters | PENDING |
-| bootstrap artifact SHA-256 | 64 lowercase hexadecimal characters | PENDING |
+| build toolchain | Go `1.26.5`, Linux AMD64 archive SHA-256 `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` | LOCALLY VERIFIED |
+| service artifact SHA-256 | `00a9aacbb6c308d4a168cc087c2c396680edab55bb682458872056abce10f000` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
+| bootstrap artifact SHA-256 | `edcdc8d99b26799795c3d5d7551b636d5009933e81683e512676e170852a55df` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
 
 The two artifact digests must come from two byte-identical builds at the exact
 source commit with `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, an empty Go
 build ID and the reviewed embedded revision. A later commit, mutable tag,
 unrecorded compiler/toolchain or non-identical rebuild rejects the packet.
+The recorded local build produced two byte-identical copies of each artifact;
+an accountable reviewer must independently reproduce both digests before the
+packet can request step-5 approval.
 
 ## Accountable roles
 
