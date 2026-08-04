@@ -32,10 +32,11 @@ public packet.
 | build toolchain | Go `1.26.5`, Linux AMD64 archive SHA-256 `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` | LOCALLY VERIFIED |
 | service artifact SHA-256 | `00a9aacbb6c308d4a168cc087c2c396680edab55bb682458872056abce10f000` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
 | bootstrap artifact SHA-256 | `edcdc8d99b26799795c3d5d7551b636d5009933e81683e512676e170852a55df` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
-| OCI manifest SHA-256 | `f3ae988c7aab21a1492e4108d45a3bafdd1d25b9431378d3fab8ef0a11aa7636` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
-| OCI config SHA-256 | `4be24611d67628889075d1782530d9b8822dda0ffc6396b157b14dc9e7f7872d` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
-| OCI layer SHA-256 | `83be76c5dcfe0a613f380df70dcf772beae89546a7f607256287d013e51b8362` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
-| OCI SBOM SHA-256 | `bd0a9fc0e7487acdb3755792a82a466d312decfabd86d83fb285e9b4a0334a88`; deterministic SPDX 2.3 over exactly two executables | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
+| descriptor launcher SHA-256 | `08d7dd79b9cc8afe68f9a2ccc367771157f6c6ee1856a7571dbe39f8e9a4f821` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
+| superseding OCI manifest SHA-256 | `27ee06d3cc2a0b804424625e2570e3018b22bdd9b0dba7c28cd54e3b05d6ce7b` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
+| superseding OCI config SHA-256 | `76f3d6db4b35ef6fe66b6f0b61627428f1f0d8327d4d52ee23032f3d30df9db5` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
+| superseding OCI layer SHA-256 | `bed142fd3b1e8ce5f248de1d0f7068a9c837bfc563ab8d9a86fcb365186f2848` | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
+| superseding OCI SBOM SHA-256 | `2c6d1bc52e47fcecb0d60342719819e6fc99e486a6d398086a3bfbba81cbea13`; deterministic SPDX 2.3 over exactly three executables | LOCALLY REPRODUCED; INDEPENDENT REVIEW PENDING |
 
 The two artifact digests must come from two byte-identical builds at the exact
 source commit with `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, an empty Go
@@ -44,6 +45,10 @@ unrecorded compiler/toolchain or non-identical rebuild rejects the packet.
 The recorded local build produced two byte-identical copies of each artifact;
 an accountable reviewer must independently reproduce both digests before the
 packet can request step-5 approval.
+
+The OCI values recorded by issue #141 are historical and not deployable after
+the descriptor launcher is introduced. Only the superseding digest set above
+may enter the private Kubernetes runbook.
 
 ## Accountable roles
 

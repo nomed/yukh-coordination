@@ -458,6 +458,31 @@ This increment creates no registry, image push, namespace, Kubernetes object,
 credential, listener or network traffic. The OCI digest must be reviewed and
 bound into the operator packet before step-5 approval can be requested.
 
+### RFC-0022 Kubernetes descriptor-launcher review — 2026-08-04
+
+Issue #144 closes the mismatch between Kubernetes read-only Secret file mounts
+and the accepted inherited-descriptor executable boundary. A compiled static
+launcher accepts only `service` or `bootstrap`, exact absolute configuration
+and secret-file paths, and selects only the two fixed reviewed child binaries.
+It performs no `PATH` lookup or arbitrary execution.
+
+Secret inputs must be bounded regular non-symlink files with no group/world
+write permission. The launcher opens with `O_NOFOLLOW|O_CLOEXEC`, verifies
+device, inode, mode and size across open, duplicates through collision-safe
+temporary descriptors into exact FD 3/4, closes originals and all descriptors
+above 4, clears the environment and performs `exec`. Failure emits one fixed
+message with no path or secret detail.
+
+The launcher becomes the OCI entrypoint and is covered by the deterministic
+layer and SPDX inventory. The service and bootstrap digests remain unchanged;
+the OCI manifest, config, layer and SBOM digests are superseded. Kubernetes
+must mount immutable Secret keys as exact regular `subPath` files and must not
+use the projected-volume symlink paths directly.
+
+This review does not approve image publication, Secret creation, namespace or
+workload creation, bootstrap execution, listener exposure or traffic. Those
+remain behind the complete operator packet and explicit step-5 gate.
+
 ### RFC-0022 accountable bucket-bootstrap implementation review — 2026-08-03
 
 Issue #117 adds a second, one-shot administrative executable with no listener,
