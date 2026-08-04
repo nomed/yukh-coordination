@@ -57,13 +57,13 @@ This public half records only separation outcomes; it never publishes names.
 
 | Role | Required custody | Closed outcome |
 |---|---|---|
-| project owner / residual-risk acceptor | step-5 and step-7 decisions | PENDING |
-| deployment operator | reviewed runbook only | PENDING |
-| security reviewer | identities, permissions, digests, limits and rollback | PENDING |
-| credential custodian | ephemeral workload and NATS material | PENDING |
-| MCP consumer operator | exact trust and descriptor-delivered consumer material | PENDING |
-| evidence reviewer | startup, audit and teardown receipts | PENDING |
-| incompatible-role conflicts | explicit, reviewed and accepted | PENDING |
+| project owner / residual-risk acceptor | step-5 and step-7 decisions | PASS — privately identified |
+| deployment operator | reviewed runbook only | PASS — project owner |
+| security reviewer | identities, permissions, digests, limits and rollback | PASS — project owner |
+| credential custodian | ephemeral workload and NATS material | PASS — project owner |
+| MCP consumer operator | exact trust and descriptor-delivered consumer material | PASS — project owner |
+| evidence reviewer | startup, audit and teardown receipts | PASS — project owner |
+| incompatible-role conflicts | explicit, reviewed and accepted | PASS — owner explicitly accepts bounded first-staging consolidation |
 
 An outcome is one of `PASS` or `REJECT`. A role holder may perform multiple
 roles only when the private change record identifies the combination and the
@@ -82,7 +82,7 @@ input. Digests are evidence references, not substitutes for private review.
 | offline policy key ID | closed non-secret identifier | PENDING |
 | five-action policy digest | 64 lowercase hexadecimal characters | PENDING |
 | NATS credential-policy digest | 64 lowercase hexadecimal characters | PENDING |
-| exact-action review | five RFC-0022 actions and no wildcard | PENDING |
+| exact-action review | five RFC-0022 actions and no wildcard | DESIGN PASS; REGISTRATION EVIDENCE PENDING |
 | endpoint/trust match review | closed `PASS` or `REJECT` | PENDING |
 
 The private review must prove that the NATS policy reaches only the nonce,
@@ -98,35 +98,54 @@ value here.
 
 | Field | Unit / bound | Value |
 |---|---|---|
-| NATS replicas | positive integer accepted by the candidate | PENDING |
-| NATS retention | milliseconds; greater than replay-safety window | PENDING |
-| replay-safety window | milliseconds | PENDING |
-| capability limit | positive integer | PENDING |
-| capability pending timeout | milliseconds | PENDING |
-| NATS connection timeout | milliseconds | PENDING |
-| NATS request timeout | milliseconds | PENDING |
-| maximum lease lifetime | milliseconds | PENDING |
-| positive restore epoch | integer greater than zero | PENDING |
+| NATS replicas | positive integer accepted by the candidate | `1` |
+| NATS retention | milliseconds; greater than replay-safety window | `3600000` |
+| replay-safety window | milliseconds | `300000` |
+| capability limit | positive integer | `8` |
+| capability pending timeout | milliseconds | `500` |
+| NATS connection timeout | milliseconds | `1000` |
+| NATS request timeout | milliseconds | `1000` |
+| maximum lease lifetime | milliseconds | `60000` |
+| positive restore epoch | integer greater than zero | `1`; reject if any prior state is discovered |
 | service/three-bucket epoch agreement | closed `PASS` or `REJECT` | PENDING |
 
 Any mismatch, zero value, rollback, expired evidence or value outside the
 candidate's closed configuration rejects the packet.
 
+## Private Kubernetes target assessment
+
+The target and namespace identifiers remain only in the private operator
+record. Read-only and server-side dry-run inspection recorded these closed
+public outcomes without creating an object:
+
+| Review | Outcome |
+|---|---|
+| unique private Kubernetes context and dedicated absent namespace | PASS |
+| Linux AMD64 node profile | PASS |
+| one default storage class | PASS |
+| namespace server-side dry run | PASS |
+| namespaced service account/RBAC, StatefulSet, Service and ConfigMap authority | PASS |
+| Secret, NetworkPolicy and PVC authority | PASS |
+| current namespace resources | ABSENT |
+
+These outcomes prove only that a packet can be prepared. They do not authorize
+namespace creation or establish runtime readiness.
+
 ## Filesystem, supervisor and lifecycle outcomes
 
 | Review | Required outcome | Status |
 |---|---|---|
-| TLS certificate and key ownership/mode | regular, absolute, non-symlink, service cannot write | PENDING |
-| signed registration ownership/mode | supervisor-owned mode `0440` regular file | PENDING |
-| replay database parent ownership/mode | service-owned private storage | PENDING |
-| audit database parent ownership/mode | service-owned private storage | PENDING |
-| closed configuration ownership/mode | absolute, non-secret, immutable to service | PENDING |
-| descriptor purpose map | NATS runtime, capability keyring, token, DPoP key only; no numbers | PENDING |
-| public listener host block | effective before process start | PENDING |
-| loopback operations listener | exact and non-routable | PENDING |
-| rollback procedure identifier | reviewed non-secret identifier | PENDING |
-| teardown procedure identifier | reviewed non-secret identifier | PENDING |
-| audit-chain verification procedure | reviewed non-secret identifier | PENDING |
+| TLS certificate and key ownership/mode | regular, absolute, non-symlink, service cannot write | PLAN PASS; VERIFY STEP 6 |
+| signed registration ownership/mode | supervisor-owned mode `0440` regular file | PLAN PASS; VERIFY STEP 6 |
+| replay database parent ownership/mode | service-owned private storage | PLAN PASS; VERIFY STEP 6 |
+| audit database parent ownership/mode | service-owned private storage | PLAN PASS; VERIFY STEP 6 |
+| closed configuration ownership/mode | absolute, non-secret, immutable to service | PLAN PASS; VERIFY STEP 6 |
+| descriptor purpose map | NATS runtime, capability keyring, token, DPoP key only; no numbers | PASS — compiled closed launcher |
+| public listener host block | effective before process start | PLAN PASS; VERIFY STEP 6 |
+| loopback operations listener | exact and non-routable | PLAN PASS; VERIFY STEP 6 |
+| rollback procedure identifier | reviewed non-secret identifier | `yukh-rfc0022-k8s-rollback-v1` |
+| teardown procedure identifier | reviewed non-secret identifier | `yukh-rfc0022-k8s-teardown-v1` |
+| audit-chain verification procedure | reviewed non-secret identifier | `yukh-rfc0022-audit-verify-v1` |
 
 ## Proposed synthetic window
 
@@ -134,9 +153,9 @@ The proposal may be prepared now but does not authorize RFC-0022 step 7.
 
 | Field | Required value | Status |
 |---|---|---|
-| operation set | one predeclared synthetic nonce/lease lifecycle | PENDING |
-| provider/protected-target exclusion | closed `PASS` | PENDING |
-| retry policy | exactly no automatic retry | PENDING |
+| operation set | one nonce consume followed by acquire, inspect, renew, release and terminal inspect on synthetic bindings | PREDECLARED |
+| provider/protected-target exclusion | closed `PASS` | PASS |
+| retry policy | exactly no automatic retry | PASS |
 | maximum expiry | absolute UTC timestamp, no more than credential lifetime | PENDING |
 | qualification result | `NOT_RUN` before step 7 | NOT_RUN |
 
