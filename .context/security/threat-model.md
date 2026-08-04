@@ -437,6 +437,27 @@ bootstrap issue #117, a superseding immutable implementation record and
 deployment-plan reconciliation remain required before provisioning approval. No live listener,
 credential, MCP traffic or provider authority is created by #115.
 
+### RFC-0022 offline OCI packaging review — 2026-08-04
+
+Issue #141 adds a deterministic OCI `scratch` packaging boundary for the
+selected private Kubernetes operator environment. The layer contains exactly
+the two previously reviewed RFC-0022 executables, minimal numeric non-root
+identity files and empty working directories. The build verifies both binary
+SHA-256 values before packaging and fixes Linux AMD64, UID/GID `65532:65532`,
+the service entrypoint, immutable source revision and profile label.
+
+There is no shell, package manager, downloader, source, compiler, CA bundle,
+credential or startup wrapper. Bootstrap requires an explicit exact entrypoint
+override. Two offline builds must produce identical OCI layouts; qualification
+checks every blob digest, the complete layer path allowlist, configuration and
+the deterministic SPDX inventory. Kubernetes must separately enforce a
+read-only root filesystem, dropped capabilities, no privilege escalation,
+fixed mounts and listener isolation.
+
+This increment creates no registry, image push, namespace, Kubernetes object,
+credential, listener or network traffic. The OCI digest must be reviewed and
+bound into the operator packet before step-5 approval can be requested.
+
 ### RFC-0022 accountable bucket-bootstrap implementation review — 2026-08-03
 
 Issue #117 adds a second, one-shot administrative executable with no listener,

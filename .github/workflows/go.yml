@@ -19,7 +19,7 @@ jobs:
         run: .github/scripts/check-documentation.sh
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: 1.26.5
           cache: true
       - name: Install qualification NATS server
         run: go install github.com/nats-io/nats-server/v2@v2.12.0
@@ -27,6 +27,8 @@ jobs:
         run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
       - name: Build reproducible private primitives executables
         run: .github/scripts/qualify-primitives-executable.sh
+      - name: Build reproducible private primitives OCI layout
+        run: .github/scripts/qualify-primitives-oci.sh
       - uses: actions/setup-node@v6
         with:
           node-version: 24
