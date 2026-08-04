@@ -232,16 +232,28 @@ type BackupReceipt struct {
 	ReceiptDigest string
 }
 
-// TranscriptLifecycleStore is an administrative capability. It is not
-// embedded in or type-compatible with the ordinary relay.Store port.
-type TranscriptLifecycleStore interface {
+// TranscriptLifecyclePreparationStore is the non-destructive administrative
+// capability. It can reserve and fence work, but cannot sign or remove data.
+type TranscriptLifecyclePreparationStore interface {
 	InspectDue(context.Context, DueQuery) ([]Operation, error)
 	Reserve(context.Context, Intent) (Operation, error)
 	BindExport(context.Context, ExportEvidence) (Operation, error)
 	PersistMarker(context.Context, MarkerPersistence) (Operation, error)
+	Inspect(context.Context, string) (Operation, error)
+}
+
+// TranscriptLifecycleCompletionStore contains the separately gated
+// destructive and external-custody capabilities.
+type TranscriptLifecycleCompletionStore interface {
 	AttachSignature(context.Context, SignatureAttachment) (Operation, error)
 	RemovePayload(context.Context, OperationReference) (Operation, error)
 	RecordBackupReceipt(context.Context, BackupReceipt) (Operation, error)
 	Complete(context.Context, OperationReference) (Operation, error)
-	Inspect(context.Context, string) (Operation, error)
+}
+
+// TranscriptLifecycleStore is the complete administrative capability. It is
+// not embedded in or type-compatible with the ordinary relay.Store port.
+type TranscriptLifecycleStore interface {
+	TranscriptLifecyclePreparationStore
+	TranscriptLifecycleCompletionStore
 }

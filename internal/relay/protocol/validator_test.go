@@ -73,6 +73,24 @@ func TestAdmissionRejectsNonCanonicalDuplicateNumericAndDeepInput(t *testing.T) 
 	}
 }
 
+func TestChannelMetadataExposesImmutableRetentionBinding(t *testing.T) {
+	validator, err := protocol.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(repositoryRoot(t), "conformance/canonical/channel.canonical.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := validator.ValidateChannelMetadata(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.RetentionPolicyDigest != "sha-256:"+strings.Repeat("1", 64) || metadata.RetentionEpoch != 0 || metadata.CreatedAt != "2026-08-02T16:00:00.000Z" {
+		t.Fatalf("retention binding not exposed exactly: %#v", metadata)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
