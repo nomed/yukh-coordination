@@ -1,6 +1,6 @@
 # RFC-0023: Single-node transcript lifecycle and retention
 
-- Status: Draft
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-03
 - Governing issue: #133
