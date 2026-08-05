@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly candidate="d122f31ce6a74dcec97dfcf8095a4447e23ee593"
-readonly service_sha="00a9aacbb6c308d4a168cc087c2c396680edab55bb682458872056abce10f000"
-readonly bootstrap_sha="edcdc8d99b26799795c3d5d7551b636d5009933e81683e512676e170852a55df"
+readonly candidate="25ec7901796208785ec25f20b5fc4c0d7bc05eba"
+readonly service_sha="598adbc49a727bffef773d97e724c915960e8404509e3b9d6941dd447040720c"
+readonly bootstrap_sha="73f59bec1ea4fd76baa6b3b637859e08fd88fe7ca0cb7530d59f85380214c923"
 readonly output="${1:?usage: build-primitives-oci.sh OUTPUT_DIRECTORY}"
 
 if [[ -e "$output" ]]; then
