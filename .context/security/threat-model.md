@@ -917,6 +917,17 @@ This remains hermetic qualification with a test-only certificate and memory
 Store. It adds no insecure runtime profile, public executable, deployment,
 Matrix bridge or production authority.
 
+### RFC-0013 executable boundary review — 2026-08-05
+
+Issue #6 adds the named client process and one closed dispatcher for the
+accepted command vocabulary. Help and version work without configuration;
+uncomposed read and mutation paths fail with stable JSON and exit codes.
+
+The executable contains no token argument, environment credential discovery,
+plaintext session store, permissive receipt verifier or insecure TLS profile.
+Bootstrap, credential custody, watch and live network composition remain
+required before the process is usable against a relay.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
