@@ -1,10 +1,10 @@
 # RFC-0022 private primitives staging implementation record
 
 - Status: superseding immutable implementation candidate
-- Recorded: 2026-08-03
+- Recorded: 2026-08-05
 - Governing RFC: RFC-0022
 - Governing issue: #90
-- Reconciliation issue: #129
+- Reconciliation issues: #129, #169, #174
 
 ## Immutable identity
 
@@ -13,22 +13,23 @@ The reviewed implementation candidate is exactly:
 | Field | Value |
 |---|---|
 | Repository | `nomed/yukh-coordination` |
-| Commit | `d122f31ce6a74dcec97dfcf8095a4447e23ee593` |
-| Git tree | `a59ba3f7ad6018d96f7329710eb593766acda676` |
+| Source candidate commit | `25ec7901796208785ec25f20b5fc4c0d7bc05eba` |
+| Source candidate tree | `43b2deab95a62dcc3d48a83d9fc8a93e0c8aa4a0` |
+| Delivery commit | `ce607210c8ae9bd71c4d4adfc1414112cb2fa008` |
+| Delivery tree | `23f90cf916e0f1885576f500f7a64c28985d7a33` |
 | Service profile | `yukh-coordination/private-primitives-staging-v1` |
 | Bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` |
-| Qualification check | GitHub Actions run `30851387901`, job `91811981779`, success at 2026-08-03T20:43:05Z |
+| Qualification check | post-merge GitHub Actions run `31018394591`, job `92348429268`, success at 2026-08-05T15:05:32Z |
 
-Commit and tree are the complete source identity. A later commit, rebuilt
-archive, branch or mutable tag is not this candidate. Deployment evidence must
-record both values before building and again through artifact provenance. This
-repository does not publish a binary or container distribution at this point;
-an operator packet must therefore bind reproducibly built artifact digests to
-this exact source identity before provisioning can be reviewed.
+The source candidate and tree are the exact embedded executable identity; the
+delivery commit and tree are the reviewed merge that binds its build and
+qualification records. A later commit, rebuilt archive, branch or mutable tag
+is not this candidate. The operator packet binds reproducibly built artifacts
+and their private registry identity to these exact source and delivery values.
 
-This record supersedes the earlier candidate
-`1af3ddb61f48539b7b2d426fb1d169db0b3cef21` recorded by #110. That commit
-remains historical evidence and is not the deployable candidate.
+This record supersedes `d122f31ce6a74dcec97dfcf8095a4447e23ee593`
+and the earlier `1af3ddb61f48539b7b2d426fb1d169db0b3cef21`. Both remain
+historical evidence and are not deployable candidates.
 
 ## Reviewed delivery chain
 
@@ -42,6 +43,7 @@ remains historical evidence and is not the deployable candidate.
 | JetStream stores and restore epoch | #109 | `1af3ddb61f48539b7b2d426fb1d169db0b3cef21` |
 | Closed staging service executable | #121 | `6c47920135ad29e36b7e591fc6f401f9eec2fa34` |
 | Accountable three-bucket bootstrap executable | #127 | `d122f31ce6a74dcec97dfcf8095a4447e23ee593` |
+| Kubernetes PodIP-aware descriptor launcher | #171 | `ce607210c8ae9bd71c4d4adfc1414112cb2fa008` |
 
 The final candidate contains every earlier implementation boundary. The chain
 is traceability evidence, not a set of independently substitutable artifacts.
@@ -64,6 +66,11 @@ revision/epoch/bucket-profile receipt; failure emits no private detail.
 Both executables embed the candidate revision. The qualification script builds
 each twice with `CGO_ENABLED=0`, trimmed paths, disabled VCS stamping and no
 build ID, then requires byte equality and the exact embedded revision.
+
+The static descriptor launcher adds one closed `service-kubernetes` mode that
+materializes only the exact private PodIP bind before executing the unchanged
+service boundary. It introduces no shell, proxy, init image, wildcard bind or
+new secret purpose.
 
 ## Qualification claim
 

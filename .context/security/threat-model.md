@@ -507,6 +507,24 @@ and ambiguous output deny startup. The source change supersedes the reviewed
 launcher and OCI bytes. Registry publication, packet rebinding, target pull,
 Kubernetes mutation, Step 5 and traffic require separate renewed authority.
 
+### RFC-0022 PodIP-aware immutable registry rebinding — 2026-08-05
+
+Issue #174 independently reproduces the PodIP-aware delivery from merge commit
+`ce607210c8ae9bd71c4d4adfc1414112cb2fa008` and publishes exactly one new
+private GHCR version. Provider pull by digest returns byte-identical manifest,
+config and layer blobs for manifest
+`13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe`.
+The package remains private, owner-owned and unlinked from a repository; the
+prior version is retained as rollback evidence but cannot be selected by the
+deployment packet.
+
+The admissible target identity is the digest-qualified reference, never the
+publication tag. Residual risk remains the broader operational PAT accepted
+for the bounded publication; temporary registry authentication state is
+destroyed after provider verification. Rebinding artifact evidence grants no
+target pull, Kubernetes mutation, Step 5, MCP request or traffic authority. A
+fresh owner approval against the complete packet remains mandatory.
+
 ### Accepted RFC-0024 offline trust-ceremony impact — 2026-08-04
 
 RFC-0024 identifies a gate-ordering risk: fabricating or prematurely
