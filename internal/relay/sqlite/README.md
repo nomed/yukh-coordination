@@ -12,7 +12,7 @@ or production topology.
 - referential integrity: foreign keys enabled;
 - writer contention bound: 5-second SQLite busy timeout;
 - process model: one database connection, serializing sequence allocation;
-- schema: STRICT tables with `PRAGMA user_version=4`;
+- schema: STRICT tables with `PRAGMA user_version=5`;
 - tenant/channel predicates on every identity, append and replay query.
 
 Channel identity is immutable across transcript epochs. Event IDs are unique
@@ -36,6 +36,24 @@ operation; those destructive capabilities are intentionally outside this
 increment. The lifecycle high-water reference is the exact signed receipt ID
 at the transcript high-water sequence.
 
+`LifecycleSignatureRemoval` is a second, separately constructed capability. It
+receives a public receipt-verification port, never a signer or private key.
+Exact signature attachment advances only the persisted canonical preimage.
+Primary removal deletes the authorized synthetic `accepted_records` rows and
+atomically persists digest-only sequence/event/receipt tombstones plus the
+`payload_removed` state. Selective removal cannot touch non-target rows; whole
+deletion cannot cross the bound tenant/channel/epoch. Identifier digests remain
+in a non-reuse registry. The adapter has no backup-receipt or completion
+methods and is not the aggregate destructive store.
+
+The v5 claim is deliberately **logical primary-store removal**, not physical
+media sanitization. SQLite's database, WAL and SHM files form one live failure
+domain and may retain historical page bytes outside the committed logical
+view. Tests scan that complete domain with generated canaries but do not
+mislabel checkpointing, compaction or filesystem behavior as atomic erasure.
+Backup generations, media sanitization and their receipts remain later custody
+obligations.
+
 Any failed `COMMIT` is reported as `relay.ErrCommitIndeterminate`; callers must
 not manufacture a replacement append. An exact retry resolves the outcome by
 the original event ID and canonical bytes.
@@ -48,10 +66,10 @@ The tests cover clean close/reopen and abrupt process termination:
 - exit during record preparation rolls back and does not consume a sequence;
 - exact retries after restart return the original receipt identity;
 - concurrent appends remain gap-free;
-- changed bytes and cross-epoch ID reuse collide;
+- changed bytes and cross-epoch raw or tombstoned ID reuse collide;
 - tenant-scoped replay does not cross identity boundaries.
 
 The database file and its `-wal`/`-shm` sidecars form one live SQLite failure
 domain. Copying only the main file while the database is open is not a valid
-backup procedure. Backup, restore, retention and deletion qualification remain
-open gates of issue #5.
+backup procedure. Physical media, backup, restore and completion qualification
+remain open gates of issue #5.

@@ -232,6 +232,13 @@ type BackupReceipt struct {
 	ReceiptDigest string
 }
 
+// ReceiptSignatureVerifier verifies one closed lifecycle receipt signature.
+// Implementations expose public verification authority only; no signing
+// capability or private key crosses this port.
+type ReceiptSignatureVerifier interface {
+	VerifyLifecycleReceipt(context.Context, string, string, []byte, []byte) error
+}
+
 // TranscriptLifecyclePreparationStore is the non-destructive administrative
 // capability. It can reserve and fence work, but cannot sign or remove data.
 type TranscriptLifecyclePreparationStore interface {
@@ -242,13 +249,25 @@ type TranscriptLifecyclePreparationStore interface {
 	Inspect(context.Context, string) (Operation, error)
 }
 
-// TranscriptLifecycleCompletionStore contains the separately gated
-// destructive and external-custody capabilities.
-type TranscriptLifecycleCompletionStore interface {
+// TranscriptLifecycleSignatureRemovalStore owns only verified primary-store
+// removal. It cannot record backup evidence or complete an operation.
+type TranscriptLifecycleSignatureRemovalStore interface {
 	AttachSignature(context.Context, SignatureAttachment) (Operation, error)
 	RemovePayload(context.Context, OperationReference) (Operation, error)
+}
+
+// TranscriptLifecycleBackupCompletionStore is the later external-custody
+// boundary and is deliberately not implemented by the SQLite remover.
+type TranscriptLifecycleBackupCompletionStore interface {
 	RecordBackupReceipt(context.Context, BackupReceipt) (Operation, error)
 	Complete(context.Context, OperationReference) (Operation, error)
+}
+
+// TranscriptLifecycleCompletionStore preserves the accepted complete method
+// set while keeping its two authority classes independently assignable.
+type TranscriptLifecycleCompletionStore interface {
+	TranscriptLifecycleSignatureRemovalStore
+	TranscriptLifecycleBackupCompletionStore
 }
 
 // TranscriptLifecycleStore is the complete administrative capability. It is

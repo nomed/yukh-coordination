@@ -667,6 +667,40 @@ introduces no signer, destructive worker, clock scheduler, backup provider,
 HTTP/SSE mutation handle, executable composition, real data, deployment,
 JetStream lifecycle, Matrix, MCP or production authority.
 
+### RFC-0023 verified SQLite primary removal review — 2026-08-04
+
+Issue #152 implements a second capability-segregated adapter for exact
+lifecycle signature attachment and synthetic primary-store removal. It accepts
+only a public verification port. No signer, private key, backup receipt or
+completion method enters the adapter, and the candidate cannot implement the
+aggregate destructive store. Verification callbacks run before the SQLite
+write transaction; exact persisted bytes are rechecked after acquiring it.
+
+Schema version 5 stores the 64-byte verified signature, one operation removal
+digest, digest-only per-sequence tombstones and a separate identifier non-reuse
+registry. Receipt digests are globally unique; event digests remain scoped to
+tenant/channel identity. Selective redaction deletes only the signed target
+rows. Whole deletion deletes only the bound transcript epoch. Both paths
+atomically insert tombstones, delete accepted rows and advance to
+`payload_removed`; a forced final-state failure rolls the entire transaction
+back.
+
+Every retry revalidates operation ID, intent digest, canonical preimage,
+signature and removal evidence. Changed or malformed material returns only
+closed lifecycle sentinels. A failed or unavailable verifier leaves every
+payload intact. Internal replay of a redacted epoch stops before the first
+removed sequence; a deleted epoch returns no records. Digest tombstones prevent
+raw identifier reuse without retaining removed event, binding, receipt or
+participant material.
+
+The candidate claims logical primary-store removal only. Generated canary tests
+scan the database, WAL and SHM failure domain and deliberately make no physical
+sanitization claim: historical SQLite pages may retain bytes outside the
+committed logical view. Media sanitization, backup custody, restore handling,
+completion, worker scheduling, HTTP/SSE revision, executable composition, real
+data, deployment, JetStream lifecycle, Matrix, MCP and production remain
+separately gated.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
