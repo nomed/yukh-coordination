@@ -5,7 +5,7 @@
 - Reconciled: 2026-08-05
 - Governing RFC: RFC-0022
 - Governing issue: #136
-- Reconciliation issues: #158, #159
+- Reconciliation issues: #158, #159, #163
 - Deployment plan: `private-primitives-staging-deployment-plan.md`
 
 This is the public, redacted review half of the RFC-0022 step-5 operator
@@ -89,7 +89,7 @@ input. Digests are evidence references, not substitutes for private review.
 
 | Evidence | Required public shape | Status |
 |---|---|---|
-| private-listener identity digest | 64 lowercase hexadecimal characters | `46d7581b364871d83ad4f062a11b5d96d12a71f96becf986b499b87b191b0a54`; CEREMONY A PASS |
+| private-listener identity digest | 64 lowercase hexadecimal characters | `445e7758bdcff2ab94c01776dc6918914d9ccb4c4457425d758216611a017133`; LEAF ROTATION PASS |
 | MCP trust-bundle digest | 64 lowercase hexadecimal characters | `ac9560e118851b63b7b40678fd9c3afe09fd35b13198946b7f038cc30a8a0115`; CEREMONY A PASS |
 | canonical registration-template digest | 64 lowercase hexadecimal characters | `2b84604fc0c3233568c9bffe5d4af73387d8768d06fdc1a8d1441aa8e2291b82`; CEREMONY A PASS |
 | signed-registration digest | 64 lowercase hexadecimal characters | DEFERRED_TO_APPROVED_STEP_5 per RFC-0024 |
@@ -101,7 +101,7 @@ input. Digests are evidence references, not substitutes for private review.
 | endpoint/trust match review | closed `PASS` or `REJECT` | PASS |
 | encrypted-custody and plaintext-destruction review | closed `PASS` or `REJECT` | PASS; redacted receipt SHA-256 `972bb20f1ae778668c3e641cdf131497d4cf881d466597a115d72a394eb9f1bd` |
 | root and policy validity bound | absolute UTC timestamp | `2026-09-04T08:01:13Z` |
-| server-leaf validity bound | absolute UTC timestamp | `2026-08-06T08:01:13Z`; ROTATE IF STEP 5 CANNOT COMPLETE SAFELY BEFORE EXPIRY |
+| server-leaf validity bound | absolute UTC timestamp | `2026-08-06T11:05:05Z`; LEAF ROTATION PASS; ROTATE AGAIN IF STEP 5 CANNOT COMPLETE SAFELY BEFORE EXPIRY |
 
 The private review must prove that the NATS policy reaches only the nonce,
 lease and capability-budget KV buckets and only the JetStream operations
@@ -196,8 +196,8 @@ step 6. The security reviewer records one of these closed decisions:
 
 Current decision: `READY_TO_REQUEST_STEP_5_APPROVAL_TIME_CRITICAL`.
 
-No pre-step-5 packet field remains pending. The server leaf expires at
-`2026-08-06T08:01:13Z`; if review and a safe step-5/step-6 interval cannot
+No pre-step-5 packet field remains pending. The selected rotated server leaf
+expires at `2026-08-06T11:05:05Z`; if review and a safe step-5/step-6 interval cannot
 complete before then, the leaf must be rotated through a separately authorized
 ceremony and rebound before any step-5 approval request. Readiness to request
 approval is not an approval request and grants no step-5 authority.

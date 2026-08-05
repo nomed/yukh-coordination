@@ -3,8 +3,8 @@
 - Updated: 2026-08-05
 - Governing issue: #6
 - Last delivery pull request: #157
-- Active Coordination increment: #163 adds the qualified RFC-0024 leaf-only
-  rotation path required before a safe Step-5 approval request
+- Active Coordination increment: #163 records the completed RFC-0024 leaf-only
+  rotation without requesting or authorizing Step 5
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -50,12 +50,11 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review and merge the leaf-only rotation tooling in #163, then
-  execute the already authorized offline rotation through an atomic custody
-  replacement. SQLite backup persistence, target pull, Kubernetes credentials
-  and objects, Step 5, operational completion, worker, physical media
-  sanitization, traffic, Matrix, MCP live use and production use remain
-  separately gated
+- Next action: review and merge the leaf-rotation evidence in #163, then make
+  a separate time-critical Step-5 approval decision. SQLite backup persistence,
+  target pull, Kubernetes credentials and objects, Step 5, operational
+  completion, worker, physical media sanitization, traffic, Matrix, MCP live
+  use and production use remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
