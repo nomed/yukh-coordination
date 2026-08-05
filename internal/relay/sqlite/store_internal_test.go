@@ -23,7 +23,7 @@ func TestOpenAppliesDurabilityProfile(t *testing.T) {
 		{"synchronous", "2"},
 		{"foreign_keys", "1"},
 		{"busy_timeout", "5000"},
-		{"user_version", "5"},
+		{"user_version", "6"},
 	}
 	for _, check := range checks {
 		t.Run(check.pragma, func(t *testing.T) {
@@ -76,8 +76,8 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 5 {
-		t.Fatalf("schema version: got %d, want 5", version)
+	if version != 6 {
+		t.Fatalf("schema version: got %d, want 6", version)
 	}
 	rows, err := store.db.Query("PRAGMA table_info(accepted_records)")
 	if err != nil {
@@ -127,7 +127,7 @@ func TestOpenMigratesSchemaVersionOne(t *testing.T) {
 			t.Fatalf("version-two migration did not add %s column", name)
 		}
 	}
-	for _, table := range []string{"lifecycle_policies", "transcript_policy_bindings", "lifecycle_operations", "lifecycle_payload_tombstones", "lifecycle_identifier_tombstones"} {
+	for _, table := range []string{"lifecycle_policies", "transcript_policy_bindings", "lifecycle_operations", "lifecycle_payload_tombstones", "lifecycle_identifier_tombstones", "lifecycle_backup_obligation_sets", "lifecycle_backup_obligations", "lifecycle_backup_receipts", "lifecycle_completions"} {
 		var found string
 		if err := store.db.QueryRow(`SELECT name FROM sqlite_schema WHERE type = 'table' AND name = ?`, table).Scan(&found); err != nil {
 			t.Fatalf("version-three migration did not create %s: %v", table, err)
@@ -173,5 +173,39 @@ func TestOpenRejectsUnknownSchemaVersion(t *testing.T) {
 	_, err = Open(path)
 	if err == nil || !strings.Contains(err.Error(), "unsupported sqlite schema version 99") {
 		t.Fatalf("expected unknown schema rejection, got %v", err)
+	}
+}
+
+func TestOpenMigratesSchemaVersionFiveToSix(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "version-five.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"lifecycle_completions", "lifecycle_backup_receipts", "lifecycle_backup_obligations", "lifecycle_backup_obligation_sets"} {
+		if _, err := store.db.Exec("DROP TABLE " + table); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.db.Exec("PRAGMA user_version=5"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	var version int
+	if err := reopened.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 6 {
+		t.Fatalf("version=%d err=%v", version, err)
+	}
+	for _, table := range []string{"lifecycle_backup_obligation_sets", "lifecycle_backup_obligations", "lifecycle_backup_receipts", "lifecycle_completions"} {
+		var found string
+		if err := reopened.db.QueryRow(`SELECT name FROM sqlite_schema WHERE type='table' AND name=?`, table).Scan(&found); err != nil {
+			t.Fatalf("missing %s: %v", table, err)
+		}
 	}
 }

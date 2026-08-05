@@ -142,6 +142,14 @@
     "name": "backup-obligation"
   },
   {
+    "canonical": "conformance/canonical/backup-obligation-set.canonical.json",
+    "digest": "sha-256:83e4abcd139097c444e02249d72cdfaca17ebed19c06e4f9d4fa4b34e408708d",
+    "domain_digest": "sha-256:746cc30fbdbfda1543b6bde5a250f8902fdf2de984f841587b2e1c5aa8a6e29b",
+    "domain_prefix": "yukh.transcript-backup-obligation-set.v0.1\u0000",
+    "input": "conformance/canonical/backup-obligation-set.input.json",
+    "name": "backup-obligation-set"
+  },
+  {
     "canonical": "conformance/canonical/backup-custodian-receipt.canonical.json",
     "digest": "sha-256:854137fc4f69d6f7b046f33ef9d0a3f877c3b8273dd123ca0814084457d42268",
     "domain_digest": "sha-256:c991af297b4b1d2e70111c62f8538d52f4dd785528e2db065aff31717ba5ceb4",

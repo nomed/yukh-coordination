@@ -147,6 +147,38 @@ func ValidateBackupObligation(value BackupObligation) error {
 	return nil
 }
 
+func ValidateBackupObligationSet(value BackupObligationSet) error {
+	if value.Profile != BackupObligationSetProfile ||
+		ValidateOperationReference(OperationReference{value.OperationID, value.IntentDigest}) != nil ||
+		!digestPattern.MatchString(value.PolicyDigest) || len(value.Obligations) != 3 {
+		return ErrInvalidContract
+	}
+	want := []BackupDomain{EventBackupDomain, IdentityBackupDomain, AuditBackupDomain}
+	for i, obligation := range value.Obligations {
+		if ValidateBackupObligation(obligation) != nil || obligation.Domain != want[i] ||
+			obligation.OperationID != value.OperationID || obligation.IntentDigest != value.IntentDigest ||
+			obligation.PolicyDigest != value.PolicyDigest {
+			return ErrInvalidContract
+		}
+	}
+	return nil
+}
+
+func ValidateObligationSetIntent(value BackupObligationSet, intent Intent, intentDigest string) error {
+	if ValidateBackupObligationSet(value) != nil || ValidateIntent(intent) != nil {
+		return ErrInvalidContract
+	}
+	if value.OperationID != intent.OperationID || value.IntentDigest != intentDigest || value.PolicyDigest != intent.PolicyDigest {
+		return ErrConflict
+	}
+	for _, obligation := range value.Obligations {
+		if ValidateObligationIntent(obligation, intent, intentDigest) != nil {
+			return ErrConflict
+		}
+	}
+	return nil
+}
+
 func ValidateCustodianReceipt(value CustodianReceipt) error {
 	signature, err := base64.RawURLEncoding.DecodeString(value.DetachedSignature)
 	if value.Profile != CustodianReceiptProfile || !validUUIDv7(value.ReceiptID) || !digestPattern.MatchString(value.ObligationDigest) ||

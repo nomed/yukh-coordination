@@ -220,7 +220,7 @@ func TestAdministrativePortIsSeparateFromRelayStore(t *testing.T) {
 	if ordinary.AssignableTo(admin) || admin.AssignableTo(ordinary) {
 		t.Fatal("ordinary and administrative stores are type-compatible")
 	}
-	for _, forbidden := range []string{"Reserve", "BindExport", "PersistMarker", "RemovePayload", "RecordBackupReceipt", "Complete", "InspectBackupRecovery"} {
+	for _, forbidden := range []string{"Reserve", "BindExport", "PersistMarker", "RemovePayload", "BindBackupObligations", "RecordBackupReceipt", "Complete", "InspectBackupRecovery"} {
 		if _, found := ordinary.MethodByName(forbidden); found {
 			t.Fatalf("relay.Store exposes administrative method %s", forbidden)
 		}
