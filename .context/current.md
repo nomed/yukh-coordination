@@ -3,8 +3,8 @@
 - Updated: 2026-08-05
 - Governing issue: #6
 - Last delivery pull request: #157
-- Active Coordination increment: #6 adds verified event publication to the
-  client foundation required by the four-agent MVP
+- Active Coordination increment: #6 adds closed join, claim and progress
+  construction for the four-agent MVP
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -50,8 +50,8 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review verified client publication, then expose the closed
-  signal commands required by the two-session/four-agent proof. SQLite backup persistence,
+- Next action: expose the closed event builders through the CLI, then complete
+  question, review and handoff families for the two-session/four-agent proof. SQLite backup persistence,
   target pull, Kubernetes credentials and objects, Step 5, operational
   completion, worker, physical media sanitization, traffic, Matrix, MCP live
   use and production use remain separately gated

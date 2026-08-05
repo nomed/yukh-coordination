@@ -767,6 +767,19 @@ credential and grants no ownership or execution authority. CLI signal
 commands, watch, a public binary, deployment, Matrix and production use remain
 separately gated.
 
+### RFC-0013 core event construction review — 2026-08-05
+
+Issue #6 adds explicit builders for `join`, `claim` and `progress`. Configuration
+supplies the exact channel, source and visible participant; no environment, Git
+state or chat context is consulted. Event and claim identifiers use UUIDv7,
+timestamps are canonical UTC milliseconds, collections are explicit and the
+complete JCS event must pass the accepted protocol validator before it can be
+published.
+
+The builders do not infer ownership, choose work, publish events or access
+credentials. Remaining signal families, CLI exposure, Matrix and deployment
+remain separate increments.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
