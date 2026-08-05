@@ -2,11 +2,13 @@
 
 - Updated: 2026-08-05
 - Governing issue: #6
-- Last delivery pull request: #157
-- Active Coordination increment: #165 implements the separately assignable
+- Last delivery pull request: #170
+- Active Coordination increments: #165 implements the separately assignable
   RFC-0023 SQLite backup-evidence and completion boundary using synthetic
-  evidence only; #163 separately records completed RFC-0024 leaf-only rotation
-  without requesting or authorizing Step 5
+  evidence only; #6 continues from its delivered verified event-publication
+  foundation toward the closed signals required by the four-agent MVP. #163
+  separately records completed RFC-0024 leaf-only rotation without requesting
+  or authorizing Step 5
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -53,9 +55,9 @@
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
 - Next action: review the synthetic SQLite backup/completion implementation for
-  #165. Real backup providers and lifecycle workers remain separately gated.
-  Separately review #163 before any time-critical Step-5 approval decision.
-  Target pull, Kubernetes credentials and objects, Step 5, operational
+  #165, then continue #6 with the closed signal commands required by the
+  two-session/four-agent proof. Real backup providers, lifecycle workers,
+  target pull, Kubernetes credentials and objects, Step 5, operational
   completion, worker, physical media sanitization, traffic, Matrix, MCP live
   use and production use remain separately gated
 
