@@ -1,0 +1,18 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://yukh.dev/coordination/schema/transcript-backup-obligation-0.1.schema.json",
+  "title":"Yukh transcript backup obligation 0.1",
+  "type":"object","additionalProperties":false,
+  "required":["profile","operation_id","intent_digest","policy_digest","domain","deadline","binding_kind","binding_digest"],
+  "properties":{
+    "profile":{"const":"yukh-transcript-backup-obligation/v0.1"},
+    "operation_id":{"$ref":"#/$defs/uuidv7"},"intent_digest":{"$ref":"#/$defs/digest"},"policy_digest":{"$ref":"#/$defs/digest"},
+    "domain":{"enum":["event","identity","security_audit"]},"deadline":{"$ref":"#/$defs/time"},
+    "binding_kind":{"enum":["generation","absence_manifest"]},"binding_digest":{"$ref":"#/$defs/digest"}
+  },
+  "$defs":{
+    "digest":{"type":"string","pattern":"^sha-256:[0-9a-f]{64}$"},
+    "uuidv7":{"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "time":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"}
+  }
+}

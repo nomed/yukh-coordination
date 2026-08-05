@@ -9,10 +9,14 @@ import (
 )
 
 const (
-	PolicyProfile  = "yukh-transcript-lifecycle-policy/v0.1"
-	IntentProfile  = "yukh-transcript-lifecycle-intent/v0.1"
-	MarkerProfile  = "yukh-transcript-lifecycle-marker/v0.1"
-	ReceiptProfile = "yukh-transcript-lifecycle-receipt-preimage/v0.1"
+	PolicyProfile             = "yukh-transcript-lifecycle-policy/v0.1"
+	IntentProfile             = "yukh-transcript-lifecycle-intent/v0.1"
+	MarkerProfile             = "yukh-transcript-lifecycle-marker/v0.1"
+	ReceiptProfile            = "yukh-transcript-lifecycle-receipt-preimage/v0.1"
+	BackupObligationProfile   = "yukh-transcript-backup-obligation/v0.1"
+	CustodianReceiptProfile   = "yukh-transcript-backup-custodian-receipt/v0.1"
+	CompletionEvidenceProfile = "yukh-transcript-lifecycle-completion-evidence/v0.1"
+	BackupRecoveryProfile     = "yukh-transcript-lifecycle-backup-recovery/v0.1"
 
 	IntegrityProfileV1 = "sequence-event-receipt-operation/v0.1"
 	MaxSafeInteger     = uint64(9_007_199_254_740_991)
@@ -73,6 +77,27 @@ const (
 	EventBackupDomain    BackupDomain = "event"
 	IdentityBackupDomain BackupDomain = "identity"
 	AuditBackupDomain    BackupDomain = "security_audit"
+)
+
+type BackupBindingKind string
+
+const (
+	BackupGeneration BackupBindingKind = "generation"
+	AbsenceManifest  BackupBindingKind = "absence_manifest"
+)
+
+type BackupMethod string
+
+const (
+	GenerationRetired BackupMethod = "generation_retired"
+	AbsenceProved     BackupMethod = "absence_proved"
+)
+
+type BackupOutcome string
+
+const (
+	BackupSucceeded BackupOutcome = "success"
+	BackupFailed    BackupOutcome = "failure"
 )
 
 type AuditReason string
@@ -225,11 +250,50 @@ type SignatureAttachment struct {
 	Signature       []byte
 }
 
-type BackupReceipt struct {
-	OperationID   string
-	IntentDigest  string
-	Domain        BackupDomain
-	ReceiptDigest string
+type BackupObligation struct {
+	Profile       string            `json:"profile"`
+	OperationID   string            `json:"operation_id"`
+	IntentDigest  string            `json:"intent_digest"`
+	PolicyDigest  string            `json:"policy_digest"`
+	Domain        BackupDomain      `json:"domain"`
+	Deadline      string            `json:"deadline"`
+	BindingKind   BackupBindingKind `json:"binding_kind"`
+	BindingDigest string            `json:"binding_digest"`
+}
+
+type CustodianReceipt struct {
+	Profile              string        `json:"profile"`
+	ReceiptID            string        `json:"receipt_id"`
+	ObligationDigest     string        `json:"obligation_digest"`
+	OperationID          string        `json:"operation_id"`
+	IntentDigest         string        `json:"intent_digest"`
+	PolicyDigest         string        `json:"policy_digest"`
+	Domain               BackupDomain  `json:"domain"`
+	BackupIdentityDigest string        `json:"backup_identity_digest"`
+	EvidenceTime         string        `json:"evidence_time"`
+	Method               BackupMethod  `json:"method"`
+	Outcome              BackupOutcome `json:"outcome"`
+	CustodianReference   string        `json:"custodian_reference"`
+	VerificationKeyID    string        `json:"verification_key_id"`
+	SignatureAlgorithm   string        `json:"signature_algorithm"`
+	DetachedSignature    string        `json:"detached_signature"`
+}
+
+type ReceiptEvidence struct {
+	Domain        BackupDomain `json:"domain"`
+	ReceiptID     string       `json:"receipt_id"`
+	ReceiptDigest string       `json:"receipt_digest"`
+}
+
+type CompletionEvidence struct {
+	Profile                 string            `json:"profile"`
+	OperationID             string            `json:"operation_id"`
+	IntentDigest            string            `json:"intent_digest"`
+	PolicyDigest            string            `json:"policy_digest"`
+	Receipts                []ReceiptEvidence `json:"receipts"`
+	SecurityAuditReceipt    string            `json:"security_audit_receipt"`
+	SecurityAuditCheckpoint string            `json:"security_audit_checkpoint"`
+	CompletedAt             string            `json:"completed_at"`
 }
 
 // ReceiptSignatureVerifier verifies one closed lifecycle receipt signature.
@@ -237,6 +301,11 @@ type BackupReceipt struct {
 // capability or private key crosses this port.
 type ReceiptSignatureVerifier interface {
 	VerifyLifecycleReceipt(context.Context, string, string, []byte, []byte) error
+}
+
+// CustodianReceiptVerifier exposes public verification authority only.
+type CustodianReceiptVerifier interface {
+	VerifyCustodianReceipt(context.Context, string, string, []byte, []byte) error
 }
 
 // TranscriptLifecyclePreparationStore is the non-destructive administrative
@@ -259,8 +328,9 @@ type TranscriptLifecycleSignatureRemovalStore interface {
 // TranscriptLifecycleBackupCompletionStore is the later external-custody
 // boundary and is deliberately not implemented by the SQLite remover.
 type TranscriptLifecycleBackupCompletionStore interface {
-	RecordBackupReceipt(context.Context, BackupReceipt) (Operation, error)
-	Complete(context.Context, OperationReference) (Operation, error)
+	RecordBackupReceipt(context.Context, CustodianReceipt) (Operation, error)
+	Complete(context.Context, CompletionEvidence) (Operation, error)
+	InspectBackupRecovery(context.Context, OperationReference) (BackupRecovery, error)
 }
 
 // TranscriptLifecycleCompletionStore preserves the accepted complete method

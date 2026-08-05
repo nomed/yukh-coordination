@@ -701,6 +701,32 @@ completion, worker scheduling, HTTP/SSE revision, executable composition, real
 data, deployment, JetStream lifecycle, Matrix, MCP and production remain
 separately gated.
 
+### RFC-0023 backup and completion contract review — 2026-08-05
+
+Issue #156 replaces the digest-only backup placeholder and
+`Complete(OperationReference)` trust shortcut with closed authority-neutral
+evidence. Exactly three immutable obligations bind operation, intent, policy,
+custody domain, copied deadline and one backup-generation or accepted
+absence-manifest digest. Custodian receipts are append-only UUIDv7 evidence,
+cross-bind the obligation and backup identity, carry only closed method/outcome
+values and must verify through a public Ed25519 verification capability before
+they can affect recovery state. No signer or private key crosses the port.
+
+Completion now requires explicit canonical evidence naming the three receipt
+digests in event, identity and security-audit order plus accountable audit
+receipt and checkpoint references. Missing, reordered, replaced, cross-domain,
+unverified or contradictory evidence fails closed. A failure receipt, a success
+after its immutable deadline, or a later distinct success after failure remains
+an incident: append-only evidence cannot overwrite it or auto-authorize
+completion. Incident resolution requires a future accepted contract.
+
+The recovery result exposes only closed status, reason and custody domains. It
+cannot carry provider paths, endpoints, accounts, credentials, arbitrary
+responses or backup content. This increment adds no SQLite schema or adapter,
+provider call, backup deletion, audit write, worker, scheduler, restore action,
+physical sanitization, HTTP/SSE/client authority, executable, deployment,
+JetStream lifecycle, Matrix, MCP or production use.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"encoding/base64"
 	"regexp"
 	"sort"
 	"time"
@@ -137,12 +138,100 @@ func ValidateSignatureAttachment(value SignatureAttachment) error {
 	return nil
 }
 
-func ValidateBackupReceipt(value BackupReceipt) error {
-	if ValidateOperationReference(OperationReference{value.OperationID, value.IntentDigest}) != nil ||
-		(value.Domain != EventBackupDomain && value.Domain != IdentityBackupDomain && value.Domain != AuditBackupDomain) || !digestPattern.MatchString(value.ReceiptDigest) {
+func ValidateBackupObligation(value BackupObligation) error {
+	if value.Profile != BackupObligationProfile || ValidateOperationReference(OperationReference{value.OperationID, value.IntentDigest}) != nil ||
+		!digestPattern.MatchString(value.PolicyDigest) || !validBackupDomain(value.Domain) || !validTime(value.Deadline) ||
+		(value.BindingKind != BackupGeneration && value.BindingKind != AbsenceManifest) || !digestPattern.MatchString(value.BindingDigest) {
 		return ErrInvalidContract
 	}
 	return nil
+}
+
+func ValidateCustodianReceipt(value CustodianReceipt) error {
+	signature, err := base64.RawURLEncoding.DecodeString(value.DetachedSignature)
+	if value.Profile != CustodianReceiptProfile || !validUUIDv7(value.ReceiptID) || !digestPattern.MatchString(value.ObligationDigest) ||
+		ValidateOperationReference(OperationReference{value.OperationID, value.IntentDigest}) != nil || !digestPattern.MatchString(value.PolicyDigest) ||
+		!validBackupDomain(value.Domain) || !digestPattern.MatchString(value.BackupIdentityDigest) || !validTime(value.EvidenceTime) ||
+		(value.Method != GenerationRetired && value.Method != AbsenceProved) || (value.Outcome != BackupSucceeded && value.Outcome != BackupFailed) ||
+		!validReference(value.CustodianReference) || !validIdentifier(value.VerificationKeyID) || value.SignatureAlgorithm != "ed25519" || err != nil || len(signature) != 64 {
+		return ErrInvalidContract
+	}
+	return nil
+}
+
+func ValidateCompletionEvidence(value CompletionEvidence) error {
+	if value.Profile != CompletionEvidenceProfile || ValidateOperationReference(OperationReference{value.OperationID, value.IntentDigest}) != nil ||
+		!digestPattern.MatchString(value.PolicyDigest) || len(value.Receipts) != 3 || !validReference(value.SecurityAuditReceipt) ||
+		!validReference(value.SecurityAuditCheckpoint) || !validTime(value.CompletedAt) {
+		return ErrInvalidContract
+	}
+	want := []BackupDomain{EventBackupDomain, IdentityBackupDomain, AuditBackupDomain}
+	for i, receipt := range value.Receipts {
+		if receipt.Domain != want[i] || !validUUIDv7(receipt.ReceiptID) || !digestPattern.MatchString(receipt.ReceiptDigest) {
+			return ErrInvalidContract
+		}
+	}
+	return nil
+}
+
+func ValidateBackupRecovery(value BackupRecovery) error {
+	if value.Profile != BackupRecoveryProfile || ValidateOperationReference(OperationReference{value.OperationID, value.IntentDigest}) != nil {
+		return ErrInvalidContract
+	}
+	validStatus := value.Status == RecoveryPending || value.Status == RecoveryIncident || value.Status == RecoveryCorrupt || value.Status == RecoveryCompletable
+	validReason := value.Reason == RecoveryEvidenceMissing || value.Reason == RecoveryReceiptFailed || value.Reason == RecoveryDeadlineMissed || value.Reason == RecoveryContradictoryEvidence || value.Reason == RecoveryInvalidEvidence || value.Reason == RecoveryAllSatisfied
+	if !validStatus || !validReason || len(value.Domains) > 3 {
+		return ErrInvalidContract
+	}
+	last := -1
+	for _, domain := range value.Domains {
+		index := indexDomain(domain)
+		if !validBackupDomain(domain) || index <= last {
+			return ErrInvalidContract
+		}
+		last = index
+	}
+	if value.Status == RecoveryCompletable && (value.Reason != RecoveryAllSatisfied || len(value.Domains) != 0) || value.Status != RecoveryCompletable && value.Reason == RecoveryAllSatisfied {
+		return ErrInvalidContract
+	}
+	if value.Status == RecoveryPending && (value.Reason != RecoveryEvidenceMissing || len(value.Domains) == 0) ||
+		value.Status == RecoveryIncident && (value.Reason != RecoveryReceiptFailed && value.Reason != RecoveryDeadlineMissed && value.Reason != RecoveryContradictoryEvidence || len(value.Domains) == 0) ||
+		value.Status == RecoveryCorrupt && value.Reason != RecoveryInvalidEvidence && value.Reason != RecoveryContradictoryEvidence {
+		return ErrInvalidContract
+	}
+	return nil
+}
+
+func ValidateObligationIntent(value BackupObligation, intent Intent, intentDigest string) error {
+	if ValidateBackupObligation(value) != nil || ValidateIntent(intent) != nil {
+		return ErrInvalidContract
+	}
+	if value.OperationID != intent.OperationID || value.IntentDigest != intentDigest || value.PolicyDigest != intent.PolicyDigest {
+		return ErrConflict
+	}
+	for _, deadline := range intent.ExpectedBackupDeletionWindows {
+		if deadline.Domain == value.Domain && deadline.Deadline == value.Deadline {
+			return nil
+		}
+	}
+	return ErrConflict
+}
+
+func ValidateReceiptObligation(value CustodianReceipt, obligation BackupObligation, obligationDigest string) error {
+	if ValidateCustodianReceipt(value) != nil || ValidateBackupObligation(obligation) != nil {
+		return ErrInvalidContract
+	}
+	if value.ObligationDigest != obligationDigest || value.OperationID != obligation.OperationID || value.IntentDigest != obligation.IntentDigest || value.PolicyDigest != obligation.PolicyDigest || value.Domain != obligation.Domain || value.BackupIdentityDigest != obligation.BindingDigest {
+		return ErrConflict
+	}
+	if obligation.BindingKind == BackupGeneration && value.Method != GenerationRetired || obligation.BindingKind == AbsenceManifest && value.Method != AbsenceProved {
+		return ErrConflict
+	}
+	return nil
+}
+
+func validBackupDomain(value BackupDomain) bool {
+	return value == EventBackupDomain || value == IdentityBackupDomain || value == AuditBackupDomain
 }
 
 func validTarget(action Action, target Target) bool {
