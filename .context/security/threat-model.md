@@ -752,6 +752,21 @@ encrypted-custody replacement with rollback to the prior leaf, a fresh reopen
 checkpoint and plaintext destruction. It grants no trust-root or policy-key
 rotation, registry, target, Kubernetes, Step 5, MCP or traffic authority.
 
+### RFC-0013 verified client publication review — 2026-08-05
+
+Issue #6 adds one provider-neutral publication method to the existing client.
+It accepts only bounded JCS-canonical event bytes bound to the configured
+channel, authorizes the exact POST target, follows no redirect and maps closed
+HTTP outcomes without exposing provider bodies. Success requires a canonical,
+cryptographically verified receipt bound to the event digest, event ID,
+channel and transcript epoch. Changed targets, cookies, unsigned receipts and
+binding mismatches fail closed.
+
+The increment constructs no event, selects no participant, stores no
+credential and grants no ownership or execution authority. CLI signal
+commands, watch, a public binary, deployment, Matrix and production use remain
+separately gated.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

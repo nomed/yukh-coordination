@@ -1,6 +1,7 @@
 package client_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 
 	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	coordclient "github.com/nomed/yukh-coordination/internal/client"
+	"github.com/nomed/yukh-coordination/internal/relay"
 	"github.com/nomed/yukh-coordination/internal/relay/httpapi"
 )
 
@@ -41,14 +43,25 @@ func (authorizer) Authorize(context.Context, httpapi.AccessRequest) (httpapi.Dec
 	return httpapi.Decision{Allowed: true, CanonicalBinding: []byte(`{"allowed":true}`), ACLPolicyVersion: "1", ACLPolicyDigest: "sha-256:" + fmt.Sprintf("%064d", 0), DecisionReceiptID: "decision:test", Revoked: make(chan struct{})}, nil
 }
 
-type application struct{ pages map[uint64][]byte }
+type application struct {
+	pages   map[uint64][]byte
+	receipt []byte
+	event   *[]byte
+}
 
-func (a application) Append(context.Context, httpapi.AdmittedRequest, []byte) (httpapi.AppendResponse, error) {
-	return httpapi.AppendResponse{}, errors.New("disabled")
+func (a application) Append(_ context.Context, _ httpapi.AdmittedRequest, event []byte) (httpapi.AppendResponse, error) {
+	if a.receipt == nil {
+		return httpapi.AppendResponse{}, errors.New("disabled")
+	}
+	if a.event != nil {
+		*a.event = append([]byte(nil), event...)
+	}
+	return httpapi.AppendResponse{Outcome: relay.AppendOutcomeAppended, CanonicalReceipt: a.receipt}, nil
 }
 func (a application) Replay(_ context.Context, r httpapi.ReplayRequest) ([]byte, error) {
 	return a.pages[r.After], nil
 }
+
 func (application) Stream(context.Context, httpapi.ReplayRequest) (<-chan httpapi.StreamItem, error) {
 	return nil, errors.New("disabled")
 }
@@ -143,6 +156,42 @@ func TestReplayPagesThroughRealHandlerAndInspectsConflicts(t *testing.T) {
 	}
 }
 
+func TestPublishThroughRealHandlerVerifiesReceiptBinding(t *testing.T) {
+	eventID := "019c6f5b-7c00-7000-8000-000000000031"
+	raw := canonical(t, map[string]any{
+		"specversion": "0.1", "id": eventID, "type": "join",
+		"source": "urn:yukh:source:test", "time": "2026-08-05T15:00:00.000Z",
+		"channel":     channelURI,
+		"participant": map[string]any{"id": "session:test", "kind": "session"},
+		"data":        map[string]any{"protocol_versions": []any{"0.1"}, "capabilities": []any{"publish", "replay"}, "status": "available"},
+		"evidence":    []any{}, "extensions": map[string]any{},
+	})
+	digest := sha256.Sum256(raw)
+	receipt := canonical(t, map[string]any{
+		"specversion": "0.1", "event_id": eventID,
+		"event_digest": fmt.Sprintf("sha-256:%x", digest),
+		"channel_id":   channelID, "channel_uri": channelURI,
+		"transcript_epoch": uint64(1), "sequence": uint64(1), "cursor": "1",
+		"participant_instance_id": participant, "signature": "valid",
+	})
+	var received []byte
+	handler, err := httpapi.New(bootstrapper{}, authenticator{}, authorizer{}, application{receipt: receipt, event: &received}, httpapi.Config{PublicBaseURI: "https://coord.example", HeartbeatInterval: time.Hour, MaxStreamLifetime: time.Minute, WriteTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewTLSServer(handler)
+	defer server.Close()
+	calls := 0
+	client, err := coordclient.New(coordclient.Config{BaseURI: server.URL, ChannelID: channelID, ChannelURI: channelURI, TranscriptEpoch: 1, PageLimit: 100, MaxRecords: 100}, server.Client(), auth{}, verifier{calls: &calls})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.Publish(context.Background(), raw)
+	if err != nil || result.Outcome != "appended" || calls != 1 || !bytes.Equal(received, raw) || !bytes.Equal(result.Receipt, receipt) {
+		t.Fatalf("publish %#v calls=%d received=%q err=%v", result, calls, received, err)
+	}
+}
+
 func TestReplayFailsClosedAtBoundaryAndBadReceipt(t *testing.T) {
 	work := "https://example.test/work"
 	raw := event(t, "019c6f5b-7c00-7000-8000-000000000013", "claim", work, map[string]any{"claim_id": "019c6f5b-7c00-7000-8000-000000000023", "generation": "0"})
@@ -169,10 +218,18 @@ func TestConfigRejectsInsecureOrAmbientInputs(t *testing.T) {
 }
 
 type targetChangingAuth struct{}
-func (targetChangingAuth) Authorize(request *http.Request) error { request.URL.RawQuery = "token=secret"; return nil }
+
+func (targetChangingAuth) Authorize(request *http.Request) error {
+	request.URL.RawQuery = "token=secret"
+	return nil
+}
 
 func TestAuthorizerCannotChangeRequestTarget(t *testing.T) {
-	client, err := coordclient.New(coordclient.Config{BaseURI:"https://coord.example",ChannelID:channelID,ChannelURI:channelURI,TranscriptEpoch:1,PageLimit:100,MaxRecords:100},http.DefaultClient,targetChangingAuth{},verifier{calls:new(int)})
-	if err != nil { t.Fatal(err) }
-	if _, err = client.Replay(context.Background()); !errors.Is(err,coordclient.ErrAuthentication) { t.Fatalf("target mutation: %v",err) }
+	client, err := coordclient.New(coordclient.Config{BaseURI: "https://coord.example", ChannelID: channelID, ChannelURI: channelURI, TranscriptEpoch: 1, PageLimit: 100, MaxRecords: 100}, http.DefaultClient, targetChangingAuth{}, verifier{calls: new(int)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Replay(context.Background()); !errors.Is(err, coordclient.ErrAuthentication) {
+		t.Fatalf("target mutation: %v", err)
+	}
 }
