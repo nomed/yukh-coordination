@@ -1,4 +1,4 @@
-# SESSION-2026-08-05-11: RFC-0022 PodIP-aware OCI rebinding
+# SESSION-2026-08-05-12: RFC-0022 PodIP-aware OCI rebinding
 
 - Governing issue: #174
 - Parent execution issue: #167
