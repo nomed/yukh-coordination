@@ -826,6 +826,20 @@ The builders exchange statements only. They do not select recipients, resolve
 claims, accept work, publish, access credentials or grant authority. CLI
 exposure, live qualification, Matrix and deployment remain separately gated.
 
+### RFC-0013 signal CLI boundary review — 2026-08-05
+
+Issue #6 exposes the accepted signal command names through a bounded stdin JSON
+boundary. Each command decodes one closed type-specific document, constructs a
+validated canonical event, publishes it once and returns one closed JSON result
+containing generated identifiers and the already verified receipt. Unknown
+commands, fields, trailing values, oversized input and protocol conflicts map
+to stable codes without provider text.
+
+Builder, authenticated publisher and credential custody remain injected by the
+host. This increment adds no executable, ambient configuration, plaintext
+credential fallback, retry, recipient selection, ownership inference, Matrix
+bridge or deployment.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

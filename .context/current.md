@@ -6,8 +6,8 @@
 - Active Coordination increments: #165 implements the separately assignable
   RFC-0023 SQLite backup-evidence and completion boundary using synthetic
   evidence only; #6 continues from its delivered verified publication and
-  closed join/claim/progress builders toward CLI exposure and the remaining
-  signal families required by the four-agent MVP. #163 separately records
+  complete conversation/handoff builders toward CLI exposure required by the
+  four-agent MVP. #163 separately records
   completed RFC-0024 leaf-only rotation without requesting or authorizing
   Step 5
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
@@ -56,8 +56,7 @@
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
 - Next action: review the synthetic SQLite backup/completion implementation for
-  #165, then expose the closed event builders through the CLI and complete the
-  question, review and handoff families for the two-session/four-agent proof.
+  #165, then review the closed signal CLI and run the two-session/four-agent proof.
   Real backup providers, lifecycle workers,
   target pull, Kubernetes credentials and objects, Step 5, operational
   completion, worker, physical media sanitization, traffic, Matrix, MCP live

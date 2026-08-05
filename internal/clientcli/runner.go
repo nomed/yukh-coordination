@@ -123,6 +123,8 @@ func code(err error) string {
 		return "YKC-ACCESS-001"
 	case errors.Is(err, coordclient.ErrIncomplete), errors.Is(err, coordclient.ErrInvalidRecord):
 		return "YKC-TRANSCRIPT-001"
+	case errors.Is(err, coordclient.ErrConflict):
+		return "YKC-CONFLICT-001"
 	default:
 		return "YKC-UNAVAILABLE-001"
 	}
@@ -135,6 +137,8 @@ func exit(err error) int {
 		return 4
 	case errors.Is(err, coordclient.ErrIncomplete), errors.Is(err, coordclient.ErrInvalidRecord):
 		return 6
+	case errors.Is(err, coordclient.ErrConflict):
+		return 5
 	default:
 		return 7
 	}
