@@ -88,6 +88,14 @@ func TestTransitionValidatorHandoffCASBindsRecipientAndSingleAcceptance(t *testi
 	if err := validator.Validate(view, second, recipientID); !errors.Is(err, relay.ErrTransitionConflict) {
 		t.Fatalf("second acceptance: %v", err)
 	}
+	successorID := "01989f0e-56b7-7000-8000-000000000015"
+	successor := transitionCandidate(t, eventDocument(successorID, "claim", accept.ID, successorID, map[string]any{"claim_id": "01989f0e-56b7-7000-9000-000000000103", "generation": "2", "predecessor_handoff_event": accept.ID}))
+	if err := validator.Validate(view, successor, participantID); !errors.Is(err, relay.ErrTransitionConflict) {
+		t.Fatalf("wrong successor: %v", err)
+	}
+	if err := validator.Validate(view, successor, recipientID); err != nil {
+		t.Fatalf("accepted successor: %v", err)
+	}
 }
 
 const participantID = "01989f0e-56b7-7000-8000-000000000201"

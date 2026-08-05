@@ -78,7 +78,8 @@ func (s *transcriptState) apply(event transitionEvent, participant string, enfor
 		if !ok {
 			return transitionFailure("UNRESOLVED_CAUSATION", relay.ErrTransitionConflict)
 		}
-		if parent.channel != event.channel || parent.work != event.work || parent.correlation != event.correlation {
+		handoffSuccessor := event.kind == "claim" && text(event.data, "predecessor_handoff_event") == event.causation
+		if parent.channel != event.channel || parent.work != event.work || (!handoffSuccessor && parent.correlation != event.correlation) {
 			return transitionFailure("INVALID_REFERENCE", relay.ErrTransitionConflict)
 		}
 	}

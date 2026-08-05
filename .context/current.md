@@ -4,8 +4,8 @@
 - Governing issue: #167
 - Last delivery pull request: #168
 - Active Coordination increments: #169 closes the Kubernetes PodIP at the
-  existing descriptor-launcher boundary; #6 continues toward CLI exposure and
-  the remaining signal families required by the four-agent MVP. Step 5 remains
+  existing descriptor-launcher boundary; #7 qualifies the complete four-agent
+  flow through the real runtime after #6 delivered the closed signal CLI. Step 5 remains
   stopped pending a new reproducible OCI, registry/packet rebinding and renewed
   approval
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
@@ -53,8 +53,9 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review and merge #169, then reproduce and rebind the superseding
-  OCI/SBOM before requesting a renewed Step-5 approval. Real backup providers,
+- Next action: isolate the two required CLI sessions as separate operating-system
+  processes and retain a sanitized replay transcript. Then reproduce and rebind
+  the superseding OCI/SBOM before requesting a renewed Step-5 approval. Real backup providers,
   lifecycle workers,
   target pull, Kubernetes credentials and objects, Step 5, operational
   completion, worker, physical media sanitization, traffic, Matrix, MCP live
