@@ -42,6 +42,10 @@ type BackupRecovery struct {
 }
 
 func CloneBackupObligation(value BackupObligation) BackupObligation { return value }
+func CloneBackupObligationSet(value BackupObligationSet) BackupObligationSet {
+	value.Obligations = append([]BackupObligation(nil), value.Obligations...)
+	return value
+}
 func CloneCustodianReceipt(value CustodianReceipt) CustodianReceipt { return value }
 func CloneCompletionEvidence(value CompletionEvidence) CompletionEvidence {
 	value.Receipts = append([]ReceiptEvidence(nil), value.Receipts...)
@@ -85,6 +89,18 @@ func ValidateCustodianReceiptRetry(original, retry CustodianReceipt) error {
 func ValidateCompletionRetry(original, retry CompletionEvidence) error {
 	_, originalDigest, originalErr := CanonicalCompletionEvidence(original)
 	_, retryDigest, retryErr := CanonicalCompletionEvidence(retry)
+	if originalErr != nil || retryErr != nil {
+		return ErrInvalidContract
+	}
+	if original.OperationID != retry.OperationID || originalDigest != retryDigest {
+		return ErrConflict
+	}
+	return nil
+}
+
+func ValidateBackupObligationSetRetry(original, retry BackupObligationSet) error {
+	_, originalDigest, originalErr := CanonicalBackupObligationSet(original)
+	_, retryDigest, retryErr := CanonicalBackupObligationSet(retry)
 	if originalErr != nil || retryErr != nil {
 		return ErrInvalidContract
 	}

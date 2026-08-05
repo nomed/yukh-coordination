@@ -12,7 +12,7 @@ or production topology.
 - referential integrity: foreign keys enabled;
 - writer contention bound: 5-second SQLite busy timeout;
 - process model: one database connection, serializing sequence allocation;
-- schema: STRICT tables with `PRAGMA user_version=5`;
+- schema: STRICT tables with `PRAGMA user_version=6`;
 - tenant/channel predicates on every identity, append and replay query.
 
 Channel identity is immutable across transcript epochs. Event IDs are unique

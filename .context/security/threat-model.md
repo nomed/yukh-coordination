@@ -731,6 +731,39 @@ provider call, backup deletion, audit write, worker, scheduler, restore action,
 physical sanitization, HTTP/SSE/client authority, executable, deployment,
 JetStream lifecycle, Matrix, MCP or production use.
 
+### RFC-0023 SQLite backup and completion persistence review — 2026-08-05
+
+Issue #165 materializes only one caller-supplied canonical set containing the
+exact event, identity and security-audit custody obligations. Schema version 6
+retains canonical set, obligation, append-only receipt and completion bytes
+with domain-separated digests. One obligation per operation/domain, globally
+non-reusable receipt IDs and one immutable completion identity prevent silent
+replacement. SQLite never discovers a backup, derives an obligation from a
+receipt or stores provider paths, accounts, credentials, responses or content.
+
+Custodian signature verification and the narrow lifecycle-completion audit
+verification capability run before `BEGIN IMMEDIATE`. The write transaction
+performs no external callback: it reloads and byte-compares the exact operation,
+set, obligations, receipts and completion request against the verified
+preflight snapshot. Verifier unavailability performs no write claiming
+verification. Exact concurrent retries converge; changed bindings, reordered
+domains, reused identities, skipped states and cross-domain substitutions fail
+closed.
+
+Failure receipts, late successes and later distinct attempts remain append-only
+incident evidence and cannot advance the operation. Recovery exposes only a
+bounded ordered finding per custody domain; malformed persisted evidence is
+reported as corrupt without exposing database or evidence detail. Completion
+requires three timely verified successes plus explicit audit receipt and
+trusted covering checkpoint evidence and advances `backups_pending` to
+`completed` atomically.
+
+This adapter implements no preparation, signing, removal or ordinary relay
+port. It performs no provider call, audit append, checkpoint creation, worker
+scheduling, restore, physical sanitization, real-data operation, deployment,
+JetStream lifecycle, Matrix, MCP or production work. Those authorities remain
+separately gated.
+
 ### RFC-0024 server-leaf rotation tooling review — 2026-08-05
 
 Issue #163 adds a leaf-only path to the existing offline ceremony executable.

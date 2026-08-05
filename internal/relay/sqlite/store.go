@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 type Store struct {
 	db *sql.DB
@@ -137,6 +137,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err := migrateLifecycleRemoval(ctx, tx.conn); err != nil {
 			return err
 		}
+		version = 5
+	}
+	if version == 5 {
+		if err := migrateLifecycleBackupCompletion(ctx, tx.conn); err != nil {
+			return err
+		}
 		if _, err := tx.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 			return fmt.Errorf("set sqlite schema version: %w", err)
 		}
@@ -171,6 +177,18 @@ func (s *Store) migrate(ctx context.Context) error {
 		lifecyclePayloadTombstonesTable,
 		lifecycleIdentifierTombstonesTable,
 		lifecycleReceiptTombstoneIndex,
+		lifecycleBackupObligationSetsTable,
+		lifecycleBackupObligationsTable,
+		lifecycleBackupReceiptsTable,
+		lifecycleCompletionsTable,
+		lifecycleBackupObligationSetNoUpdate,
+		lifecycleBackupObligationSetNoDelete,
+		lifecycleBackupObligationNoUpdate,
+		lifecycleBackupObligationNoDelete,
+		lifecycleBackupReceiptNoUpdate,
+		lifecycleBackupReceiptNoDelete,
+		lifecycleCompletionNoUpdate,
+		lifecycleCompletionNoDelete,
 		`CREATE TABLE accepted_records (
 			tenant_id TEXT NOT NULL,
 			channel_id TEXT NOT NULL,
@@ -300,6 +318,62 @@ const lifecycleReceiptTombstoneIndex = `CREATE UNIQUE INDEX lifecycle_receipt_id
 	ON lifecycle_identifier_tombstones (identifier_digest)
 	WHERE identifier_kind = 'receipt'`
 
+const lifecycleBackupObligationSetsTable = `CREATE TABLE lifecycle_backup_obligation_sets (
+	operation_id TEXT PRIMARY KEY,
+	set_digest TEXT NOT NULL UNIQUE,
+	canonical_set BLOB NOT NULL,
+	FOREIGN KEY (operation_id) REFERENCES lifecycle_operations (operation_id)
+) STRICT`
+
+const lifecycleBackupObligationsTable = `CREATE TABLE lifecycle_backup_obligations (
+	operation_id TEXT NOT NULL,
+	domain TEXT NOT NULL CHECK (domain IN ('event', 'identity', 'security_audit')),
+	obligation_digest TEXT NOT NULL UNIQUE,
+	canonical_obligation BLOB NOT NULL,
+	deadline TEXT NOT NULL,
+	binding_kind TEXT NOT NULL CHECK (binding_kind IN ('generation', 'absence_manifest')),
+	binding_digest TEXT NOT NULL,
+	PRIMARY KEY (operation_id, domain),
+	FOREIGN KEY (operation_id) REFERENCES lifecycle_backup_obligation_sets (operation_id)
+) STRICT`
+
+const lifecycleBackupReceiptsTable = `CREATE TABLE lifecycle_backup_receipts (
+	receipt_id TEXT PRIMARY KEY,
+	receipt_digest TEXT NOT NULL UNIQUE,
+	operation_id TEXT NOT NULL,
+	domain TEXT NOT NULL,
+	canonical_receipt BLOB NOT NULL,
+	evidence_time TEXT NOT NULL,
+	outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+	FOREIGN KEY (operation_id, domain)
+		REFERENCES lifecycle_backup_obligations (operation_id, domain)
+) STRICT`
+
+const lifecycleCompletionsTable = `CREATE TABLE lifecycle_completions (
+	operation_id TEXT PRIMARY KEY,
+	completion_digest TEXT NOT NULL UNIQUE,
+	canonical_completion BLOB NOT NULL,
+	completed_at TEXT NOT NULL,
+	FOREIGN KEY (operation_id) REFERENCES lifecycle_operations (operation_id)
+) STRICT`
+
+const lifecycleBackupObligationSetNoUpdate = `CREATE TRIGGER lifecycle_backup_obligation_sets_no_update
+	BEFORE UPDATE ON lifecycle_backup_obligation_sets BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupObligationSetNoDelete = `CREATE TRIGGER lifecycle_backup_obligation_sets_no_delete
+	BEFORE DELETE ON lifecycle_backup_obligation_sets BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupObligationNoUpdate = `CREATE TRIGGER lifecycle_backup_obligations_no_update
+	BEFORE UPDATE ON lifecycle_backup_obligations BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupObligationNoDelete = `CREATE TRIGGER lifecycle_backup_obligations_no_delete
+	BEFORE DELETE ON lifecycle_backup_obligations BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupReceiptNoUpdate = `CREATE TRIGGER lifecycle_backup_receipts_no_update
+	BEFORE UPDATE ON lifecycle_backup_receipts BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupReceiptNoDelete = `CREATE TRIGGER lifecycle_backup_receipts_no_delete
+	BEFORE DELETE ON lifecycle_backup_receipts BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleCompletionNoUpdate = `CREATE TRIGGER lifecycle_completions_no_update
+	BEFORE UPDATE ON lifecycle_completions BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleCompletionNoDelete = `CREATE TRIGGER lifecycle_completions_no_delete
+	BEFORE DELETE ON lifecycle_completions BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+
 func migrateLifecyclePreparation(ctx context.Context, conn *sql.Conn) error {
 	statements := []string{
 		"ALTER TABLE transcripts ADD COLUMN completeness TEXT NOT NULL DEFAULT 'complete' CHECK (completeness IN ('complete', 'incomplete'))",
@@ -327,6 +401,28 @@ func migrateLifecycleRemoval(ctx context.Context, conn *sql.Conn) error {
 	for _, statement := range statements {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("migrate sqlite lifecycle removal: %w", err)
+		}
+	}
+	return nil
+}
+
+func migrateLifecycleBackupCompletion(ctx context.Context, conn *sql.Conn) error {
+	for _, statement := range []string{
+		lifecycleBackupObligationSetsTable,
+		lifecycleBackupObligationsTable,
+		lifecycleBackupReceiptsTable,
+		lifecycleCompletionsTable,
+		lifecycleBackupObligationSetNoUpdate,
+		lifecycleBackupObligationSetNoDelete,
+		lifecycleBackupObligationNoUpdate,
+		lifecycleBackupObligationNoDelete,
+		lifecycleBackupReceiptNoUpdate,
+		lifecycleBackupReceiptNoDelete,
+		lifecycleCompletionNoUpdate,
+		lifecycleCompletionNoDelete,
+	} {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("migrate sqlite lifecycle backup completion: %w", err)
 		}
 	}
 	return nil

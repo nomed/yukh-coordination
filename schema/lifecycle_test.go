@@ -91,7 +91,7 @@ func TestBackupCompletionSchemasAcceptIndependentVectors(t *testing.T) {
 	if json.Unmarshal(body, &vectors) != nil {
 		t.Fatal("invalid vectors")
 	}
-	cases := map[string]string{"obligation": "transcript-backup-obligation-0.1.schema.json", "custodian_receipt": "transcript-backup-custodian-receipt-0.1.schema.json", "completion_evidence": "transcript-lifecycle-completion-evidence-0.1.schema.json", "recovery": "transcript-lifecycle-backup-recovery-0.1.schema.json"}
+	cases := map[string]string{"obligation": "transcript-backup-obligation-0.1.schema.json", "obligation_set": "transcript-backup-obligation-set-0.1.schema.json", "custodian_receipt": "transcript-backup-custodian-receipt-0.1.schema.json", "completion_evidence": "transcript-lifecycle-completion-evidence-0.1.schema.json", "recovery": "transcript-lifecycle-backup-recovery-0.1.schema.json"}
 	for vector, name := range cases {
 		compiled, err := compiler.Compile("https://yukh.dev/coordination/schema/" + name)
 		if err != nil {
