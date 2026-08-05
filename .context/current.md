@@ -2,10 +2,11 @@
 
 - Updated: 2026-08-05
 - Governing issue: #6
-- Last delivery pull request: #151
-- Active Coordination increment: #156 closes the authority-neutral backup
+- Last delivery pull request: #161
+- Active Coordination increments: #156 closes the authority-neutral backup
   obligation, signed custodian receipt, recovery and completion-evidence
-  contract; no adapter or deletion execution is in scope
+  contract; #159 separately plans immutable registry binding. Neither increment
+  authorizes provider execution or real deletion
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -37,7 +38,8 @@
   RFC-0023 fixed the mandatory transcript lifecycle and retention boundary in
   #134; its schema and capability-segregated port foundation was delivered in
   #140 and its non-destructive SQLite preparation transaction in #151; verified
-  synthetic primary payload removal was delivered in #155; the
+  synthetic primary payload removal was delivered in #155; the RFC-0022 packet
+  deferred-state gates were corrected in #161; the
   RFC-0022 operator packet was prepared in #138, consolidated in
   #146 and its first reproducible artifact digests recorded in #139 without
   authorizing provisioning or live traffic; RFC-0024 fixed the offline trust
@@ -49,10 +51,11 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review the #156 contract candidate, then open a pull request if
-  the evidence remains green. SQLite backup persistence, operational
-  completion, worker, physical media sanitization, HTTP/SSE revision,
-  deployment, Matrix, MCP and production use remain separately gated
+- Next action: merge the approved #156 contract candidate in #157, then review
+  the separately gated immutable registry-binding plan in #159. SQLite backup
+  persistence, registry mutation, operational completion, worker, physical
+  media sanitization, traffic, Matrix, MCP and production use remain
+  separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
