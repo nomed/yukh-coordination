@@ -1,10 +1,10 @@
 # Current context
 
-- Updated: 2026-08-04
+- Updated: 2026-08-05
 - Governing issue: #6
 - Last delivery pull request: #151
-- Active Coordination increment: #152 implements verified SQLite lifecycle
-  signature attachment and synthetic primary payload removal
+- Active Coordination increment: #158 corrects the RFC-0022 operator packet's
+  deferred-state gate ordering without authorizing provisioning
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -47,10 +47,10 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review and merge verified synthetic primary payload removal in
-  #152. Backup receipts, completion, worker, physical media sanitization,
-  HTTP/SSE revision, deployment, Matrix, MCP and production use remain
-  separately gated
+- Next action: review and merge the record-only packet correction in #158,
+  then review the separately gated immutable registry-binding plan in #159.
+  Registry mutation, step 5, traffic, Matrix, MCP live use and production use
+  remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
