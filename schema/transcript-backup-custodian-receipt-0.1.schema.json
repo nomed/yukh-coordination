@@ -1,0 +1,20 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://yukh.dev/coordination/schema/transcript-backup-custodian-receipt-0.1.schema.json",
+  "title":"Yukh transcript backup custodian receipt 0.1",
+  "type":"object","additionalProperties":false,
+  "required":["profile","receipt_id","obligation_digest","operation_id","intent_digest","policy_digest","domain","backup_identity_digest","evidence_time","method","outcome","custodian_reference","verification_key_id","signature_algorithm","detached_signature"],
+  "properties":{
+    "profile":{"const":"yukh-transcript-backup-custodian-receipt/v0.1"},"receipt_id":{"$ref":"#/$defs/uuidv7"},
+    "obligation_digest":{"$ref":"#/$defs/digest"},"operation_id":{"$ref":"#/$defs/uuidv7"},"intent_digest":{"$ref":"#/$defs/digest"},"policy_digest":{"$ref":"#/$defs/digest"},
+    "domain":{"enum":["event","identity","security_audit"]},"backup_identity_digest":{"$ref":"#/$defs/digest"},"evidence_time":{"$ref":"#/$defs/time"},
+    "method":{"enum":["generation_retired","absence_proved"]},"outcome":{"enum":["success","failure"]},
+    "custodian_reference":{"$ref":"#/$defs/reference"},"verification_key_id":{"$ref":"#/$defs/identifier"},"signature_algorithm":{"const":"ed25519"},
+    "detached_signature":{"type":"string","pattern":"^[A-Za-z0-9_-]{86}$"}
+  },
+  "$defs":{
+    "identifier":{"type":"string","pattern":"^[a-z0-9][a-z0-9._:-]{0,255}$"},"reference":{"type":"string","pattern":"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,511}$"},
+    "digest":{"type":"string","pattern":"^sha-256:[0-9a-f]{64}$"},"uuidv7":{"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "time":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"}
+  }
+}

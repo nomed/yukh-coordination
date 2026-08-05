@@ -177,9 +177,6 @@ func TestTypedAdministrativeRequestsEnforceCrossBindings(t *testing.T) {
 	if err := ValidateSignatureAttachment(attachment); err != nil {
 		t.Fatalf("valid signature attachment rejected: %v", err)
 	}
-	if err := ValidateBackupReceipt(BackupReceipt{OperationID: reference.OperationID, IntentDigest: reference.IntentDigest, Domain: EventBackupDomain, ReceiptDigest: fixture.MarkerDigest}); err != nil {
-		t.Fatalf("valid backup receipt rejected: %v", err)
-	}
 
 	damaged := persistence
 	damaged.IntentDigest = "sha-256:" + strings.Repeat("f", 64)
@@ -223,7 +220,7 @@ func TestAdministrativePortIsSeparateFromRelayStore(t *testing.T) {
 	if ordinary.AssignableTo(admin) || admin.AssignableTo(ordinary) {
 		t.Fatal("ordinary and administrative stores are type-compatible")
 	}
-	for _, forbidden := range []string{"Reserve", "BindExport", "PersistMarker", "RemovePayload", "RecordBackupReceipt", "Complete"} {
+	for _, forbidden := range []string{"Reserve", "BindExport", "PersistMarker", "RemovePayload", "RecordBackupReceipt", "Complete", "InspectBackupRecovery"} {
 		if _, found := ordinary.MethodByName(forbidden); found {
 			t.Fatalf("relay.Store exposes administrative method %s", forbidden)
 		}

@@ -12,10 +12,15 @@ import (
 )
 
 const (
-	policyDigestDomain = "yukh.transcript-lifecycle-policy.v0.1\x00"
-	intentDigestDomain = "yukh.transcript-lifecycle-intent.v0.1\x00"
-	markerDigestDomain = "yukh.transcript-lifecycle-marker.v0.1\x00"
-	receiptSignDomain  = "yukh.transcript-lifecycle-receipt.v0.1\x00"
+	policyDigestDomain             = "yukh.transcript-lifecycle-policy.v0.1\x00"
+	intentDigestDomain             = "yukh.transcript-lifecycle-intent.v0.1\x00"
+	markerDigestDomain             = "yukh.transcript-lifecycle-marker.v0.1\x00"
+	receiptSignDomain              = "yukh.transcript-lifecycle-receipt.v0.1\x00"
+	backupObligationDigestDomain   = "yukh.transcript-backup-obligation.v0.1\x00"
+	custodianReceiptDigestDomain   = "yukh.transcript-backup-custodian-receipt.v0.1\x00"
+	custodianReceiptSignDomain     = "yukh.transcript-backup-custodian-receipt-signature.v0.1\x00"
+	completionEvidenceDigestDomain = "yukh.transcript-lifecycle-completion-evidence.v0.1\x00"
+	backupRecoveryDigestDomain     = "yukh.transcript-lifecycle-backup-recovery.v0.1\x00"
 )
 
 var (
@@ -29,6 +34,78 @@ func CanonicalPolicy(policy Policy) ([]byte, error) {
 		return nil, err
 	}
 	return canonical(policy)
+}
+
+func CanonicalBackupObligation(value BackupObligation) ([]byte, string, error) {
+	if ValidateBackupObligation(value) != nil {
+		return nil, "", ErrInvalidContract
+	}
+	body, err := canonical(value)
+	if err != nil {
+		return nil, "", ErrInvalidContract
+	}
+	return body, digest(backupObligationDigestDomain, body), nil
+}
+
+func CanonicalCustodianReceipt(value CustodianReceipt) ([]byte, string, []byte, error) {
+	if ValidateCustodianReceipt(value) != nil {
+		return nil, "", nil, ErrInvalidContract
+	}
+	body, err := canonical(value)
+	if err != nil {
+		return nil, "", nil, ErrInvalidContract
+	}
+	unsigned := value
+	unsigned.DetachedSignature = ""
+	preimageBody, err := canonical(custodianReceiptUnsigned(unsigned))
+	if err != nil {
+		return nil, "", nil, ErrInvalidContract
+	}
+	signing := append([]byte(custodianReceiptSignDomain), preimageBody...)
+	return body, digest(custodianReceiptDigestDomain, body), signing, nil
+}
+
+func CanonicalCompletionEvidence(value CompletionEvidence) ([]byte, string, error) {
+	if ValidateCompletionEvidence(value) != nil {
+		return nil, "", ErrInvalidContract
+	}
+	body, err := canonical(value)
+	if err != nil {
+		return nil, "", ErrInvalidContract
+	}
+	return body, digest(completionEvidenceDigestDomain, body), nil
+}
+
+func CanonicalBackupRecovery(value BackupRecovery) ([]byte, string, error) {
+	if ValidateBackupRecovery(value) != nil {
+		return nil, "", ErrInvalidContract
+	}
+	body, err := canonical(value)
+	if err != nil {
+		return nil, "", ErrInvalidContract
+	}
+	return body, digest(backupRecoveryDigestDomain, body), nil
+}
+
+type unsignedCustodianReceipt struct {
+	Profile              string        `json:"profile"`
+	ReceiptID            string        `json:"receipt_id"`
+	ObligationDigest     string        `json:"obligation_digest"`
+	OperationID          string        `json:"operation_id"`
+	IntentDigest         string        `json:"intent_digest"`
+	PolicyDigest         string        `json:"policy_digest"`
+	Domain               BackupDomain  `json:"domain"`
+	BackupIdentityDigest string        `json:"backup_identity_digest"`
+	EvidenceTime         string        `json:"evidence_time"`
+	Method               BackupMethod  `json:"method"`
+	Outcome              BackupOutcome `json:"outcome"`
+	CustodianReference   string        `json:"custodian_reference"`
+	VerificationKeyID    string        `json:"verification_key_id"`
+	SignatureAlgorithm   string        `json:"signature_algorithm"`
+}
+
+func custodianReceiptUnsigned(v CustodianReceipt) unsignedCustodianReceipt {
+	return unsignedCustodianReceipt{v.Profile, v.ReceiptID, v.ObligationDigest, v.OperationID, v.IntentDigest, v.PolicyDigest, v.Domain, v.BackupIdentityDigest, v.EvidenceTime, v.Method, v.Outcome, v.CustodianReference, v.VerificationKeyID, v.SignatureAlgorithm}
 }
 
 func PolicyDigest(policy Policy) (string, error) {

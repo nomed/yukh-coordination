@@ -132,5 +132,29 @@
     "domain_prefix": "yukh-coordination:audit-recovery-manifest:v1\n",
     "input": "conformance/canonical/audit-recovery-manifest.input.json",
     "name": "audit-recovery-manifest"
+  },
+  {
+    "canonical": "conformance/canonical/backup-obligation.canonical.json",
+    "digest": "sha-256:c589180cca9c36e521be26e1142e6c5310069fc797ef6da0c4dbf0c6949d82cd",
+    "domain_digest": "sha-256:16606523e2988535d48211dc7212be1aa37b30a3a2031adf683b377238382564",
+    "domain_prefix": "yukh.transcript-backup-obligation.v0.1\u0000",
+    "input": "conformance/canonical/backup-obligation.input.json",
+    "name": "backup-obligation"
+  },
+  {
+    "canonical": "conformance/canonical/backup-custodian-receipt.canonical.json",
+    "digest": "sha-256:854137fc4f69d6f7b046f33ef9d0a3f877c3b8273dd123ca0814084457d42268",
+    "domain_digest": "sha-256:c991af297b4b1d2e70111c62f8538d52f4dd785528e2db065aff31717ba5ceb4",
+    "domain_prefix": "yukh.transcript-backup-custodian-receipt.v0.1\u0000",
+    "input": "conformance/canonical/backup-custodian-receipt.input.json",
+    "name": "backup-custodian-receipt"
+  },
+  {
+    "canonical": "conformance/canonical/lifecycle-completion-evidence.canonical.json",
+    "digest": "sha-256:f2f33d8019dd79f665bd6eddfa64fc6146dadfdf78ea91e9d04c0202e50c7ba0",
+    "domain_digest": "sha-256:fbd0b11c7aa53de852405bd14d1335691d2dbdd02b832a5ecc2b8b8eb68e46bf",
+    "domain_prefix": "yukh.transcript-lifecycle-completion-evidence.v0.1\u0000",
+    "input": "conformance/canonical/lifecycle-completion-evidence.input.json",
+    "name": "lifecycle-completion-evidence"
   }
 ]

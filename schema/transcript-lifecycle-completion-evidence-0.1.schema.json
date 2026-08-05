@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://yukh.dev/coordination/schema/transcript-lifecycle-completion-evidence-0.1.schema.json",
+  "title":"Yukh transcript lifecycle completion evidence 0.1",
+  "type":"object","additionalProperties":false,
+  "required":["profile","operation_id","intent_digest","policy_digest","receipts","security_audit_receipt","security_audit_checkpoint","completed_at"],
+  "properties":{
+    "profile":{"const":"yukh-transcript-lifecycle-completion-evidence/v0.1"},"operation_id":{"$ref":"#/$defs/uuidv7"},"intent_digest":{"$ref":"#/$defs/digest"},"policy_digest":{"$ref":"#/$defs/digest"},
+    "receipts":{"type":"array","minItems":3,"maxItems":3,"prefixItems":[{"$ref":"#/$defs/eventReceipt"},{"$ref":"#/$defs/identityReceipt"},{"$ref":"#/$defs/auditReceipt"}],"items":false},
+    "security_audit_receipt":{"$ref":"#/$defs/reference"},"security_audit_checkpoint":{"$ref":"#/$defs/reference"},"completed_at":{"$ref":"#/$defs/time"}
+  },
+  "$defs":{
+    "reference":{"type":"string","pattern":"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,511}$"},"digest":{"type":"string","pattern":"^sha-256:[0-9a-f]{64}$"},"uuidv7":{"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},"time":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"},
+    "receipt":{"type":"object","additionalProperties":false,"required":["domain","receipt_id","receipt_digest"],"properties":{"domain":{"enum":["event","identity","security_audit"]},"receipt_id":{"$ref":"#/$defs/uuidv7"},"receipt_digest":{"$ref":"#/$defs/digest"}}},
+    "eventReceipt":{"allOf":[{"$ref":"#/$defs/receipt"},{"properties":{"domain":{"const":"event"}}}]},"identityReceipt":{"allOf":[{"$ref":"#/$defs/receipt"},{"properties":{"domain":{"const":"identity"}}}]},"auditReceipt":{"allOf":[{"$ref":"#/$defs/receipt"},{"properties":{"domain":{"const":"security_audit"}}}]}
+  }
+}
