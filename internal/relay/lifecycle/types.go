@@ -9,14 +9,15 @@ import (
 )
 
 const (
-	PolicyProfile             = "yukh-transcript-lifecycle-policy/v0.1"
-	IntentProfile             = "yukh-transcript-lifecycle-intent/v0.1"
-	MarkerProfile             = "yukh-transcript-lifecycle-marker/v0.1"
-	ReceiptProfile            = "yukh-transcript-lifecycle-receipt-preimage/v0.1"
-	BackupObligationProfile   = "yukh-transcript-backup-obligation/v0.1"
-	CustodianReceiptProfile   = "yukh-transcript-backup-custodian-receipt/v0.1"
-	CompletionEvidenceProfile = "yukh-transcript-lifecycle-completion-evidence/v0.1"
-	BackupRecoveryProfile     = "yukh-transcript-lifecycle-backup-recovery/v0.1"
+	PolicyProfile              = "yukh-transcript-lifecycle-policy/v0.1"
+	IntentProfile              = "yukh-transcript-lifecycle-intent/v0.1"
+	MarkerProfile              = "yukh-transcript-lifecycle-marker/v0.1"
+	ReceiptProfile             = "yukh-transcript-lifecycle-receipt-preimage/v0.1"
+	BackupObligationProfile    = "yukh-transcript-backup-obligation/v0.1"
+	BackupObligationSetProfile = "yukh-transcript-backup-obligation-set/v0.1"
+	CustodianReceiptProfile    = "yukh-transcript-backup-custodian-receipt/v0.1"
+	CompletionEvidenceProfile  = "yukh-transcript-lifecycle-completion-evidence/v0.1"
+	BackupRecoveryProfile      = "yukh-transcript-lifecycle-backup-recovery/v0.1"
 
 	IntegrityProfileV1 = "sequence-event-receipt-operation/v0.1"
 	MaxSafeInteger     = uint64(9_007_199_254_740_991)
@@ -261,6 +262,17 @@ type BackupObligation struct {
 	BindingDigest string            `json:"binding_digest"`
 }
 
+// BackupObligationSet is the complete administrative request to materialize
+// the three independent custody obligations. Storage never discovers or
+// derives these bindings from receipts or provider state.
+type BackupObligationSet struct {
+	Profile      string             `json:"profile"`
+	OperationID  string             `json:"operation_id"`
+	IntentDigest string             `json:"intent_digest"`
+	PolicyDigest string             `json:"policy_digest"`
+	Obligations  []BackupObligation `json:"obligations"`
+}
+
 type CustodianReceipt struct {
 	Profile              string        `json:"profile"`
 	ReceiptID            string        `json:"receipt_id"`
@@ -308,6 +320,12 @@ type CustodianReceiptVerifier interface {
 	VerifyCustodianReceipt(context.Context, string, string, []byte, []byte) error
 }
 
+// CompletionAuditVerifier exposes only public verification authority for the
+// explicit lifecycle-completion audit evidence and its covering checkpoint.
+type CompletionAuditVerifier interface {
+	VerifyLifecycleCompletionAudit(context.Context, CompletionEvidence) error
+}
+
 // TranscriptLifecyclePreparationStore is the non-destructive administrative
 // capability. It can reserve and fence work, but cannot sign or remove data.
 type TranscriptLifecyclePreparationStore interface {
@@ -328,6 +346,7 @@ type TranscriptLifecycleSignatureRemovalStore interface {
 // TranscriptLifecycleBackupCompletionStore is the later external-custody
 // boundary and is deliberately not implemented by the SQLite remover.
 type TranscriptLifecycleBackupCompletionStore interface {
+	BindBackupObligations(context.Context, BackupObligationSet) (Operation, error)
 	RecordBackupReceipt(context.Context, CustodianReceipt) (Operation, error)
 	Complete(context.Context, CompletionEvidence) (Operation, error)
 	InspectBackupRecovery(context.Context, OperationReference) (BackupRecovery, error)

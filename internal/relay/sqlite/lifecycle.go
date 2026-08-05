@@ -374,7 +374,7 @@ func validStoredLifecycle(row lifecycleOperationRow) bool {
 		return validExport && len(operation.Signature) == 0 && row.payloadRemovalDigest == "" && validMarkerPersistence(operation)
 	case lifecycle.ReceiptSigned:
 		return validExport && len(operation.Signature) == 64 && row.payloadRemovalDigest == "" && validMarkerPersistence(operation)
-	case lifecycle.PayloadRemoved:
+	case lifecycle.PayloadRemoved, lifecycle.BackupsPending, lifecycle.Completed:
 		return validExport && len(operation.Signature) == 64 && validLifecycleDigest(row.payloadRemovalDigest) && validMarkerPersistence(operation)
 	default:
 		return false

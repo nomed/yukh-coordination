@@ -73,6 +73,32 @@ func TestCanonicalBackupCompletionVectors(t *testing.T) {
 	}
 }
 
+func TestBackupObligationSetIsExactOrderedAndCloned(t *testing.T) {
+	obligations, _ := backupFixture(t)
+	set := BackupObligationSet{BackupObligationSetProfile, obligations[0].OperationID, obligations[0].IntentDigest, obligations[0].PolicyDigest, obligations}
+	canonical, digest, err := CanonicalBackupObligationSet(set)
+	if err != nil || len(canonical) == 0 || len(digest) != len("sha-256:")+64 {
+		t.Fatalf("canonical set: digest=%q err=%v", digest, err)
+	}
+	cloned := CloneBackupObligationSet(set)
+	cloned.Obligations[0].BindingDigest = "sha-256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	if set.Obligations[0].BindingDigest == cloned.Obligations[0].BindingDigest {
+		t.Fatal("obligation set clone shares slice storage")
+	}
+	reordered := set
+	reordered.Obligations = append([]BackupObligation(nil), set.Obligations...)
+	reordered.Obligations[0], reordered.Obligations[1] = reordered.Obligations[1], reordered.Obligations[0]
+	if ValidateBackupObligationSet(reordered) == nil {
+		t.Fatal("reordered obligation set accepted")
+	}
+	changed := set
+	changed.Obligations = append([]BackupObligation(nil), set.Obligations...)
+	changed.Obligations[0].BindingDigest = "sha-256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	if !errors.Is(ValidateBackupObligationSetRetry(set, changed), ErrConflict) {
+		t.Fatal("changed obligation-set retry accepted")
+	}
+}
+
 func TestRecoveryRequiresThreeTimelyVerifiedSuccesses(t *testing.T) {
 	obligations, receipts := backupFixture(t)
 	ctx := context.Background()

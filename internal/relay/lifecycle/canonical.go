@@ -12,15 +12,16 @@ import (
 )
 
 const (
-	policyDigestDomain             = "yukh.transcript-lifecycle-policy.v0.1\x00"
-	intentDigestDomain             = "yukh.transcript-lifecycle-intent.v0.1\x00"
-	markerDigestDomain             = "yukh.transcript-lifecycle-marker.v0.1\x00"
-	receiptSignDomain              = "yukh.transcript-lifecycle-receipt.v0.1\x00"
-	backupObligationDigestDomain   = "yukh.transcript-backup-obligation.v0.1\x00"
-	custodianReceiptDigestDomain   = "yukh.transcript-backup-custodian-receipt.v0.1\x00"
-	custodianReceiptSignDomain     = "yukh.transcript-backup-custodian-receipt-signature.v0.1\x00"
-	completionEvidenceDigestDomain = "yukh.transcript-lifecycle-completion-evidence.v0.1\x00"
-	backupRecoveryDigestDomain     = "yukh.transcript-lifecycle-backup-recovery.v0.1\x00"
+	policyDigestDomain              = "yukh.transcript-lifecycle-policy.v0.1\x00"
+	intentDigestDomain              = "yukh.transcript-lifecycle-intent.v0.1\x00"
+	markerDigestDomain              = "yukh.transcript-lifecycle-marker.v0.1\x00"
+	receiptSignDomain               = "yukh.transcript-lifecycle-receipt.v0.1\x00"
+	backupObligationDigestDomain    = "yukh.transcript-backup-obligation.v0.1\x00"
+	backupObligationSetDigestDomain = "yukh.transcript-backup-obligation-set.v0.1\x00"
+	custodianReceiptDigestDomain    = "yukh.transcript-backup-custodian-receipt.v0.1\x00"
+	custodianReceiptSignDomain      = "yukh.transcript-backup-custodian-receipt-signature.v0.1\x00"
+	completionEvidenceDigestDomain  = "yukh.transcript-lifecycle-completion-evidence.v0.1\x00"
+	backupRecoveryDigestDomain      = "yukh.transcript-lifecycle-backup-recovery.v0.1\x00"
 )
 
 var (
@@ -45,6 +46,17 @@ func CanonicalBackupObligation(value BackupObligation) ([]byte, string, error) {
 		return nil, "", ErrInvalidContract
 	}
 	return body, digest(backupObligationDigestDomain, body), nil
+}
+
+func CanonicalBackupObligationSet(value BackupObligationSet) ([]byte, string, error) {
+	if ValidateBackupObligationSet(value) != nil {
+		return nil, "", ErrInvalidContract
+	}
+	body, err := canonical(value)
+	if err != nil {
+		return nil, "", ErrInvalidContract
+	}
+	return body, digest(backupObligationSetDigestDomain, body), nil
 }
 
 func CanonicalCustodianReceipt(value CustodianReceipt) ([]byte, string, []byte, error) {
