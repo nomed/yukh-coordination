@@ -1,7 +1,7 @@
 # SESSION-2026-08-05-05: RFC-0022 Kubernetes PodIP launcher
 
 - Governing issue: #169
-- Pull request: pending
+- Pull request: #171
 - Status: implementation candidate
 
 ## Objective
