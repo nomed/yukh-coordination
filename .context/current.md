@@ -4,8 +4,8 @@
 - Governing issue: #167
 - Last delivery pull request: #168
 - Active Coordination increments: #169 closes the Kubernetes PodIP at the
-  existing descriptor-launcher boundary; #7 qualifies two isolated CLI
-  sessions and four agents through the real runtime. Step 5 remains
+  existing descriptor-launcher boundary; #6 composes the client process after
+  #7 qualified two isolated CLI sessions and four agents. Step 5 remains
   stopped pending a new reproducible OCI, registry/packet rebinding and renewed
   approval
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
@@ -53,8 +53,8 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: independently review the two-process qualification and close #7
-  if its retained evidence passes. Then reproduce and rebind the superseding
+- Next action: connect the executable to accepted bootstrap, custody and receipt
+  verification adapters without plaintext fallback. Then reproduce and rebind the superseding
   OCI/SBOM before requesting a renewed Step-5 approval. Real backup providers,
   lifecycle workers,
   target pull, Kubernetes credentials and objects, Step 5, operational
