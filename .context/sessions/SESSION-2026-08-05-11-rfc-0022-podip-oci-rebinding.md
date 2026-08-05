@@ -2,7 +2,7 @@
 
 - Governing issue: #174
 - Parent execution issue: #167
-- Pull request: pending
+- Pull request: #179
 - Status: review candidate
 
 ## Objective
