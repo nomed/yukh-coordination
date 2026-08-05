@@ -1,11 +1,11 @@
 # RFC-0022 private staging operator packet
 
-- Status: complete review candidate; provisioning forbidden
+- Status: rebound review candidate; provisioning forbidden
 - Prepared: 2026-08-04
 - Reconciled: 2026-08-05
 - Governing RFC: RFC-0022
 - Governing issue: #136
-- Reconciliation issues: #158, #159, #163
+- Reconciliation issues: #158, #159, #163, #169, #174
 - Deployment plan: `private-primitives-staging-deployment-plan.md`
 
 This is the public, redacted review half of the RFC-0022 step-5 operator
@@ -26,42 +26,47 @@ public packet.
 | Field | Required value | Status |
 |---|---|---|
 | repository | `nomed/yukh-coordination` | VERIFIED |
-| source commit | `d122f31ce6a74dcec97dfcf8095a4447e23ee593` | VERIFIED |
-| Git tree | `a59ba3f7ad6018d96f7329710eb593766acda676` | VERIFIED |
+| source candidate commit | `25ec7901796208785ec25f20b5fc4c0d7bc05eba` | VERIFIED |
+| source candidate tree | `43b2deab95a62dcc3d48a83d9fc8a93e0c8aa4a0` | VERIFIED |
+| delivery commit | `ce607210c8ae9bd71c4d4adfc1414112cb2fa008` | VERIFIED |
+| delivery tree | `23f90cf916e0f1885576f500f7a64c28985d7a33` | VERIFIED |
 | service profile | `yukh-coordination/private-primitives-staging-v1` | VERIFIED |
 | bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` | VERIFIED |
-| hermetic qualification | run `30851387901`, job `91811981779` | VERIFIED |
+| hermetic qualification | post-merge run `31018394591`, job `92348429268` | VERIFIED |
 | MCP consumer commit | `e303b3671bf9b4c5202ae147b882ab763964d5ed` | VERIFIED |
 | build toolchain | Go `1.26.5`, Linux AMD64 archive SHA-256 `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` | LOCALLY VERIFIED |
-| service artifact SHA-256 | `00a9aacbb6c308d4a168cc087c2c396680edab55bb682458872056abce10f000` | INDEPENDENTLY REPRODUCED |
-| bootstrap artifact SHA-256 | `edcdc8d99b26799795c3d5d7551b636d5009933e81683e512676e170852a55df` | INDEPENDENTLY REPRODUCED |
-| descriptor launcher SHA-256 | `08d7dd79b9cc8afe68f9a2ccc367771157f6c6ee1856a7571dbe39f8e9a4f821` | INDEPENDENTLY REPRODUCED |
-| superseding OCI manifest SHA-256 | `27ee06d3cc2a0b804424625e2570e3018b22bdd9b0dba7c28cd54e3b05d6ce7b` | INDEPENDENTLY REPRODUCED |
-| superseding OCI config SHA-256 | `76f3d6db4b35ef6fe66b6f0b61627428f1f0d8327d4d52ee23032f3d30df9db5` | INDEPENDENTLY REPRODUCED |
-| superseding OCI layer SHA-256 | `bed142fd3b1e8ce5f248de1d0f7068a9c837bfc563ab8d9a86fcb365186f2848` | INDEPENDENTLY REPRODUCED |
-| superseding OCI SBOM SHA-256 | `2c6d1bc52e47fcecb0d60342719819e6fc99e486a6d398086a3bfbba81cbea13`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED |
-| immutable registry reference | digest-qualified reference with provider-observed manifest digest | `ghcr.io/nomed/yukh-coordination-private-primitives@sha256:27ee06d3cc2a0b804424625e2570e3018b22bdd9b0dba7c28cd54e3b05d6ce7b`; PROVIDER-OBSERVED PASS |
+| service artifact SHA-256 | `598adbc49a727bffef773d97e724c915960e8404509e3b9d6941dd447040720c` | INDEPENDENTLY REPRODUCED |
+| bootstrap artifact SHA-256 | `73f59bec1ea4fd76baa6b3b637859e08fd88fe7ca0cb7530d59f85380214c923` | INDEPENDENTLY REPRODUCED |
+| descriptor launcher SHA-256 | `f120742330e675d7b59e1e8e715fd3c4cefbedca8bbdc2add2ebb2f9192f35c7` | INDEPENDENTLY REPRODUCED |
+| superseding OCI manifest SHA-256 | `13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe` | INDEPENDENTLY REPRODUCED |
+| superseding OCI config SHA-256 | `1ba350b044f511915bfc4076584d95494213aee63c441e103ac79eac148f223a` | INDEPENDENTLY REPRODUCED |
+| superseding OCI layer SHA-256 | `c273cf19b7bfed29ab6d1b775c5749ea947fd5a01a48c4fe95b1c8781bf755f4` | INDEPENDENTLY REPRODUCED |
+| superseding OCI SBOM SHA-256 | `eede90b9eee7a5e98ef735abf3304657223fb197dc779c7a9d2363e9fe6ba064`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED |
+| immutable registry reference | digest-qualified reference with provider-observed manifest digest | `ghcr.io/nomed/yukh-coordination-private-primitives@sha256:13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe`; PROVIDER-OBSERVED PASS |
 
 The executable and OCI digests were independently reproduced from the exact
-delivery commit `83411ebf6b3a86b55ec527dfd40908a402e07c1a`, which embeds the
-immutable source commit above. The two artifact digests came from two
+delivery commit `ce607210c8ae9bd71c4d4adfc1414112cb2fa008`, which embeds the
+immutable source candidate above. The artifact digests came from two
 byte-identical builds at the exact
-source commit with `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, an empty Go
+source candidate with `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, an empty Go
 build ID and the reviewed embedded revision. A later commit, mutable tag,
 unrecorded compiler/toolchain or non-identical rebuild rejects the packet.
 The separately authorized registry operation published exactly one private
-package version. GHCR reported OCI image-manifest media type, size `402` and
+new private package version under tag `staging-v1-podip-13b97c16c376`. GHCR
+reported OCI image-manifest media type, size `402` and
 the exact manifest digest above. The package remains private and owner-only;
 no repository Actions access was granted. The owner accepted the bounded
-first-publication residual risk that the existing operational PAT had broader
+publication residual risk that the existing operational PAT had broader
 scopes than the planned one-shot package-write-only publisher. Its temporary
 ORAS login state, toolchain, OCI layout and worktree were destroyed after
 verification. The digest-qualified reference, never its publication tag, is
 the only admissible target pull identity.
 
-The OCI values recorded by issue #141 are historical and not deployable after
-the descriptor launcher is introduced. Only the superseding digest set above
-may enter the private Kubernetes runbook.
+The OCI values recorded by issues #141 and #159, including manifest
+`27ee06d3cc2a0b804424625e2570e3018b22bdd9b0dba7c28cd54e3b05d6ce7b`,
+are retained rollback evidence and are not deployable after the PodIP-aware
+launcher. Only the superseding digest set above may enter the private
+Kubernetes runbook.
 
 ## Accountable roles
 

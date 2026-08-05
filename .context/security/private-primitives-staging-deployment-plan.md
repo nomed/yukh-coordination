@@ -4,7 +4,7 @@
 - Recorded: 2026-08-03
 - Governing RFC: RFC-0022
 - Governing issue: #90
-- Reconciliation issue: #129
+- Reconciliation issues: #129, #169, #174
 - Implementation record: `private-primitives-staging-implementation-record.md`
 
 This public plan intentionally contains no endpoint, address, account,
@@ -20,8 +20,10 @@ executables and the separately reviewed accountable three-bucket bootstrap.
 That closes the implementation prerequisites but does not itself authorize
 provisioning. No infrastructure or credential work may begin until a concrete,
 redacted operator packet binds reproducible artifact digests and every item
-below to commit `d122f31ce6a74dcec97dfcf8095a4447e23ee593` and tree
-`a59ba3f7ad6018d96f7329710eb593766acda676`, and the owner explicitly approves
+below to source candidate `25ec7901796208785ec25f20b5fc4c0d7bc05eba`,
+tree `43b2deab95a62dcc3d48a83d9fc8a93e0c8aa4a0`, delivery commit
+`ce607210c8ae9bd71c4d4adfc1414112cb2fa008` and tree
+`23f90cf916e0f1885576f500f7a64c28985d7a33`, and the owner explicitly approves
 that complete packet.
 
 ## Accountable roles
