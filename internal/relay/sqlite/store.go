@@ -181,6 +181,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		lifecycleBackupObligationsTable,
 		lifecycleBackupReceiptsTable,
 		lifecycleCompletionsTable,
+		lifecycleBackupObligationSetNoUpdate,
+		lifecycleBackupObligationSetNoDelete,
+		lifecycleBackupObligationNoUpdate,
+		lifecycleBackupObligationNoDelete,
+		lifecycleBackupReceiptNoUpdate,
+		lifecycleBackupReceiptNoDelete,
+		lifecycleCompletionNoUpdate,
+		lifecycleCompletionNoDelete,
 		`CREATE TABLE accepted_records (
 			tenant_id TEXT NOT NULL,
 			channel_id TEXT NOT NULL,
@@ -349,6 +357,23 @@ const lifecycleCompletionsTable = `CREATE TABLE lifecycle_completions (
 	FOREIGN KEY (operation_id) REFERENCES lifecycle_operations (operation_id)
 ) STRICT`
 
+const lifecycleBackupObligationSetNoUpdate = `CREATE TRIGGER lifecycle_backup_obligation_sets_no_update
+	BEFORE UPDATE ON lifecycle_backup_obligation_sets BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupObligationSetNoDelete = `CREATE TRIGGER lifecycle_backup_obligation_sets_no_delete
+	BEFORE DELETE ON lifecycle_backup_obligation_sets BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupObligationNoUpdate = `CREATE TRIGGER lifecycle_backup_obligations_no_update
+	BEFORE UPDATE ON lifecycle_backup_obligations BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupObligationNoDelete = `CREATE TRIGGER lifecycle_backup_obligations_no_delete
+	BEFORE DELETE ON lifecycle_backup_obligations BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupReceiptNoUpdate = `CREATE TRIGGER lifecycle_backup_receipts_no_update
+	BEFORE UPDATE ON lifecycle_backup_receipts BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleBackupReceiptNoDelete = `CREATE TRIGGER lifecycle_backup_receipts_no_delete
+	BEFORE DELETE ON lifecycle_backup_receipts BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleCompletionNoUpdate = `CREATE TRIGGER lifecycle_completions_no_update
+	BEFORE UPDATE ON lifecycle_completions BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+const lifecycleCompletionNoDelete = `CREATE TRIGGER lifecycle_completions_no_delete
+	BEFORE DELETE ON lifecycle_completions BEGIN SELECT RAISE(ABORT, 'immutable lifecycle evidence'); END`
+
 func migrateLifecyclePreparation(ctx context.Context, conn *sql.Conn) error {
 	statements := []string{
 		"ALTER TABLE transcripts ADD COLUMN completeness TEXT NOT NULL DEFAULT 'complete' CHECK (completeness IN ('complete', 'incomplete'))",
@@ -387,6 +412,14 @@ func migrateLifecycleBackupCompletion(ctx context.Context, conn *sql.Conn) error
 		lifecycleBackupObligationsTable,
 		lifecycleBackupReceiptsTable,
 		lifecycleCompletionsTable,
+		lifecycleBackupObligationSetNoUpdate,
+		lifecycleBackupObligationSetNoDelete,
+		lifecycleBackupObligationNoUpdate,
+		lifecycleBackupObligationNoDelete,
+		lifecycleBackupReceiptNoUpdate,
+		lifecycleBackupReceiptNoDelete,
+		lifecycleCompletionNoUpdate,
+		lifecycleCompletionNoDelete,
 	} {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("migrate sqlite lifecycle backup completion: %w", err)

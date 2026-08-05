@@ -37,6 +37,17 @@ signer/private key, worker, scheduler, restore execution, physical sanitization,
 HTTP/SSE/client change, executable composition, real data, deployment,
 JetStream lifecycle, Matrix, MCP or production authority is introduced.
 
+## Review correction
+
+Formal review of draft PR #168 required exact concurrent convergence for
+receipt and completion retries, complete validation of canonical evidence
+against every redundant SQLite column, schema-enforced immutability, an
+independent public obligation-set schema/vector and rollback/corruption tests
+at the remaining write boundaries. The corrected candidate adds all five
+controls. A `completed` operation without its exact canonical completion row,
+or any drift between the obligation set and stored evidence, is now bounded
+corruption rather than recoverable success.
+
 ## Next boundary
 
 Publish a review pull request linked to #165 after complete qualification. A

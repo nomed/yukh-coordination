@@ -152,7 +152,11 @@ func (s *LifecycleBackupCompletion) RecordBackupReceipt(ctx context.Context, rec
 		if existing.digest != digest || !bytes.Equal(existing.canonical, canonical) {
 			return lifecycle.Operation{}, lifecycle.ErrConflict
 		}
-		return lifecycle.CloneOperation(preflight.operation), nil
+		currentOperation, currentFound, currentErr := loadLifecycleOperation(ctx, s.store.db, receipt.OperationID)
+		if currentErr != nil || !currentFound {
+			return lifecycle.Operation{}, closedFound(currentErr, currentFound)
+		}
+		return lifecycle.CloneOperation(currentOperation.operation), nil
 	}
 	if preflight.operation.State != lifecycle.BackupsPending {
 		return lifecycle.Operation{}, lifecycle.ErrConflict
@@ -166,6 +170,19 @@ func (s *LifecycleBackupCompletion) RecordBackupReceipt(ctx context.Context, rec
 	stored, found, err := loadLifecycleOperation(ctx, tx.conn, receipt.OperationID)
 	if err != nil || !found {
 		return lifecycle.Operation{}, closedFound(err, found)
+	}
+	concurrent, concurrentErr := loadReceiptByID(ctx, tx.conn, receipt.ReceiptID)
+	if concurrentErr != nil {
+		return lifecycle.Operation{}, lifecycle.ErrUnavailable
+	}
+	if concurrent != nil {
+		if concurrent.digest != digest || !bytes.Equal(concurrent.canonical, canonical) {
+			return lifecycle.Operation{}, lifecycle.ErrConflict
+		}
+		if tx.commit(ctx) != nil {
+			return lifecycle.Operation{}, lifecycle.ErrUnavailable
+		}
+		return lifecycle.CloneOperation(stored.operation), nil
 	}
 	current, currentBytes, currentDigest, err := loadObligation(ctx, tx.conn, receipt.OperationID, receipt.Domain)
 	if err != nil || !sameOperationSnapshot(preflight, stored) || stored.operation.State != lifecycle.BackupsPending ||
@@ -191,16 +208,35 @@ func (s *LifecycleBackupCompletion) InspectBackupRecovery(ctx context.Context, r
 	if err := lifecycle.ValidateOperationReference(reference); err != nil {
 		return lifecycle.BackupRecovery{}, err
 	}
-	operation, found, err := loadLifecycleOperation(ctx, s.store.db, reference.OperationID)
+	tx, err := s.store.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return lifecycle.BackupRecovery{}, lifecycle.ErrUnavailable
+	}
+	defer tx.Rollback()
+	operation, found, err := loadLifecycleOperation(ctx, tx, reference.OperationID)
 	if err != nil || !found {
 		return lifecycle.BackupRecovery{}, closedFound(err, found)
 	}
 	if operation.operation.IntentDigest != reference.IntentDigest {
 		return lifecycle.BackupRecovery{}, lifecycle.ErrConflict
 	}
-	obligations, receipts, err := loadBackupEvidence(ctx, s.store.db, reference.OperationID)
+	set, setErr := loadObligationSet(ctx, tx, reference.OperationID)
+	completion, completionErr := loadCompletion(ctx, tx, reference.OperationID)
+	if setErr != nil || completionErr != nil || set == nil ||
+		operation.operation.State != lifecycle.BackupsPending && operation.operation.State != lifecycle.Completed ||
+		operation.operation.State == lifecycle.BackupsPending && completion != nil ||
+		operation.operation.State == lifecycle.Completed && completion == nil {
+		return corruptRecovery(reference), nil
+	}
+	obligations, receipts, err := loadBackupEvidence(ctx, tx, reference.OperationID)
 	if err != nil {
 		return corruptRecovery(reference), nil
+	}
+	if !obligationSetMatchesEvidence(set, obligations) || completion != nil && !completionReferencesStored(completion.evidence, obligations, receipts) {
+		return corruptRecovery(reference), nil
+	}
+	if tx.Commit() != nil {
+		return lifecycle.BackupRecovery{}, lifecycle.ErrUnavailable
 	}
 	return lifecycle.CloneBackupRecovery(lifecycle.ClassifyBackupRecovery(ctx, reference, obligations, receipts, s.receiptVerifier)), nil
 }
@@ -246,7 +282,14 @@ func (s *LifecycleBackupCompletion) Complete(ctx context.Context, evidence lifec
 		if existing.digest != digest || !bytes.Equal(existing.canonical, canonical) {
 			return lifecycle.Operation{}, lifecycle.ErrConflict
 		}
-		return lifecycle.CloneOperation(preflight.operation), nil
+		currentOperation, currentFound, currentErr := loadLifecycleOperation(ctx, s.store.db, evidence.OperationID)
+		if currentErr != nil || !currentFound {
+			return lifecycle.Operation{}, closedFound(currentErr, currentFound)
+		}
+		if currentOperation.operation.State != lifecycle.Completed {
+			return lifecycle.Operation{}, lifecycle.ErrUnavailable
+		}
+		return lifecycle.CloneOperation(currentOperation.operation), nil
 	}
 
 	tx, err := beginImmediate(ctx, s.store.db)
@@ -257,6 +300,16 @@ func (s *LifecycleBackupCompletion) Complete(ctx context.Context, evidence lifec
 	stored, found, err := loadLifecycleOperation(ctx, tx.conn, evidence.OperationID)
 	if err != nil || !found {
 		return lifecycle.Operation{}, closedFound(err, found)
+	}
+	if stored.operation.State == lifecycle.Completed {
+		concurrent, loadErr := loadCompletion(ctx, tx.conn, evidence.OperationID)
+		if loadErr != nil || concurrent == nil || concurrent.digest != digest || !bytes.Equal(concurrent.canonical, canonical) {
+			return lifecycle.Operation{}, lifecycle.ErrConflict
+		}
+		if tx.commit(ctx) != nil {
+			return lifecycle.Operation{}, lifecycle.ErrUnavailable
+		}
+		return lifecycle.CloneOperation(stored.operation), nil
 	}
 	currentSet, err := loadObligationSet(ctx, tx.conn, evidence.OperationID)
 	if err != nil || currentSet == nil || !sameOperationSnapshot(preflight, stored) || stored.operation.State != lifecycle.BackupsPending ||
@@ -293,6 +346,12 @@ type canonicalRecord struct {
 	digest    string
 }
 
+type completionRecord struct {
+	canonical []byte
+	digest    string
+	evidence  lifecycle.CompletionEvidence
+}
+
 type obligationSetRow struct {
 	canonical []byte
 	digest    string
@@ -326,7 +385,9 @@ func loadObligation(ctx context.Context, q queryRower, operationID string, domai
 	var value lifecycle.BackupObligation
 	var raw []byte
 	var digest string
-	err := q.QueryRowContext(ctx, `SELECT canonical_obligation, obligation_digest FROM lifecycle_backup_obligations WHERE operation_id = ? AND domain = ?`, operationID, string(domain)).Scan(&raw, &digest)
+	var storedDomain, deadline, bindingKind, bindingDigest string
+	err := q.QueryRowContext(ctx, `SELECT canonical_obligation, obligation_digest, domain, deadline, binding_kind, binding_digest
+		FROM lifecycle_backup_obligations WHERE operation_id = ? AND domain = ?`, operationID, string(domain)).Scan(&raw, &digest, &storedDomain, &deadline, &bindingKind, &bindingDigest)
 	if err != nil {
 		return value, nil, "", err
 	}
@@ -334,7 +395,8 @@ func loadObligation(ctx context.Context, q queryRower, operationID string, domai
 		return value, nil, "", lifecycle.ErrUnavailable
 	}
 	canonical, actual, err := lifecycle.CanonicalBackupObligation(value)
-	if err != nil || actual != digest || !bytes.Equal(canonical, raw) {
+	if err != nil || actual != digest || !bytes.Equal(canonical, raw) || value.OperationID != operationID || string(value.Domain) != storedDomain ||
+		value.Domain != domain || value.Deadline != deadline || string(value.BindingKind) != bindingKind || value.BindingDigest != bindingDigest {
 		return value, nil, "", lifecycle.ErrUnavailable
 	}
 	return value, raw, digest, nil
@@ -342,24 +404,43 @@ func loadObligation(ctx context.Context, q queryRower, operationID string, domai
 
 func loadReceiptByID(ctx context.Context, q queryRower, receiptID string) (*canonicalRecord, error) {
 	var row canonicalRecord
-	err := q.QueryRowContext(ctx, `SELECT canonical_receipt, receipt_digest FROM lifecycle_backup_receipts WHERE receipt_id = ?`, receiptID).Scan(&row.canonical, &row.digest)
+	var operationID, domain, evidenceTime, outcome string
+	err := q.QueryRowContext(ctx, `SELECT canonical_receipt, receipt_digest, operation_id, domain, evidence_time, outcome
+		FROM lifecycle_backup_receipts WHERE receipt_id = ?`, receiptID).Scan(&row.canonical, &row.digest, &operationID, &domain, &evidenceTime, &outcome)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	var receipt lifecycle.CustodianReceipt
+	if lifecycle.ValidateCanonical(row.canonical) != nil || json.Unmarshal(row.canonical, &receipt) != nil {
+		return nil, lifecycle.ErrUnavailable
+	}
+	canonical, digest, _, canonicalErr := lifecycle.CanonicalCustodianReceipt(receipt)
+	if canonicalErr != nil || !bytes.Equal(canonical, row.canonical) || digest != row.digest || receipt.ReceiptID != receiptID ||
+		receipt.OperationID != operationID || string(receipt.Domain) != domain || receipt.EvidenceTime != evidenceTime || string(receipt.Outcome) != outcome {
+		return nil, lifecycle.ErrUnavailable
 	}
 	return &row, nil
 }
 
-func loadCompletion(ctx context.Context, q queryRower, operationID string) (*canonicalRecord, error) {
-	var row canonicalRecord
-	err := q.QueryRowContext(ctx, `SELECT canonical_completion, completion_digest FROM lifecycle_completions WHERE operation_id = ?`, operationID).Scan(&row.canonical, &row.digest)
+func loadCompletion(ctx context.Context, q queryRower, operationID string) (*completionRecord, error) {
+	var row completionRecord
+	var completedAt string
+	err := q.QueryRowContext(ctx, `SELECT canonical_completion, completion_digest, completed_at FROM lifecycle_completions WHERE operation_id = ?`, operationID).Scan(&row.canonical, &row.digest, &completedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if lifecycle.ValidateCanonical(row.canonical) != nil || json.Unmarshal(row.canonical, &row.evidence) != nil {
+		return nil, lifecycle.ErrUnavailable
+	}
+	canonical, digest, canonicalErr := lifecycle.CanonicalCompletionEvidence(row.evidence)
+	if canonicalErr != nil || !bytes.Equal(canonical, row.canonical) || digest != row.digest || row.evidence.OperationID != operationID || row.evidence.CompletedAt != completedAt {
+		return nil, lifecycle.ErrUnavailable
 	}
 	return &row, nil
 }
@@ -369,7 +450,7 @@ type backupEvidenceQueryer interface {
 }
 
 func loadBackupEvidence(ctx context.Context, q backupEvidenceQueryer, operationID string) ([]lifecycle.BackupObligation, []lifecycle.CustodianReceipt, error) {
-	rows, err := q.QueryContext(ctx, `SELECT canonical_obligation, obligation_digest FROM lifecycle_backup_obligations WHERE operation_id = ?
+	rows, err := q.QueryContext(ctx, `SELECT canonical_obligation, obligation_digest, domain, deadline, binding_kind, binding_digest FROM lifecycle_backup_obligations WHERE operation_id = ?
 		ORDER BY CASE domain WHEN 'event' THEN 0 WHEN 'identity' THEN 1 ELSE 2 END`, operationID)
 	if err != nil {
 		return nil, nil, err
@@ -378,13 +459,15 @@ func loadBackupEvidence(ctx context.Context, q backupEvidenceQueryer, operationI
 	for rows.Next() {
 		var raw []byte
 		var storedDigest string
+		var domain, deadline, bindingKind, bindingDigest string
 		var value lifecycle.BackupObligation
-		if rows.Scan(&raw, &storedDigest) != nil || lifecycle.ValidateCanonical(raw) != nil || json.Unmarshal(raw, &value) != nil {
+		if rows.Scan(&raw, &storedDigest, &domain, &deadline, &bindingKind, &bindingDigest) != nil || lifecycle.ValidateCanonical(raw) != nil || json.Unmarshal(raw, &value) != nil {
 			rows.Close()
 			return nil, nil, lifecycle.ErrUnavailable
 		}
 		canonical, digest, err := lifecycle.CanonicalBackupObligation(value)
-		if err != nil || digest != storedDigest || !bytes.Equal(canonical, raw) {
+		if err != nil || digest != storedDigest || !bytes.Equal(canonical, raw) || string(value.Domain) != domain ||
+			value.Deadline != deadline || string(value.BindingKind) != bindingKind || value.BindingDigest != bindingDigest {
 			rows.Close()
 			return nil, nil, lifecycle.ErrUnavailable
 		}
@@ -393,7 +476,7 @@ func loadBackupEvidence(ctx context.Context, q backupEvidenceQueryer, operationI
 	if err := rows.Close(); err != nil {
 		return nil, nil, err
 	}
-	rows, err = q.QueryContext(ctx, `SELECT canonical_receipt, receipt_digest FROM lifecycle_backup_receipts WHERE operation_id = ? ORDER BY rowid`, operationID)
+	rows, err = q.QueryContext(ctx, `SELECT canonical_receipt, receipt_digest, receipt_id, domain, evidence_time, outcome FROM lifecycle_backup_receipts WHERE operation_id = ? ORDER BY rowid`, operationID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -402,12 +485,14 @@ func loadBackupEvidence(ctx context.Context, q backupEvidenceQueryer, operationI
 	for rows.Next() {
 		var raw []byte
 		var storedDigest string
+		var receiptID, domain, evidenceTime, outcome string
 		var value lifecycle.CustodianReceipt
-		if rows.Scan(&raw, &storedDigest) != nil || lifecycle.ValidateCanonical(raw) != nil || json.Unmarshal(raw, &value) != nil {
+		if rows.Scan(&raw, &storedDigest, &receiptID, &domain, &evidenceTime, &outcome) != nil || lifecycle.ValidateCanonical(raw) != nil || json.Unmarshal(raw, &value) != nil {
 			return nil, nil, lifecycle.ErrUnavailable
 		}
 		canonical, digest, _, err := lifecycle.CanonicalCustodianReceipt(value)
-		if err != nil || digest != storedDigest || !bytes.Equal(canonical, raw) {
+		if err != nil || digest != storedDigest || !bytes.Equal(canonical, raw) || value.ReceiptID != receiptID || value.OperationID != operationID ||
+			string(value.Domain) != domain || value.EvidenceTime != evidenceTime || string(value.Outcome) != outcome {
 			return nil, nil, lifecycle.ErrUnavailable
 		}
 		receipts = append(receipts, value)
@@ -427,6 +512,15 @@ func obligationsMatchSet(set lifecycle.BackupObligationSet, obligations []lifecy
 		}
 	}
 	return true
+}
+
+func obligationSetMatchesEvidence(row *obligationSetRow, obligations []lifecycle.BackupObligation) bool {
+	if row == nil {
+		return false
+	}
+	var set lifecycle.BackupObligationSet
+	canonical, digest, err := decodeObligationSet(row.canonical, &set)
+	return err == nil && digest == row.digest && bytes.Equal(canonical, row.canonical) && obligationsMatchSet(set, obligations)
 }
 
 func sameOperationSnapshot(a, b lifecycleOperationRow) bool {

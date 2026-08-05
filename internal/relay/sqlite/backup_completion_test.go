@@ -89,6 +89,11 @@ func TestLifecycleBackupCompletionPersistsExactEvidenceAcrossRestart(t *testing.
 	if retry, err := adapter.Complete(context.Background(), evidence); err != nil || retry.State != lifecycle.Completed || auditCalls != 2 {
 		t.Fatalf("complete retry: state=%s audit=%d err=%v", retry.State, auditCalls, err)
 	}
+	for _, statement := range []string{`UPDATE lifecycle_completions SET completed_at = completed_at`, `DELETE FROM lifecycle_completions`} {
+		if _, err := fixture.store.db.Exec(statement); err == nil {
+			t.Fatalf("immutable completion accepted %q", statement)
+		}
+	}
 
 	if err := fixture.store.Close(); err != nil {
 		t.Fatal(err)
@@ -191,6 +196,40 @@ func TestLifecycleBackupCompletionConcurrentExactBindConverges(t *testing.T) {
 	assertTableCount(t, fixture.store, "lifecycle_backup_obligations", 3)
 }
 
+func TestLifecycleBackupCompletionConcurrentReceiptAndCompletionConverge(t *testing.T) {
+	fixture, operation := removedLifecycleOperation(t)
+	adapter, _ := NewLifecycleBackupCompletion(fixture.store, databaseReceiptVerifier{store: fixture.store}, databaseAuditVerifier{store: fixture.store})
+	set := backupObligationSet(t, operation)
+	if _, err := adapter.BindBackupObligations(context.Background(), set); err != nil {
+		t.Fatal(err)
+	}
+	first := backupReceipt(t, set.Obligations[0], 0)
+	runConcurrent(t, 8, func() error {
+		got, err := adapter.RecordBackupReceipt(context.Background(), first)
+		if err == nil && got.State != lifecycle.BackupsPending {
+			return fmt.Errorf("receipt state %s", got.State)
+		}
+		return err
+	})
+	assertTableCount(t, fixture.store, "lifecycle_backup_receipts", 1)
+	receipts := []lifecycle.CustodianReceipt{first, backupReceipt(t, set.Obligations[1], 1), backupReceipt(t, set.Obligations[2], 2)}
+	for _, receipt := range receipts[1:] {
+		if _, err := adapter.RecordBackupReceipt(context.Background(), receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	evidence := completionEvidence(t, operation, receipts)
+	runConcurrent(t, 8, func() error {
+		got, err := adapter.Complete(context.Background(), evidence)
+		if err == nil && got.State != lifecycle.Completed {
+			return fmt.Errorf("completion state %s", got.State)
+		}
+		return err
+	})
+	assertTableCount(t, fixture.store, "lifecycle_completions", 1)
+	assertOperationState(t, fixture.store, operation.Intent.OperationID, lifecycle.Completed)
+}
+
 func TestLifecycleBackupCompletionRollsBackSetAndCompletion(t *testing.T) {
 	fixture, operation := removedLifecycleOperation(t)
 	adapter, _ := NewLifecycleBackupCompletion(fixture.store, databaseReceiptVerifier{store: fixture.store}, databaseAuditVerifier{store: fixture.store})
@@ -204,6 +243,106 @@ func TestLifecycleBackupCompletionRollsBackSetAndCompletion(t *testing.T) {
 	assertTableCount(t, fixture.store, "lifecycle_backup_obligation_sets", 0)
 	assertTableCount(t, fixture.store, "lifecycle_backup_obligations", 0)
 	assertOperationState(t, fixture.store, operation.Intent.OperationID, lifecycle.PayloadRemoved)
+}
+
+func TestLifecycleBackupCompletionRollsBackReceiptAndCompletionBoundaries(t *testing.T) {
+	fixture, operation := removedLifecycleOperation(t)
+	adapter, _ := NewLifecycleBackupCompletion(fixture.store, databaseReceiptVerifier{store: fixture.store}, databaseAuditVerifier{store: fixture.store})
+	set := backupObligationSet(t, operation)
+	if _, err := adapter.BindBackupObligations(context.Background(), set); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.store.db.Exec(`CREATE TRIGGER fail_receipt BEFORE INSERT ON lifecycle_backup_receipts BEGIN SELECT RAISE(ABORT, 'forced'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.RecordBackupReceipt(context.Background(), backupReceipt(t, set.Obligations[0], 0)); !errors.Is(err, lifecycle.ErrConflict) {
+		t.Fatalf("forced receipt rollback: %v", err)
+	}
+	assertTableCount(t, fixture.store, "lifecycle_backup_receipts", 0)
+	if _, err := fixture.store.db.Exec(`DROP TRIGGER fail_receipt`); err != nil {
+		t.Fatal(err)
+	}
+	receipts := make([]lifecycle.CustodianReceipt, 3)
+	for i, obligation := range set.Obligations {
+		receipts[i] = backupReceipt(t, obligation, i)
+		if _, err := adapter.RecordBackupReceipt(context.Background(), receipts[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := fixture.store.db.Exec(`CREATE TRIGGER fail_completion_state BEFORE UPDATE OF state ON lifecycle_operations WHEN NEW.state = 'completed' BEGIN SELECT RAISE(ABORT, 'forced'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.Complete(context.Background(), completionEvidence(t, operation, receipts)); !errors.Is(err, lifecycle.ErrUnavailable) {
+		t.Fatalf("forced completion rollback: %v", err)
+	}
+	assertTableCount(t, fixture.store, "lifecycle_completions", 0)
+	assertOperationState(t, fixture.store, operation.Intent.OperationID, lifecycle.BackupsPending)
+}
+
+func TestLifecycleBackupCompletionSchemaIsImmutableAndCorruptionIsBounded(t *testing.T) {
+	fixture, operation := removedLifecycleOperation(t)
+	adapter, _ := NewLifecycleBackupCompletion(fixture.store, databaseReceiptVerifier{store: fixture.store}, databaseAuditVerifier{store: fixture.store})
+	set := backupObligationSet(t, operation)
+	if _, err := adapter.BindBackupObligations(context.Background(), set); err != nil {
+		t.Fatal(err)
+	}
+	receipt := backupReceipt(t, set.Obligations[0], 0)
+	if _, err := adapter.RecordBackupReceipt(context.Background(), receipt); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE lifecycle_backup_obligation_sets SET set_digest = set_digest`,
+		`DELETE FROM lifecycle_backup_obligation_sets`,
+		`UPDATE lifecycle_backup_obligations SET deadline = deadline`,
+		`DELETE FROM lifecycle_backup_obligations`,
+		`UPDATE lifecycle_backup_receipts SET outcome = outcome`,
+		`DELETE FROM lifecycle_backup_receipts`,
+	} {
+		if _, err := fixture.store.db.Exec(statement); err == nil {
+			t.Fatalf("immutable schema accepted %q", statement)
+		}
+	}
+	if _, err := fixture.store.db.Exec(`DROP TRIGGER lifecycle_backup_obligations_no_update`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.store.db.Exec(`UPDATE lifecycle_backup_obligations SET deadline = '2026-08-08T00:00:00.000Z' WHERE operation_id = ? AND domain = 'event'`, operation.Intent.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	reference := lifecycle.OperationReference{OperationID: operation.Intent.OperationID, IntentDigest: operation.IntentDigest}
+	recovery, err := adapter.InspectBackupRecovery(context.Background(), reference)
+	if err != nil || recovery.Status != lifecycle.RecoveryCorrupt || len(recovery.Findings) != 1 || recovery.Findings[0].Reason != lifecycle.RecoveryInvalidEvidence {
+		t.Fatalf("bounded corruption: %+v err=%v", recovery, err)
+	}
+}
+
+func TestLifecycleBackupCompletionRejectsCompletedStateWithoutEvidence(t *testing.T) {
+	fixture, operation := removedLifecycleOperation(t)
+	adapter, _ := NewLifecycleBackupCompletion(fixture.store, databaseReceiptVerifier{store: fixture.store}, databaseAuditVerifier{store: fixture.store})
+	set := backupObligationSet(t, operation)
+	if _, err := adapter.BindBackupObligations(context.Background(), set); err != nil {
+		t.Fatal(err)
+	}
+	receipts := make([]lifecycle.CustodianReceipt, 3)
+	for i, obligation := range set.Obligations {
+		receipts[i] = backupReceipt(t, obligation, i)
+		if _, err := adapter.RecordBackupReceipt(context.Background(), receipts[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := adapter.Complete(context.Background(), completionEvidence(t, operation, receipts)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.store.db.Exec(`DROP TRIGGER lifecycle_completions_no_delete`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.store.db.Exec(`DELETE FROM lifecycle_completions WHERE operation_id = ?`, operation.Intent.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	reference := lifecycle.OperationReference{OperationID: operation.Intent.OperationID, IntentDigest: operation.IntentDigest}
+	recovery, err := adapter.InspectBackupRecovery(context.Background(), reference)
+	if err != nil || recovery.Status != lifecycle.RecoveryCorrupt {
+		t.Fatalf("missing completion: %+v err=%v", recovery, err)
+	}
 }
 
 func TestLifecycleBackupCompletionAuditUnavailabilityDoesNotComplete(t *testing.T) {
@@ -310,5 +449,22 @@ func assertOperationState(t *testing.T, store *Store, operationID string, want l
 	}
 	if got != string(want) {
 		t.Fatalf("state: got %s want %s", got, want)
+	}
+}
+
+func runConcurrent(t *testing.T, count int, call func() error) {
+	t.Helper()
+	results := make(chan error, count)
+	var wait sync.WaitGroup
+	for i := 0; i < count; i++ {
+		wait.Add(1)
+		go func() { defer wait.Done(); results <- call() }()
+	}
+	wait.Wait()
+	close(results)
+	for err := range results {
+		if err != nil {
+			t.Fatalf("concurrent exact retry: %v", err)
+		}
 	}
 }

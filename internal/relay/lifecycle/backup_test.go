@@ -31,6 +31,8 @@ func (unavailableCustodianVerifier) VerifyCustodianReceipt(context.Context, stri
 type backupVectors struct {
 	Obligation             string `json:"obligation"`
 	ObligationDigest       string `json:"obligation_digest"`
+	ObligationSet          string `json:"obligation_set"`
+	ObligationSetDigest    string `json:"obligation_set_digest"`
 	CustodianReceipt       string `json:"custodian_receipt"`
 	CustodianReceiptDigest string `json:"custodian_receipt_digest"`
 	CompletionEvidence     string `json:"completion_evidence"`
@@ -47,16 +49,22 @@ func TestCanonicalBackupCompletionVectors(t *testing.T) {
 		t.Fatal("invalid vectors")
 	}
 	var obligation BackupObligation
+	var obligationSet BackupObligationSet
 	var receipt CustodianReceipt
 	var completion CompletionEvidence
 	var recovery BackupRecovery
 	_ = json.Unmarshal([]byte(vectors.Obligation), &obligation)
+	_ = json.Unmarshal([]byte(vectors.ObligationSet), &obligationSet)
 	_ = json.Unmarshal([]byte(vectors.CustodianReceipt), &receipt)
 	_ = json.Unmarshal([]byte(vectors.CompletionEvidence), &completion)
 	_ = json.Unmarshal([]byte(vectors.Recovery), &recovery)
 	canonical, digest, err := CanonicalBackupObligation(obligation)
 	if err != nil || string(canonical) != vectors.Obligation || digest != vectors.ObligationDigest {
 		t.Fatalf("obligation vector mismatch: %v %s %s", err, digest, canonical)
+	}
+	canonical, digest, err = CanonicalBackupObligationSet(obligationSet)
+	if err != nil || string(canonical) != vectors.ObligationSet || digest != vectors.ObligationSetDigest {
+		t.Fatalf("obligation-set vector mismatch: %v %s %s", err, digest, canonical)
 	}
 	canonical, digest, signing, err := CanonicalCustodianReceipt(receipt)
 	if err != nil || string(canonical) != vectors.CustodianReceipt || digest != vectors.CustodianReceiptDigest || string(signing[:len(custodianReceiptSignDomain)]) != custodianReceiptSignDomain {
