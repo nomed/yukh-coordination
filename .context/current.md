@@ -55,8 +55,8 @@
 - Next action: review and merge #174, then request renewed time-critical Step-5
   approval against the rebound packet while the server leaf remains valid;
   rotate first if the safe execution window is no longer sufficient. Separately
-  connect the client executable to accepted bootstrap, custody and receipt
-  verification adapters. Real backup providers, lifecycle workers,
+  connect the client executable to the accepted bootstrap exchange, concrete
+  custody and receipt verification adapters. Real backup providers, lifecycle workers,
   target pull, Kubernetes credentials and objects, Step 5, operational
   completion, worker, physical media sanitization, traffic, Matrix, MCP live
   use and production use remain separately gated

@@ -928,6 +928,17 @@ plaintext session store, permissive receipt verifier or insecure TLS profile.
 Bootstrap, credential custody, watch and live network composition remain
 required before the process is usable against a relay.
 
+### RFC-0014 client bootstrap saga review — 2026-08-05
+
+Issue #6 composes the neutral bootstrap transaction across one explicit signer
+store, external-token source, relay issuer and credential store. Success is
+reported only after CAS persistence, exact reload and signer/thumbprint reopen.
+
+A newly created signer is retired only when failure occurs before the relay
+exchange. Once the exchange begins, ambiguity retains the signer and never
+claims a usable session. Tokens, revisions and private keys remain behind their
+closed adapter boundaries and are never formatted or returned.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
