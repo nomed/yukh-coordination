@@ -525,6 +525,26 @@ destroyed after provider verification. Rebinding artifact evidence grants no
 target pull, Kubernetes mutation, Step 5, MCP request or traffic authority. A
 fresh owner approval against the complete packet remains mandatory.
 
+### RFC-0022 non-root runtime-directory closure — 2026-08-05
+
+Renewed Step-5 execution exposed that a kubelet-owned writable volume root
+cannot itself satisfy both non-root write access and the launcher's private
+output-parent rule. Issue #182 keeps the volume root outside the trusted config
+boundary and permits the launcher to create exactly one absent UID-owned
+mode-`0700` child beneath an exact mode-`0770`, effective-GID-owned mount root.
+An existing private child must have the executing UID and exact mode `0700`.
+
+The child may contain only the expected rendered output or be empty. Symlinks,
+wrong mode or owner, world-writable mount roots, unexpected entries and changed
+or partial output fail closed. The mount remains visible only to Coordination;
+the NATS container does not mount it. The launcher then retains its mode-`0400`
+same-directory atomic render and exact-restart behavior.
+
+This closes ownership without a root launcher, init image, shell, capability,
+privilege escalation or relaxed output mode. The changed executable and OCI
+bytes require another reproducible registry/packet binding before Step 5 may
+resume. It grants no credential, listener, MCP traffic or Step-7 authority.
+
 ### Accepted RFC-0024 offline trust-ceremony impact — 2026-08-04
 
 RFC-0024 identifies a gate-ordering risk: fabricating or prematurely
