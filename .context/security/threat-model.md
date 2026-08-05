@@ -720,9 +720,13 @@ after its immutable deadline, or a later distinct success after failure remains
 an incident: append-only evidence cannot overwrite it or auto-authorize
 completion. Incident resolution requires a future accepted contract.
 
-The recovery result exposes only closed status, reason and custody domains. It
-cannot carry provider paths, endpoints, accounts, credentials, arbitrary
-responses or backup content. This increment adds no SQLite schema or adapter,
+The recovery result exposes only closed status and an ordered bounded list of
+per-domain findings. Mixed failure and deadline incidents cannot overwrite one
+another. Public verification authority unavailability remains a recoverable
+finding and is never mislabeled as contract corruption; invalid signatures and
+cross-bound evidence still fail closed. The result cannot carry provider paths,
+endpoints, accounts, credentials, arbitrary responses or backup content. This
+increment adds no SQLite schema or adapter,
 provider call, backup deletion, audit write, worker, scheduler, restore action,
 physical sanitization, HTTP/SSE/client authority, executable, deployment,
 JetStream lifecycle, Matrix, MCP or production use.

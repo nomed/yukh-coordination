@@ -3,17 +3,39 @@
   "$id":"https://yukh.dev/coordination/schema/transcript-lifecycle-backup-recovery-0.1.schema.json",
   "title":"Yukh transcript lifecycle backup recovery 0.1",
   "type":"object","additionalProperties":false,
-  "required":["profile","operation_id","intent_digest","status","reason","domains"],
+  "required":["profile","operation_id","intent_digest","status","findings"],
   "properties":{
     "profile":{"const":"yukh-transcript-lifecycle-backup-recovery/v0.1"},
     "operation_id":{"$ref":"#/$defs/uuidv7"},"intent_digest":{"$ref":"#/$defs/digest"},
     "status":{"enum":["pending","incident","corrupt","completable"]},
-    "reason":{"enum":["evidence_missing","receipt_failed","deadline_missed","contradictory_evidence","invalid_evidence","all_satisfied"]},
-    "domains":{"type":"array","maxItems":3,"uniqueItems":true,"items":{"enum":["event","identity","security_audit"]}}
+    "findings":{"$ref":"#/$defs/orderedFindings"}
   },
   "allOf":[
-    {"if":{"properties":{"status":{"const":"completable"}}},"then":{"properties":{"reason":{"const":"all_satisfied"},"domains":{"maxItems":0}}}},
-    {"if":{"not":{"properties":{"status":{"const":"completable"}},"required":["status"]}},"then":{"properties":{"reason":{"not":{"const":"all_satisfied"}}}}}
+    {"if":{"properties":{"status":{"const":"completable"}},"required":["status"]},"then":{"properties":{"findings":{"maxItems":0}}}},
+    {"if":{"properties":{"status":{"const":"pending"}},"required":["status"]},"then":{"properties":{"findings":{"minItems":1,"items":{"$ref":"#/$defs/pendingFinding"}}}}},
+    {"if":{"properties":{"status":{"const":"incident"}},"required":["status"]},"then":{"properties":{"findings":{"minItems":1,"items":{"$ref":"#/$defs/activeFinding"},"contains":{"$ref":"#/$defs/incidentFinding"},"minContains":1}}}},
+    {"if":{"properties":{"status":{"const":"corrupt"}},"required":["status"]},"then":{"properties":{"findings":{"items":{"$ref":"#/$defs/corruptFinding"}}}}}
   ],
-  "$defs":{"digest":{"type":"string","pattern":"^sha-256:[0-9a-f]{64}$"},"uuidv7":{"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"}}
+  "$defs":{
+    "digest":{"type":"string","pattern":"^sha-256:[0-9a-f]{64}$"},
+    "uuidv7":{"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "finding":{"type":"object","additionalProperties":false,"required":["domain","reason"],"properties":{"domain":{"enum":["event","identity","security_audit"]},"reason":{"enum":["evidence_missing","verification_unavailable","receipt_failed","deadline_missed","contradictory_evidence","invalid_evidence"]}}},
+    "pendingFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"reason":{"enum":["evidence_missing","verification_unavailable"]}}}]},
+    "activeFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"reason":{"enum":["evidence_missing","verification_unavailable","receipt_failed","deadline_missed","contradictory_evidence"]}}}]},
+    "incidentFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"reason":{"enum":["receipt_failed","deadline_missed","contradictory_evidence"]}}}]},
+    "corruptFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"reason":{"enum":["contradictory_evidence","invalid_evidence"]}}}]},
+    "eventFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"domain":{"const":"event"}}}]},
+    "identityFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"domain":{"const":"identity"}}}]},
+    "auditFinding":{"allOf":[{"$ref":"#/$defs/finding"},{"properties":{"domain":{"const":"security_audit"}}}]},
+    "orderedFindings":{"anyOf":[
+      {"type":"array","maxItems":0},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/eventFinding"}],"items":false},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/identityFinding"}],"items":false},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/auditFinding"}],"items":false},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/eventFinding"},{"$ref":"#/$defs/identityFinding"}],"items":false},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/eventFinding"},{"$ref":"#/$defs/auditFinding"}],"items":false},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/identityFinding"},{"$ref":"#/$defs/auditFinding"}],"items":false},
+      {"type":"array","prefixItems":[{"$ref":"#/$defs/eventFinding"},{"$ref":"#/$defs/identityFinding"},{"$ref":"#/$defs/auditFinding"}],"items":false}
+    ]}
+  }
 }

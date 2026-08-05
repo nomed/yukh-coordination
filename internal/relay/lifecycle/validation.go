@@ -179,25 +179,35 @@ func ValidateBackupRecovery(value BackupRecovery) error {
 		return ErrInvalidContract
 	}
 	validStatus := value.Status == RecoveryPending || value.Status == RecoveryIncident || value.Status == RecoveryCorrupt || value.Status == RecoveryCompletable
-	validReason := value.Reason == RecoveryEvidenceMissing || value.Reason == RecoveryReceiptFailed || value.Reason == RecoveryDeadlineMissed || value.Reason == RecoveryContradictoryEvidence || value.Reason == RecoveryInvalidEvidence || value.Reason == RecoveryAllSatisfied
-	if !validStatus || !validReason || len(value.Domains) > 3 {
+	if !validStatus || len(value.Findings) > 3 {
 		return ErrInvalidContract
 	}
 	last := -1
-	for _, domain := range value.Domains {
-		index := indexDomain(domain)
-		if !validBackupDomain(domain) || index <= last {
+	for _, finding := range value.Findings {
+		index := indexDomain(finding.Domain)
+		validReason := finding.Reason == RecoveryEvidenceMissing || finding.Reason == RecoveryVerificationUnavailable || finding.Reason == RecoveryReceiptFailed || finding.Reason == RecoveryDeadlineMissed || finding.Reason == RecoveryContradictoryEvidence || finding.Reason == RecoveryInvalidEvidence
+		if !validBackupDomain(finding.Domain) || !validReason || index <= last {
+			return ErrInvalidContract
+		}
+		if value.Status == RecoveryPending && finding.Reason != RecoveryEvidenceMissing && finding.Reason != RecoveryVerificationUnavailable ||
+			value.Status == RecoveryIncident && finding.Reason == RecoveryInvalidEvidence ||
+			value.Status == RecoveryCorrupt && finding.Reason != RecoveryInvalidEvidence && finding.Reason != RecoveryContradictoryEvidence {
 			return ErrInvalidContract
 		}
 		last = index
 	}
-	if value.Status == RecoveryCompletable && (value.Reason != RecoveryAllSatisfied || len(value.Domains) != 0) || value.Status != RecoveryCompletable && value.Reason == RecoveryAllSatisfied {
+	if value.Status == RecoveryCompletable && len(value.Findings) != 0 ||
+		(value.Status == RecoveryPending || value.Status == RecoveryIncident) && len(value.Findings) == 0 {
 		return ErrInvalidContract
 	}
-	if value.Status == RecoveryPending && (value.Reason != RecoveryEvidenceMissing || len(value.Domains) == 0) ||
-		value.Status == RecoveryIncident && (value.Reason != RecoveryReceiptFailed && value.Reason != RecoveryDeadlineMissed && value.Reason != RecoveryContradictoryEvidence || len(value.Domains) == 0) ||
-		value.Status == RecoveryCorrupt && value.Reason != RecoveryInvalidEvidence && value.Reason != RecoveryContradictoryEvidence {
-		return ErrInvalidContract
+	if value.Status == RecoveryIncident {
+		hasIncident := false
+		for _, finding := range value.Findings {
+			hasIncident = hasIncident || finding.Reason == RecoveryReceiptFailed || finding.Reason == RecoveryDeadlineMissed || finding.Reason == RecoveryContradictoryEvidence
+		}
+		if !hasIncident {
+			return ErrInvalidContract
+		}
 	}
 	return nil
 }

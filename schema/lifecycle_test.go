@@ -106,4 +106,22 @@ func TestBackupCompletionSchemasAcceptIndependentVectors(t *testing.T) {
 			t.Fatalf("%s accepted provider detail", name)
 		}
 	}
+	recoverySchema, err := compiler.Compile("https://yukh.dev/coordination/schema/transcript-lifecycle-backup-recovery-0.1.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := map[string]any{"profile": "yukh-transcript-lifecycle-backup-recovery/v0.1", "operation_id": "0198cf64-cc00-7000-8000-000000000001", "intent_digest": "sha-256:" + strings.Repeat("a", 64), "status": "incident"}
+	base["findings"] = []any{map[string]any{"domain": "event", "reason": "receipt_failed"}, map[string]any{"domain": "identity", "reason": "deadline_missed"}}
+	if err := recoverySchema.Validate(base); err != nil {
+		t.Fatalf("mixed recovery rejected: %v", err)
+	}
+	base["findings"] = []any{map[string]any{"domain": "identity", "reason": "deadline_missed"}, map[string]any{"domain": "event", "reason": "receipt_failed"}}
+	if recoverySchema.Validate(base) == nil {
+		t.Fatal("recovery schema accepted reversed findings")
+	}
+	base["status"] = "pending"
+	base["findings"] = []any{map[string]any{"domain": "event", "reason": "receipt_failed"}}
+	if recoverySchema.Validate(base) == nil {
+		t.Fatal("pending recovery accepted terminal incident reason")
+	}
 }

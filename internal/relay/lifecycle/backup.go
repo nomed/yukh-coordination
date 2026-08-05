@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 )
 
 type RecoveryStatus string
@@ -17,23 +18,27 @@ const (
 type RecoveryReason string
 
 const (
-	RecoveryEvidenceMissing       RecoveryReason = "evidence_missing"
-	RecoveryReceiptFailed         RecoveryReason = "receipt_failed"
-	RecoveryDeadlineMissed        RecoveryReason = "deadline_missed"
-	RecoveryContradictoryEvidence RecoveryReason = "contradictory_evidence"
-	RecoveryInvalidEvidence       RecoveryReason = "invalid_evidence"
-	RecoveryAllSatisfied          RecoveryReason = "all_satisfied"
+	RecoveryEvidenceMissing         RecoveryReason = "evidence_missing"
+	RecoveryReceiptFailed           RecoveryReason = "receipt_failed"
+	RecoveryDeadlineMissed          RecoveryReason = "deadline_missed"
+	RecoveryContradictoryEvidence   RecoveryReason = "contradictory_evidence"
+	RecoveryInvalidEvidence         RecoveryReason = "invalid_evidence"
+	RecoveryVerificationUnavailable RecoveryReason = "verification_unavailable"
 )
+
+type RecoveryFinding struct {
+	Domain BackupDomain   `json:"domain"`
+	Reason RecoveryReason `json:"reason"`
+}
 
 // BackupRecovery is deliberately bounded: it carries only closed state and
 // custody domains, never provider responses, paths, accounts or payload.
 type BackupRecovery struct {
-	Profile      string         `json:"profile"`
-	OperationID  string         `json:"operation_id"`
-	IntentDigest string         `json:"intent_digest"`
-	Status       RecoveryStatus `json:"status"`
-	Reason       RecoveryReason `json:"reason"`
-	Domains      []BackupDomain `json:"domains"`
+	Profile      string            `json:"profile"`
+	OperationID  string            `json:"operation_id"`
+	IntentDigest string            `json:"intent_digest"`
+	Status       RecoveryStatus    `json:"status"`
+	Findings     []RecoveryFinding `json:"findings"`
 }
 
 func CloneBackupObligation(value BackupObligation) BackupObligation { return value }
@@ -43,7 +48,7 @@ func CloneCompletionEvidence(value CompletionEvidence) CompletionEvidence {
 	return value
 }
 func CloneBackupRecovery(value BackupRecovery) BackupRecovery {
-	value.Domains = append([]BackupDomain(nil), value.Domains...)
+	value.Findings = append([]RecoveryFinding(nil), value.Findings...)
 	return value
 }
 
@@ -57,6 +62,9 @@ func ValidateCustodianReceiptSignature(ctx context.Context, verifier CustodianRe
 	}
 	signature, _ := base64.RawURLEncoding.DecodeString(value.DetachedSignature)
 	if err := verifier.VerifyCustodianReceipt(ctx, value.VerificationKeyID, value.SignatureAlgorithm, signing, signature); err != nil {
+		if errors.Is(err, ErrUnavailable) {
+			return ErrUnavailable
+		}
 		return ErrInvalidContract
 	}
 	return nil
@@ -93,69 +101,81 @@ func ValidateCompletionRetry(original, retry CompletionEvidence) error {
 // incident-resolution contract.
 func ClassifyBackupRecovery(ctx context.Context, reference OperationReference, obligations []BackupObligation, receipts []CustodianReceipt, verifier CustodianReceiptVerifier) BackupRecovery {
 	want := []BackupDomain{EventBackupDomain, IdentityBackupDomain, AuditBackupDomain}
-	result := func(status RecoveryStatus, reason RecoveryReason, domains []BackupDomain) BackupRecovery {
-		return BackupRecovery{BackupRecoveryProfile, reference.OperationID, reference.IntentDigest, status, reason, domains}
+	result := func(status RecoveryStatus, findings []RecoveryFinding) BackupRecovery {
+		return BackupRecovery{BackupRecoveryProfile, reference.OperationID, reference.IntentDigest, status, findings}
 	}
 	if ValidateOperationReference(reference) != nil || len(obligations) != 3 {
-		return result(RecoveryCorrupt, RecoveryInvalidEvidence, nil)
+		return result(RecoveryCorrupt, nil)
 	}
 	digests := make(map[BackupDomain]string, 3)
 	deadlines := make(map[BackupDomain]string, 3)
 	for i, obligation := range obligations {
 		_, digest, err := CanonicalBackupObligation(obligation)
 		if err != nil || obligation.Domain != want[i] || obligation.OperationID != reference.OperationID || obligation.IntentDigest != reference.IntentDigest || i > 0 && obligation.PolicyDigest != obligations[0].PolicyDigest {
-			return result(RecoveryCorrupt, RecoveryInvalidEvidence, nil)
+			return result(RecoveryCorrupt, nil)
 		}
 		digests[obligation.Domain], deadlines[obligation.Domain] = digest, obligation.Deadline
 	}
 	seen := make(map[BackupDomain]CustodianReceipt, 3)
-	incidents := make(map[BackupDomain]bool, 3)
-	incidentReason := RecoveryReceiptFailed
+	incidents := make(map[BackupDomain]RecoveryReason, 3)
+	pending := make(map[BackupDomain]RecoveryReason, 3)
 	receiptIDs := make(map[string]BackupDomain, len(receipts))
 	for _, receipt := range receipts {
+		if !validBackupDomain(receipt.Domain) {
+			return result(RecoveryCorrupt, nil)
+		}
 		if domain, exists := receiptIDs[receipt.ReceiptID]; exists && domain != receipt.Domain {
-			return result(RecoveryCorrupt, RecoveryContradictoryEvidence, nil)
+			return result(RecoveryCorrupt, nil)
 		}
 		receiptIDs[receipt.ReceiptID] = receipt.Domain
 		obligation := obligations[indexDomain(receipt.Domain)]
-		if ValidateReceiptObligation(receipt, obligation, digests[receipt.Domain]) != nil || ValidateCustodianReceiptSignature(ctx, verifier, receipt) != nil {
-			return result(RecoveryCorrupt, RecoveryInvalidEvidence, []BackupDomain{receipt.Domain})
+		if ValidateReceiptObligation(receipt, obligation, digests[receipt.Domain]) != nil {
+			return result(RecoveryCorrupt, []RecoveryFinding{{receipt.Domain, RecoveryInvalidEvidence}})
+		}
+		if signatureErr := ValidateCustodianReceiptSignature(ctx, verifier, receipt); signatureErr != nil {
+			if errors.Is(signatureErr, ErrUnavailable) {
+				pending[receipt.Domain] = RecoveryVerificationUnavailable
+				continue
+			}
+			return result(RecoveryCorrupt, []RecoveryFinding{{receipt.Domain, RecoveryInvalidEvidence}})
 		}
 		if previous, ok := seen[receipt.Domain]; ok {
 			if ValidateCustodianReceiptRetry(previous, receipt) != nil {
-				incidents[receipt.Domain] = true
-				incidentReason = RecoveryContradictoryEvidence
+				incidents[receipt.Domain] = RecoveryContradictoryEvidence
 			}
 			continue
 		}
 		seen[receipt.Domain] = receipt
 		if receipt.Outcome == BackupFailed {
-			incidents[receipt.Domain] = true
+			incidents[receipt.Domain] = RecoveryReceiptFailed
 		}
 		if receipt.Outcome == BackupSucceeded && receipt.EvidenceTime > deadlines[receipt.Domain] {
-			incidents[receipt.Domain] = true
-			if incidentReason != RecoveryContradictoryEvidence {
-				incidentReason = RecoveryDeadlineMissed
-			}
+			incidents[receipt.Domain] = RecoveryDeadlineMissed
 		}
 	}
-	var incidentDomains, missing []BackupDomain
+	var findings []RecoveryFinding
+	hasIncident := false
 	for _, domain := range want {
-		if incidents[domain] {
-			incidentDomains = append(incidentDomains, domain)
+		if reason, found := incidents[domain]; found {
+			findings = append(findings, RecoveryFinding{domain, reason})
+			hasIncident = true
+			continue
+		}
+		if reason, found := pending[domain]; found {
+			findings = append(findings, RecoveryFinding{domain, reason})
 			continue
 		}
 		if _, ok := seen[domain]; !ok {
-			missing = append(missing, domain)
+			findings = append(findings, RecoveryFinding{domain, RecoveryEvidenceMissing})
 		}
 	}
-	if len(incidentDomains) > 0 {
-		return result(RecoveryIncident, incidentReason, incidentDomains)
+	if hasIncident {
+		return result(RecoveryIncident, findings)
 	}
-	if len(missing) > 0 {
-		return result(RecoveryPending, RecoveryEvidenceMissing, missing)
+	if len(findings) > 0 {
+		return result(RecoveryPending, findings)
 	}
-	return result(RecoveryCompletable, RecoveryAllSatisfied, []BackupDomain{})
+	return result(RecoveryCompletable, []RecoveryFinding{})
 }
 
 func indexDomain(domain BackupDomain) int {

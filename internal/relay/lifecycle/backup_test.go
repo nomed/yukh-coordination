@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,12 @@ func (acceptingCustodianVerifier) VerifyCustodianReceipt(_ context.Context, key,
 		return ErrInvalidContract
 	}
 	return nil
+}
+
+type unavailableCustodianVerifier struct{}
+
+func (unavailableCustodianVerifier) VerifyCustodianReceipt(context.Context, string, string, []byte, []byte) error {
+	return ErrUnavailable
 }
 
 type backupVectors struct {
@@ -71,7 +78,7 @@ func TestRecoveryRequiresThreeTimelyVerifiedSuccesses(t *testing.T) {
 	ctx := context.Background()
 	verifier := acceptingCustodianVerifier{}
 	reference := OperationReference{obligations[0].OperationID, obligations[0].IntentDigest}
-	if got := ClassifyBackupRecovery(ctx, reference, obligations, receipts[:2], verifier); got.Status != RecoveryPending || len(got.Domains) != 1 || got.Domains[0] != AuditBackupDomain {
+	if got := ClassifyBackupRecovery(ctx, reference, obligations, receipts[:2], verifier); got.Status != RecoveryPending || len(got.Findings) != 1 || got.Findings[0] != (RecoveryFinding{AuditBackupDomain, RecoveryEvidenceMissing}) {
 		t.Fatalf("pending = %#v", got)
 	}
 	if got := ClassifyBackupRecovery(ctx, reference, obligations, receipts, verifier); got.Status != RecoveryCompletable || ValidateBackupRecovery(got) != nil {
@@ -79,16 +86,16 @@ func TestRecoveryRequiresThreeTimelyVerifiedSuccesses(t *testing.T) {
 	}
 	failed := append([]CustodianReceipt(nil), receipts...)
 	failed[0].Outcome = BackupFailed
-	if got := ClassifyBackupRecovery(ctx, reference, obligations, failed, verifier); got.Status != RecoveryIncident || got.Reason != RecoveryReceiptFailed {
+	if got := ClassifyBackupRecovery(ctx, reference, obligations, failed, verifier); got.Status != RecoveryIncident || got.Findings[0] != (RecoveryFinding{EventBackupDomain, RecoveryReceiptFailed}) {
 		t.Fatalf("failure = %#v", got)
 	}
 	late := append([]CustodianReceipt(nil), receipts...)
 	late[1].EvidenceTime = "2026-08-06T00:00:00.000Z"
-	if got := ClassifyBackupRecovery(ctx, reference, obligations, late, verifier); got.Status != RecoveryIncident || got.Reason != RecoveryDeadlineMissed {
+	if got := ClassifyBackupRecovery(ctx, reference, obligations, late, verifier); got.Status != RecoveryIncident || got.Findings[0] != (RecoveryFinding{IdentityBackupDomain, RecoveryDeadlineMissed}) {
 		t.Fatalf("late = %#v", got)
 	}
-	if got := ClassifyBackupRecovery(ctx, reference, obligations, receipts, nil); got.Status != RecoveryCorrupt {
-		t.Fatalf("unverified = %#v", got)
+	if got := ClassifyBackupRecovery(ctx, reference, obligations, receipts, unavailableCustodianVerifier{}); got.Status != RecoveryPending || len(got.Findings) != 3 || got.Findings[0].Reason != RecoveryVerificationUnavailable {
+		t.Fatalf("unavailable verifier = %#v", got)
 	}
 }
 
@@ -100,8 +107,19 @@ func TestLaterSuccessCannotOverwriteFailure(t *testing.T) {
 	later.ReceiptID = "0198cf64-cc00-7000-8000-000000000099"
 	later.EvidenceTime = "2026-08-04T01:00:00.000Z"
 	got := ClassifyBackupRecovery(context.Background(), OperationReference{obligations[0].OperationID, obligations[0].IntentDigest}, obligations, append([]CustodianReceipt{failure, later}, receipts[1:]...), acceptingCustodianVerifier{})
-	if got.Status != RecoveryIncident || got.Reason != RecoveryContradictoryEvidence {
+	if got.Status != RecoveryIncident || got.Findings[0] != (RecoveryFinding{EventBackupDomain, RecoveryContradictoryEvidence}) {
 		t.Fatalf("later success = %#v", got)
+	}
+}
+
+func TestRecoveryPreservesMixedIncidentReasonsByDomain(t *testing.T) {
+	obligations, receipts := backupFixture(t)
+	receipts[0].Outcome = BackupFailed
+	receipts[1].EvidenceTime = "2026-08-06T00:00:00.000Z"
+	got := ClassifyBackupRecovery(context.Background(), OperationReference{obligations[0].OperationID, obligations[0].IntentDigest}, obligations, receipts, acceptingCustodianVerifier{})
+	want := []RecoveryFinding{{EventBackupDomain, RecoveryReceiptFailed}, {IdentityBackupDomain, RecoveryDeadlineMissed}}
+	if got.Status != RecoveryIncident || !reflect.DeepEqual(got.Findings, want) || ValidateBackupRecovery(got) != nil {
+		t.Fatalf("mixed incident = %#v", got)
 	}
 }
 

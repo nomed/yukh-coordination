@@ -19,6 +19,11 @@
 - exact retry, cross-binding and clone helpers;
 - deterministic bounded recovery classification.
 
+Review correction records recovery as ordered per-domain findings so mixed
+failure/deadline incidents retain both causes. A public verifier returning the
+closed unavailable sentinel produces recoverable `verification_unavailable`
+instead of permanent contract corruption.
+
 ## Incident rule frozen
 
 A failure receipt never satisfies an obligation. A success after the immutable
