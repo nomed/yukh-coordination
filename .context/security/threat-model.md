@@ -864,6 +864,24 @@ host. This increment adds no executable, ambient configuration, plaintext
 credential fallback, retry, recipient selection, ownership inference, Matrix
 bridge or deployment.
 
+### RFC-0013 four-agent runtime qualification review — 2026-08-05
+
+Issue #7 composes four independently authenticated CLI runners through the
+real TLS handler, authorization boundary, transition validator, append service
+and memory Store. The complete join, claim, progress, question, answer, review,
+verdict, handoff, successor claim, release and leave sequence produces fifteen
+durable records with verified receipts and no user-mediated message copying.
+
+The qualification exposed and closes one transition defect: an accepted
+handoff successor starts a new root correlation while causally referencing the
+accepted offer. Cross-correlation remains forbidden for every other event, and
+the successor is admitted only for the exact recipient of the single accepted
+handoff.
+
+This is a hermetic in-process qualification. It adds no insecure server mode,
+credential fallback, deployment or production authority and does not yet claim
+the required two isolated operating-system processes.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

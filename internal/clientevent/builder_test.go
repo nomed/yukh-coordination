@@ -89,3 +89,11 @@ func TestRejectsInvalidConfigurationAndPayloadBeforePublication(t *testing.T) {
 		t.Fatalf("invalid claim: %v", err)
 	}
 }
+
+func TestBuildJSONClaim(t *testing.T) {
+	b := builder(t)
+	raw := []byte(`{"work_uri":"https://github.com/nomed/yukh-coordination/issues/7","generation":"0","scope":"implementation","boundary":"qualification","expected_active_claims":[]}`)
+	if _, err := b.BuildJSON("work claim", raw); err != nil {
+		t.Fatal(err)
+	}
+}
