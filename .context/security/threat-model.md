@@ -813,6 +813,19 @@ The builders do not infer ownership, choose work, publish events or access
 credentials. Remaining signal families, CLI exposure, Matrix and deployment
 remain separate increments.
 
+### RFC-0013 conversation and handoff construction review — 2026-08-05
+
+Issue #6 completes closed builders for question/answer, review/verdict,
+handoff offer/accept, release and leave. Root correlations and causal event
+references remain explicit. Handoff boundary and empty evidence-set digests
+are derived canonically rather than trusted from caller input; acceptance must
+repeat the exact offered digests. Every complete envelope passes the accepted
+schema and semantic validator.
+
+The builders exchange statements only. They do not select recipients, resolve
+claims, accept work, publish, access credentials or grant authority. CLI
+exposure, live qualification, Matrix and deployment remain separately gated.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
