@@ -136,6 +136,36 @@ func TestClosedConfigAndPathValidation(t *testing.T) {
 	if err != nil || config.ValidatePaths() != nil {
 		t.Fatalf("valid config rejected: parse=%v validate=%v", err, config.ValidatePaths())
 	}
+	value.PublicBind = PodIPPublicBindSlot
+	template, _ := json.Marshal(value)
+	rendered, err := RenderPodIPConfig(template, []byte("10.42.1.9\n"))
+	if err != nil {
+		t.Fatalf("PodIP render failed: %v", err)
+	}
+	renderedConfig, err := ParseConfig(rendered)
+	if err != nil || renderedConfig.PublicBind() != "10.42.1.9:8443" {
+		t.Fatal("rendered bind was not closed")
+	}
+	for _, invalid := range [][]byte{nil, []byte("127.0.0.1"), []byte("8.8.8.8"), []byte("0.0.0.0"), []byte("10.42.01.9"), []byte("10.42.1.9\n\n"), []byte(" 10.42.1.9"), []byte("not-an-ip")} {
+		if _, err := RenderPodIPConfig(template, invalid); err == nil {
+			t.Fatalf("accepted invalid PodIP %q", invalid)
+		}
+	}
+	value.PublicBind = "10.0.0.8:8443"
+	withoutSlot, _ := json.Marshal(value)
+	if _, err := RenderPodIPConfig(withoutSlot, []byte("10.42.1.9")); err == nil {
+		t.Fatal("accepted template without typed slot")
+	}
+	duplicateSlot := append([]byte(`{"public_bind":"${YUKH_POD_IP}:8443",`), template[1:]...)
+	if _, err := RenderPodIPConfig(duplicateSlot, []byte("10.42.1.9")); err == nil {
+		t.Fatal("accepted duplicate typed slot")
+	}
+	unknownTemplate := append(template[:len(template)-1], []byte(`,"other_slot":"${YUKH_POD_IP}"}`)...)
+	if _, err := RenderPodIPConfig(unknownTemplate, []byte("10.42.1.9")); err == nil {
+		t.Fatal("accepted unknown placeholder field")
+	}
+	value.PublicBind = "10.0.0.8:8443"
+	raw, _ = json.Marshal(value)
 	if _, err := ParseConfig(append(raw[:len(raw)-1], []byte(`,"unexpected":true}`)...)); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unknown field error = %v", err)
 	}

@@ -20,6 +20,7 @@ import (
 )
 
 const Profile = "yukh-coordination/private-primitives-staging-v1"
+const PodIPPublicBindSlot = "${YUKH_POD_IP}:8443"
 
 var (
 	ErrInvalid         = errors.New("private primitives staging: invalid")
@@ -58,6 +59,40 @@ type configJSON struct {
 }
 
 type Config struct{ value configJSON }
+
+// RenderPodIPConfig closes the sole Kubernetes runtime value without adding a
+// shell, environment expansion or a second configuration parser to the image.
+func RenderPodIPConfig(raw, podIPRaw []byte) ([]byte, error) {
+	if len(raw) == 0 || len(raw) > 16_384 || !closedJSONObject(raw) || len(podIPRaw) == 0 || len(podIPRaw) > 64 {
+		return nil, ErrInvalid
+	}
+	var value configJSON
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&value) != nil || value.PublicBind != PodIPPublicBindSlot {
+		return nil, ErrInvalid
+	}
+	ipText := string(podIPRaw)
+	if strings.HasSuffix(ipText, "\n") {
+		ipText = strings.TrimSuffix(ipText, "\n")
+	}
+	if ipText == "" || strings.TrimSpace(ipText) != ipText {
+		return nil, ErrInvalid
+	}
+	ip := net.ParseIP(ipText)
+	if ip == nil || !ip.IsPrivate() || ip.IsLoopback() || ip.String() != ipText {
+		return nil, ErrInvalid
+	}
+	value.PublicBind = net.JoinHostPort(ipText, "8443")
+	rendered, err := json.Marshal(value)
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	if _, err := ParseConfig(rendered); err != nil {
+		return nil, ErrInvalid
+	}
+	return append(rendered, '\n'), nil
+}
 
 // SecretDescriptors is constructed by the supervisor and is deliberately not
 // part of the serializable configuration surface.

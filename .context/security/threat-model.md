@@ -483,6 +483,30 @@ This review does not approve image publication, Secret creation, namespace or
 workload creation, bootstrap execution, listener exposure or traffic. Those
 remain behind the complete operator packet and explicit step-5 gate.
 
+### RFC-0022 Kubernetes PodIP closure review — 2026-08-05
+
+Issue #169 extends the same static descriptor launcher with one closed
+`service-kubernetes` mode. It reads one absolute, mode-checked configuration
+template and one absolute, mode-checked Downward-API PodIP file. The template
+must contain exactly the typed `${YUKH_POD_IP}:8443` public-bind slot; unknown
+or duplicate fields remain rejected by the existing closed JSON boundary.
+
+The renderer accepts only a canonical private, non-loopback IP, replaces only
+the typed public-bind field and revalidates the complete result through the
+existing service parser. It writes a same-directory mode-`0400` temporary file,
+syncs and atomically renames it. Exact restart output is accepted; a changed,
+empty or partial pre-existing output fails closed and is never overwritten.
+The public base URI, secret purposes, descriptor slots, fixed child executable,
+empty environment and descriptor cleanup are unchanged.
+
+This removes the runtime PodIP mismatch without a shell, init image, proxy,
+`hostNetwork` or second configuration parser. Residual risk remains the
+supervisor-owned writable output directory and Kubernetes's correct Downward
+API population; unsafe parents, symlinks, modes, public/wildcard/malformed IPs
+and ambiguous output deny startup. The source change supersedes the reviewed
+launcher and OCI bytes. Registry publication, packet rebinding, target pull,
+Kubernetes mutation, Step 5 and traffic require separate renewed authority.
+
 ### Accepted RFC-0024 offline trust-ceremony impact — 2026-08-04
 
 RFC-0024 identifies a gate-ordering risk: fabricating or prematurely
