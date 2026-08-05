@@ -2,11 +2,11 @@
 
 - Updated: 2026-08-05
 - Governing issue: #167
-- Last delivery pull request: #178
-- Active Coordination increments: #174 records the independently reproduced
-  and provider-verified PodIP-aware OCI/packet rebinding; #6 composes the client
-  process after #7 closed its two-process qualification. Step 5 remains stopped
-  pending review and renewed approval
+- Last delivery pull request: #181
+- Active Coordination increments: renewed RFC-0022 Step 5 is paused at #182
+  after the restricted namespace foundation and immutable target pull exposed
+  the non-root runtime-directory ownership gap; #6 composes the client process
+  after #7 closed its two-process qualification
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -52,9 +52,8 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review and merge #174, then request renewed time-critical Step-5
-  approval against the rebound packet while the server leaf remains valid;
-  rotate first if the safe execution window is no longer sufficient. Separately
+- Next action: review and merge #182, reproduce/rebind its superseding OCI and
+  reassess the server-leaf window before resuming Step 5. Separately
   connect the client executable to the accepted bootstrap exchange, concrete
   custody and receipt verification adapters. Real backup providers, lifecycle workers,
   target pull, Kubernetes credentials and objects, Step 5, operational

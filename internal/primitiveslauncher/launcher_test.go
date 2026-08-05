@@ -3,6 +3,7 @@ package primitiveslauncher
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,9 +108,17 @@ func TestProcessCloseIsIdempotent(t *testing.T) {
 
 func TestPrepareKubernetesServiceRendersPodIPAtomically(t *testing.T) {
 	directory := t.TempDir()
+	runtimeRoot := filepath.Join(directory, "runtime")
+	if err := os.Mkdir(runtimeRoot, 0o770); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(runtimeRoot, 0o770); err != nil {
+		t.Fatal(err)
+	}
 	template := filepath.Join(directory, "template.json")
 	podIP := filepath.Join(directory, "pod-ip")
-	output := filepath.Join(directory, "rendered.json")
+	privateRuntime := filepath.Join(runtimeRoot, "private")
+	output := filepath.Join(privateRuntime, "rendered.json")
 	nats := filepath.Join(directory, "nats.secret")
 	keyring := filepath.Join(directory, "keyring.secret")
 	value := map[string]any{
@@ -135,6 +144,10 @@ func TestPrepareKubernetesServiceRendersPodIPAtomically(t *testing.T) {
 	info, err := os.Stat(output)
 	if err != nil || info.Mode().Perm() != 0o400 {
 		t.Fatal("unsafe rendered config")
+	}
+	parentInfo, err := os.Stat(privateRuntime)
+	if err != nil || parentInfo.Mode().Perm() != 0o700 {
+		t.Fatal("private runtime directory was not closed")
 	}
 	rendered, _ := os.ReadFile(output)
 	config, err := primitivesstaging.ParseConfig(rendered)
@@ -281,6 +294,71 @@ func TestPrepareKubernetesServiceRejectsUnsafeRenderInputs(t *testing.T) {
 		if process, err := Prepare(arguments(paths)); err == nil {
 			process.Close()
 			t.Fatal("accepted duplicate render path")
+		}
+	})
+
+	t.Run("unsafe writable mount root", func(t *testing.T) {
+		paths, _ := newFixture(t)
+		mountRoot := filepath.Join(filepath.Dir(paths["output"]), "runtime")
+		if err := os.Mkdir(mountRoot, 0o777); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(mountRoot, 0o777); err != nil {
+			t.Fatal(err)
+		}
+		paths["output"] = filepath.Join(mountRoot, "private", "rendered.json")
+		if process, err := Prepare(arguments(paths)); err == nil {
+			process.Close()
+			t.Fatal("accepted world-writable mount root")
+		}
+		if _, err := os.Lstat(filepath.Dir(paths["output"])); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("created private directory under unsafe mount root")
+		}
+	})
+
+	t.Run("unsafe existing private directory", func(t *testing.T) {
+		paths, _ := newFixture(t)
+		private := filepath.Join(filepath.Dir(paths["output"]), "private")
+		if err := os.Mkdir(private, 0o770); err != nil {
+			t.Fatal(err)
+		}
+		paths["output"] = filepath.Join(private, "rendered.json")
+		if process, err := Prepare(arguments(paths)); err == nil {
+			process.Close()
+			t.Fatal("accepted group-writable private directory")
+		}
+	})
+
+	t.Run("symlink private directory", func(t *testing.T) {
+		paths, _ := newFixture(t)
+		target := filepath.Join(filepath.Dir(paths["output"]), "target")
+		private := filepath.Join(filepath.Dir(paths["output"]), "private")
+		if err := os.Mkdir(target, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, private); err != nil {
+			t.Fatal(err)
+		}
+		paths["output"] = filepath.Join(private, "rendered.json")
+		if process, err := Prepare(arguments(paths)); err == nil {
+			process.Close()
+			t.Fatal("accepted symlink private directory")
+		}
+	})
+
+	t.Run("ambiguous private directory", func(t *testing.T) {
+		paths, _ := newFixture(t)
+		private := filepath.Join(filepath.Dir(paths["output"]), "private")
+		if err := os.Mkdir(private, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(private, "unexpected"), []byte("state"), 0o400); err != nil {
+			t.Fatal(err)
+		}
+		paths["output"] = filepath.Join(private, "rendered.json")
+		if process, err := Prepare(arguments(paths)); err == nil {
+			process.Close()
+			t.Fatal("accepted ambiguous private directory")
 		}
 	})
 }

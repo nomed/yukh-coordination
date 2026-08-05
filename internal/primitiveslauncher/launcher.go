@@ -110,17 +110,16 @@ func renderKubernetesConfig(templatePath, podIPPath, outputPath string) error {
 	if err != nil {
 		return ErrInvalid
 	}
+	parent := filepath.Dir(outputPath)
+	if ensurePrivateOutputParent(parent, filepath.Base(outputPath)) != nil {
+		return ErrInvalid
+	}
 	if existing, err := readCheckedFile(outputPath, maxSecretBytes); err == nil {
 		if bytes.Equal(existing, rendered) {
 			return nil
 		}
 		return ErrInvalid
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return ErrInvalid
-	}
-	parent := filepath.Dir(outputPath)
-	info, err := os.Lstat(parent)
-	if err != nil || !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
 		return ErrInvalid
 	}
 	temporary, err := os.CreateTemp(parent, ".yukh-rendered-config-*")
@@ -143,6 +142,49 @@ func renderKubernetesConfig(templatePath, podIPPath, outputPath string) error {
 	}
 	ok = true
 	return nil
+}
+
+func ensurePrivateOutputParent(parent, outputName string) error {
+	if !exactAbsolute(parent) || outputName == "" || filepath.Base(outputName) != outputName {
+		return ErrInvalid
+	}
+	if info, err := os.Lstat(parent); err == nil {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || !info.IsDir() || info.Mode().Perm() != 0o700 || stat.Uid != uint32(os.Geteuid()) {
+			return ErrInvalid
+		}
+		entries, err := os.ReadDir(parent)
+		if err != nil || len(entries) > 1 || len(entries) == 1 && entries[0].Name() != outputName {
+			return ErrInvalid
+		}
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return ErrInvalid
+	}
+	mountRoot := filepath.Dir(parent)
+	info, err := os.Lstat(mountRoot)
+	stat, ok := infoSysStat(info)
+	if err != nil || !ok || !info.IsDir() || info.Mode().Perm() != 0o770 || stat.Gid != uint32(os.Getegid()) {
+		return ErrInvalid
+	}
+	if err := os.Mkdir(parent, 0o700); err != nil {
+		return ErrInvalid
+	}
+	info, err = os.Lstat(parent)
+	stat, ok = infoSysStat(info)
+	if err != nil || !ok || !info.IsDir() || info.Mode().Perm() != 0o700 || stat.Uid != uint32(os.Geteuid()) || stat.Gid != uint32(os.Getegid()) {
+		_ = os.Remove(parent)
+		return ErrInvalid
+	}
+	return nil
+}
+
+func infoSysStat(info os.FileInfo) (*syscall.Stat_t, bool) {
+	if info == nil {
+		return nil, false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return stat, ok
 }
 
 func readCheckedFile(path string, limit int64) ([]byte, error) {
