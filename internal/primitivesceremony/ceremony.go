@@ -26,6 +26,7 @@ import (
 )
 
 const Profile = "yukh-coordination/private-primitives-offline-ceremony-v1"
+const LeafRotationProfile = "yukh-coordination/private-primitives-leaf-rotation-v1"
 
 var ErrInvalid = errors.New("offline ceremony unavailable")
 
@@ -59,6 +60,169 @@ type receiptJSON struct {
 type Generator struct {
 	Now     func() time.Time
 	Entropy io.Reader
+}
+
+type leafRotationReceiptJSON struct {
+	LeafCertificateSHA256 string `json:"leaf_certificate_sha256"`
+	LeafExpiresAt         string `json:"leaf_expires_at"`
+	Profile               string `json:"profile"`
+	RootKeyID             string `json:"root_key_id"`
+	TLSAlgorithm          string `json:"tls_algorithm"`
+	TrustBundleSHA256     string `json:"trust_bundle_sha256"`
+}
+
+// RotateLeaf creates only a fresh server leaf under an existing RFC-0024 root.
+// Root material is read from exact, supervisor-controlled files and is never
+// copied into the output directory.
+func (generator Generator) RotateLeaf(raw []byte, rootPrivatePath, rootCertificatePath, output string) error {
+	config, err := parseConfig(raw)
+	if err != nil || !exactInput(rootPrivatePath, 0o400) || !exactInput(rootCertificatePath, 0o444) || !exactDirectory(output) {
+		return ErrInvalid
+	}
+	rootPrivateRaw, err := os.ReadFile(rootPrivatePath)
+	if err != nil || len(rootPrivateRaw) == 0 || len(rootPrivateRaw) > 16*1024 {
+		return ErrInvalid
+	}
+	rootCertificateRaw, err := os.ReadFile(rootCertificatePath)
+	if err != nil || len(rootCertificateRaw) == 0 || len(rootCertificateRaw) > 16*1024 {
+		return ErrInvalid
+	}
+	rootPrivate, root, err := parseRotationRoot(rootPrivateRaw, rootCertificateRaw)
+	if err != nil {
+		return ErrInvalid
+	}
+	now := generator.Now
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC().Truncate(time.Second) }
+	}
+	entropy := generator.Entropy
+	if entropy == nil {
+		entropy = rand.Reader
+	}
+	issued := now()
+	if issued.Location() != time.UTC || issued.Nanosecond() != 0 || root.NotBefore.After(issued) || !root.NotAfter.After(issued.Add(24*time.Hour)) {
+		return ErrInvalid
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), entropy)
+	if err != nil {
+		return ErrInvalid
+	}
+	leafSerial, err := serial(entropy)
+	if err != nil {
+		return ErrInvalid
+	}
+	leafTemplate := &x509.Certificate{SerialNumber: leafSerial, Subject: pkix.Name{CommonName: "Yukh private staging service"}, NotBefore: issued, NotAfter: issued.Add(24 * time.Hour), BasicConstraintsValid: true, KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, SignatureAlgorithm: x509.ECDSAWithSHA256}
+	if ip := net.ParseIP(config.ServerName); ip != nil {
+		leafTemplate.IPAddresses = []net.IP{ip}
+	} else {
+		leafTemplate.DNSNames = []string{config.ServerName}
+	}
+	leafDER, err := x509.CreateCertificate(entropy, leafTemplate, root, &leafKey.PublicKey, rootPrivate)
+	if err != nil {
+		return ErrInvalid
+	}
+	leafPrivateDER, err := x509.MarshalPKCS8PrivateKey(leafKey)
+	if err != nil {
+		return ErrInvalid
+	}
+	leafPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	receipt, err := canonical(leafRotationReceiptJSON{Profile: LeafRotationProfile, RootKeyID: config.RootKeyID, TLSAlgorithm: "ECDSA-P256-SHA256", TrustBundleSHA256: digest(rootCertificateRaw), LeafCertificateSHA256: digest(leafPEM), LeafExpiresAt: format(leafTemplate.NotAfter)})
+	if err != nil {
+		return ErrInvalid
+	}
+	entries := []outputEntry{{"leaf-private.pk8.pem", pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: leafPrivateDER}), 0o400}, {"leaf-cert.pem", leafPEM, 0o444}, {"leaf-rotation-receipt.json", receipt, 0o444}}
+	written := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		path := filepath.Join(output, entry.name)
+		if err := os.WriteFile(path, entry.value, entry.mode); err != nil {
+			_ = os.Remove(path)
+			for _, previous := range written {
+				_ = os.Remove(previous)
+			}
+			return ErrInvalid
+		}
+		written = append(written, path)
+	}
+	return nil
+}
+
+func VerifyLeafRotation(raw []byte, rootCertificatePath, output string) error {
+	config, err := parseConfig(raw)
+	if err != nil || !exactInput(rootCertificatePath, 0o444) || !filepath.IsAbs(output) || filepath.Clean(output) != output {
+		return ErrInvalid
+	}
+	rootRaw, err := os.ReadFile(rootCertificatePath)
+	if err != nil || len(rootRaw) == 0 || len(rootRaw) > 16*1024 {
+		return ErrInvalid
+	}
+	rootBlock, rest := pem.Decode(rootRaw)
+	if rootBlock == nil || rootBlock.Type != "CERTIFICATE" || len(bytes.TrimSpace(rest)) != 0 {
+		return ErrInvalid
+	}
+	root, err := x509.ParseCertificate(rootBlock.Bytes)
+	if err != nil || !root.IsCA || root.SignatureAlgorithm != x509.ECDSAWithSHA256 {
+		return ErrInvalid
+	}
+	read := func(name string) ([]byte, error) {
+		value, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil || len(value) == 0 || len(value) > 16*1024 {
+			return nil, ErrInvalid
+		}
+		return value, nil
+	}
+	leafRaw, err := read("leaf-cert.pem")
+	if err != nil {
+		return ErrInvalid
+	}
+	receiptRaw, err := read("leaf-rotation-receipt.json")
+	if err != nil {
+		return ErrInvalid
+	}
+	canonicalReceipt, err := jsoncanonicalizer.Transform(receiptRaw)
+	if err != nil || !bytes.Equal(receiptRaw, canonicalReceipt) {
+		return ErrInvalid
+	}
+	var receipt leafRotationReceiptJSON
+	decoder := json.NewDecoder(bytes.NewReader(receiptRaw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&receipt) != nil || decoder.Decode(&struct{}{}) != io.EOF || receipt.Profile != LeafRotationProfile || receipt.RootKeyID != config.RootKeyID || receipt.TLSAlgorithm != "ECDSA-P256-SHA256" || receipt.TrustBundleSHA256 != digest(rootRaw) || receipt.LeafCertificateSHA256 != digest(leafRaw) {
+		return ErrInvalid
+	}
+	leafBlock, leafRest := pem.Decode(leafRaw)
+	if leafBlock == nil || leafBlock.Type != "CERTIFICATE" || len(bytes.TrimSpace(leafRest)) != 0 {
+		return ErrInvalid
+	}
+	leaf, err := x509.ParseCertificate(leafBlock.Bytes)
+	if err != nil || leaf.SignatureAlgorithm != x509.ECDSAWithSHA256 || leaf.CheckSignatureFrom(root) != nil || format(leaf.NotAfter) != receipt.LeafExpiresAt || !leaf.NotAfter.Equal(leaf.NotBefore.Add(24*time.Hour)) || len(leaf.ExtKeyUsage) != 1 || leaf.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
+		return ErrInvalid
+	}
+	if ip := net.ParseIP(config.ServerName); ip != nil {
+		if len(leaf.IPAddresses) != 1 || !leaf.IPAddresses[0].Equal(ip) || len(leaf.DNSNames) != 0 {
+			return ErrInvalid
+		}
+	} else if len(leaf.DNSNames) != 1 || leaf.DNSNames[0] != config.ServerName || len(leaf.IPAddresses) != 0 {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func parseRotationRoot(privateRaw, certificateRaw []byte) (*ecdsa.PrivateKey, *x509.Certificate, error) {
+	privateBlock, privateRest := pem.Decode(privateRaw)
+	certificateBlock, certificateRest := pem.Decode(certificateRaw)
+	if privateBlock == nil || privateBlock.Type != "PRIVATE KEY" || len(bytes.TrimSpace(privateRest)) != 0 || certificateBlock == nil || certificateBlock.Type != "CERTIFICATE" || len(bytes.TrimSpace(certificateRest)) != 0 {
+		return nil, nil, ErrInvalid
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(privateBlock.Bytes)
+	private, ok := parsed.(*ecdsa.PrivateKey)
+	if err != nil || !ok || private.Curve != elliptic.P256() {
+		return nil, nil, ErrInvalid
+	}
+	certificate, err := x509.ParseCertificate(certificateBlock.Bytes)
+	public, ok := certificate.PublicKey.(*ecdsa.PublicKey)
+	if err != nil || !ok || !certificate.IsCA || certificate.SignatureAlgorithm != x509.ECDSAWithSHA256 || !private.PublicKey.Equal(public) {
+		return nil, nil, ErrInvalid
+	}
+	return private, certificate, nil
 }
 
 func (generator Generator) Generate(raw []byte, output string) error {
@@ -244,6 +408,13 @@ func exactDirectory(path string) bool {
 	}
 	entries, err := os.ReadDir(path)
 	return err == nil && len(entries) == 0
+}
+func exactInput(path string, mode os.FileMode) bool {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return false
+	}
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm() == mode
 }
 func identity(value string) bool {
 	if ip := net.ParseIP(value); ip != nil {

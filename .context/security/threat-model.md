@@ -731,6 +731,27 @@ provider call, backup deletion, audit write, worker, scheduler, restore action,
 physical sanitization, HTTP/SSE/client authority, executable, deployment,
 JetStream lifecycle, Matrix, MCP or production use.
 
+### RFC-0024 server-leaf rotation tooling review — 2026-08-05
+
+Issue #163 adds a leaf-only path to the existing offline ceremony executable.
+It accepts the already reviewed private configuration plus absolute,
+mode-checked root key and certificate inputs, proves that the P-256 private key
+matches the accepted CA certificate and refuses a root that cannot cover the
+complete new 24-hour validity interval. Root material never enters the output.
+
+The command creates exactly one fresh P-256 server key, one root-signed
+certificate for the unchanged exact DNS/IP identity and one canonical redacted
+receipt. A separate verifier binds the trust-bundle digest, root key ID, exact
+SAN shape, chain, algorithm, server-auth use, 24-hour bound and leaf digest.
+Unsafe modes, symlinks, malformed or mismatched roots, wrong identity, partial
+output and receipt/certificate tamper fail closed.
+
+This tooling does not itself open custody or replace a retained leaf. Private
+execution still requires a volatile network-isolated workspace, an atomic
+encrypted-custody replacement with rollback to the prior leaf, a fresh reopen
+checkpoint and plaintext destruction. It grants no trust-root or policy-key
+rotation, registry, target, Kubernetes, Step 5, MCP or traffic authority.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
