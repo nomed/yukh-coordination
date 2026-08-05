@@ -1,11 +1,11 @@
 # RFC-0022 private staging operator packet
 
-- Status: reconciled preparation candidate; provisioning forbidden
+- Status: complete review candidate; provisioning forbidden
 - Prepared: 2026-08-04
 - Reconciled: 2026-08-05
 - Governing RFC: RFC-0022
 - Governing issue: #136
-- Reconciliation issue: #158
+- Reconciliation issues: #158, #159
 - Deployment plan: `private-primitives-staging-deployment-plan.md`
 
 This is the public, redacted review half of the RFC-0022 step-5 operator
@@ -40,7 +40,7 @@ public packet.
 | superseding OCI config SHA-256 | `76f3d6db4b35ef6fe66b6f0b61627428f1f0d8327d4d52ee23032f3d30df9db5` | INDEPENDENTLY REPRODUCED |
 | superseding OCI layer SHA-256 | `bed142fd3b1e8ce5f248de1d0f7068a9c837bfc563ab8d9a86fcb365186f2848` | INDEPENDENTLY REPRODUCED |
 | superseding OCI SBOM SHA-256 | `2c6d1bc52e47fcecb0d60342719819e6fc99e486a6d398086a3bfbba81cbea13`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED |
-| immutable registry reference | digest-qualified reference with provider-observed manifest digest | PENDING_REGISTRY_BINDING |
+| immutable registry reference | digest-qualified reference with provider-observed manifest digest | `ghcr.io/nomed/yukh-coordination-private-primitives@sha256:27ee06d3cc2a0b804424625e2570e3018b22bdd9b0dba7c28cd54e3b05d6ce7b`; PROVIDER-OBSERVED PASS |
 
 The executable and OCI digests were independently reproduced from the exact
 delivery commit `83411ebf6b3a86b55ec527dfd40908a402e07c1a`, which embeds the
@@ -49,9 +49,15 @@ byte-identical builds at the exact
 source commit with `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, an empty Go
 build ID and the reviewed embedded revision. A later commit, mutable tag,
 unrecorded compiler/toolchain or non-identical rebuild rejects the packet.
-The registry field remains a stop condition until a separately authorized
-registry operation binds the manifest to a digest-qualified reference and an
-accountable reviewer observes the same manifest digest from the provider.
+The separately authorized registry operation published exactly one private
+package version. GHCR reported OCI image-manifest media type, size `402` and
+the exact manifest digest above. The package remains private and owner-only;
+no repository Actions access was granted. The owner accepted the bounded
+first-publication residual risk that the existing operational PAT had broader
+scopes than the planned one-shot package-write-only publisher. Its temporary
+ORAS login state, toolchain, OCI layout and worktree were destroyed after
+verification. The digest-qualified reference, never its publication tag, is
+the only admissible target pull identity.
 
 The OCI values recorded by issue #141 are historical and not deployable after
 the descriptor launcher is introduced. Only the superseding digest set above
@@ -188,13 +194,13 @@ step 6. The security reviewer records one of these closed decisions:
 - `REJECT`: one or more closed rejection reasons, with no provisioning;
 - `REQUEST_STEP_5_APPROVAL`: complete packet presented to the project owner.
 
-Current decision: `REJECT_INCOMPLETE_TIME_CRITICAL`.
+Current decision: `READY_TO_REQUEST_STEP_5_APPROVAL_TIME_CRITICAL`.
 
-The immutable registry reference is the sole remaining pre-step-5 packet
-blocker. The server leaf expires at `2026-08-06T08:01:13Z`; if registry binding,
-review and a safe step-5/step-6 interval cannot complete before then, the leaf
-must be rotated through a separately authorized ceremony and rebound before
-any step-5 approval request. This record neither requests nor grants step 5.
+No pre-step-5 packet field remains pending. The server leaf expires at
+`2026-08-06T08:01:13Z`; if review and a safe step-5/step-6 interval cannot
+complete before then, the leaf must be rotated through a separately authorized
+ceremony and rebound before any step-5 approval request. Readiness to request
+approval is not an approval request and grants no step-5 authority.
 
 ## Authorization boundary
 
