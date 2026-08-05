@@ -50,5 +50,6 @@ nav:
   - Explanation:
       - Claims are not locks: explanation/claims-not-locks.md
       - Component boundary: explanation/component-boundary.md
+      - JetStream state and secret boundaries: explanation/jetstream-state-and-secret-boundaries.md
   - Security:
       - Security boundary: security/boundary.md
