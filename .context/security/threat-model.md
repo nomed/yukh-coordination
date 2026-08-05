@@ -882,6 +882,23 @@ This is a hermetic in-process qualification. It adds no insecure server mode,
 credential fallback, deployment or production authority and does not yet claim
 the required two isolated operating-system processes.
 
+### RFC-0013 isolated-process qualification review — 2026-08-05
+
+Issue #7 starts separate implementation and review operating-system processes,
+each holding credentials for only its own two synthetic agents. They discover
+cross-session state exclusively by verified replay from the real TLS handler;
+the parent starts the sessions and compares evidence but forwards no event ID,
+message or protocol state between them.
+
+Both processes independently retain the same sanitized 15-record projection
+and SHA-256 digest. The fixture removes generated identifiers, receipts and
+transport details while preserving sequence, event type and participant. It
+contains no credential or unrestricted transcript.
+
+This remains hermetic qualification with a test-only certificate and memory
+Store. It adds no insecure runtime profile, public executable, deployment,
+Matrix bridge or production authority.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:
