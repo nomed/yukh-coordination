@@ -28,6 +28,23 @@ sidecar, init image, proxy, wildcard bind or new infrastructure component.
   output;
 - full repository qualification is required before publication.
 
+The reproducible offline candidate is bound to source commit
+`25ec7901796208785ec25f20b5fc4c0d7bc05eba`:
+
+| Artifact | SHA-256 |
+|---|---|
+| service executable | `598adbc49a727bffef773d97e724c915960e8404509e3b9d6941dd447040720c` |
+| bootstrap executable | `73f59bec1ea4fd76baa6b3b637859e08fd88fe7ca0cb7530d59f85380214c923` |
+| descriptor launcher | `f120742330e675d7b59e1e8e715fd3c4cefbedca8bbdc2add2ebb2f9192f35c7` |
+| OCI manifest | `13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe` |
+| OCI config | `1ba350b044f511915bfc4076584d95494213aee63c441e103ac79eac148f223a` |
+| OCI layer | `c273cf19b7bfed29ab6d1b775c5749ea947fd5a01a48c4fe95b1c8781bf755f4` |
+| SPDX SBOM | `eede90b9eee7a5e98ef735abf3304657223fb197dc779c7a9d2363e9fe6ba064` |
+
+Two complete offline OCI builds were byte-identical. These are local
+qualification identities only; no registry publication or packet rebinding
+occurred.
+
 ## Decisions discovered
 
 The accepted exact private bind cannot be known in a static Kubernetes config,
