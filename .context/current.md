@@ -2,7 +2,7 @@
 
 - Updated: 2026-08-06
 - Governing issues: #6, #167 and #184
-- Last delivery pull request: #192
+- Last delivery pull request: #193
 - Active Coordination increment: #185 connects the client CLI to the accepted
   bootstrap exchange; #185 remains a draft and is not accepted delivery
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
@@ -50,10 +50,10 @@
   process boundary and bootstrap saga were delivered in #180 and #181; the
   PodIP-aware launcher and immutable OCI evidence were corrected in #171 and
   #179; the non-root runtime-directory boundary was closed in #183; the
-  JetStream state and secret boundaries were documented in #189; corrected OCI
-  preparation tooling and records were delivered in #192 at immutable delivery
-  commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, distinct from executable/OCI
-  reproduction source commit `92678da9d1d866c50371a683845c4675bf45c055`
+  JetStream state and secret boundaries were documented in #189; issue #184
+  preparation was completed in #192 from executable/OCI reproduction source
+  `92678da9`, with preparation commit `97fe3086`; #193 bound the corrected,
+  distinct delivery identity `806f9e1c`
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
@@ -61,10 +61,10 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: under #184, obtain separate explicit authorization for one
-  private OCI publication and provider comparison and for a fresh server-leaf
-  window before requesting a new explicit authorization for RFC-0022 Step 5.
-  Separately, #185 may connect the client executable to the
+- Next action: issue #184 preparation is complete. Private OCI publication and
+  provider comparison, server-leaf rotation, and RFC-0022 Steps 5, 6 and 7
+  remain gated and require separate explicit authorization. Separately, #185
+  may connect the client executable to the
   accepted bootstrap exchange, concrete custody and receipt-verification
   adapters. RFC-0023 lifecycle-worker composition remains design-only in #177.
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
