@@ -12,6 +12,8 @@ credential, listener, or traffic path exists.
 The accepted
 [RFC-0022](https://github.com/nomed/yukh-coordination/blob/main/.context/rfcs/RFC-0022-private-staging-primitives-service.md),
 [deployment plan](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-deployment-plan.md),
+[implementation record](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-implementation-record.md),
+[redacted operator packet](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-operator-packet.md),
 and
 [threat model](https://github.com/nomed/yukh-coordination/blob/main/.context/security/threat-model.md)
 remain authoritative.
@@ -78,11 +80,12 @@ JetStream does not hold every durable record needed by the service:
 | DPoP proof replay reservations | Dedicated local SQLite database | None |
 | Mandatory authentication, authorization, readiness, key-lifecycle, and storage audit | Separate local SQLite audit ledger | None |
 | Signed public workload registration | Supervisor-owned regular file | None |
-| Closed non-secret runtime configuration | Supervisor-owned regular file | Names and configures the exact NATS profile, but contains no credential |
+| Closed non-secret configuration | Supervisor-owned bootstrap file; supervisor-provided service template and launcher-rendered mode-`0400` service file in a private process-owned directory | Names and configures the exact NATS profile, but contains no credential |
 
 The replay and audit databases are separate from the NATS process and its
-storage. The NATS container also does not mount Coordination's private rendered
-runtime directory. Losing any required state or exact configuration evidence
+storage. The rendered service configuration is not a secret; its private
+directory prevents replacement or ambiguous reuse. The NATS container does not
+mount that directory. Losing any required state or exact configuration evidence
 fails readiness; one store is never treated as a backup authority for another.
 
 ## Secrets and identities stay outside JetStream
@@ -127,6 +130,11 @@ Before Step 5 can be reassessed:
 
 Preparation, offline reproduction, documentation, or a passing repository check
 does not satisfy those gates.
+
+Issue #184 records byte-identical offline candidate builds from the corrected
+source. Those local candidate identities are preparation evidence only: they
+remain non-deployable until separately authorized publication, provider pull
+comparison, record and packet rebinding, and a fresh owner decision.
 
 ## Current maturity boundary
 
