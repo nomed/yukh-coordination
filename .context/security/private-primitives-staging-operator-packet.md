@@ -1,11 +1,11 @@
 # RFC-0022 private staging operator packet
 
-- Status: rebound review candidate; provisioning forbidden
+- Status: offline OCI preparation review candidate; provisioning forbidden
 - Prepared: 2026-08-04
-- Reconciled: 2026-08-05
+- Reconciled: 2026-08-06
 - Governing RFC: RFC-0022
 - Governing issue: #136
-- Reconciliation issues: #158, #159, #163, #169, #174
+- Reconciliation issues: #158, #159, #163, #169, #174, #182, #184
 - Deployment plan: `private-primitives-staging-deployment-plan.md`
 
 This is the public, redacted review half of the RFC-0022 step-5 operator
@@ -26,47 +26,66 @@ public packet.
 | Field | Required value | Status |
 |---|---|---|
 | repository | `nomed/yukh-coordination` | VERIFIED |
-| source candidate commit | `25ec7901796208785ec25f20b5fc4c0d7bc05eba` | VERIFIED |
-| source candidate tree | `43b2deab95a62dcc3d48a83d9fc8a93e0c8aa4a0` | VERIFIED |
-| delivery commit | `ce607210c8ae9bd71c4d4adfc1414112cb2fa008` | VERIFIED |
-| delivery tree | `23f90cf916e0f1885576f500f7a64c28985d7a33` | VERIFIED |
+| exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
+| exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` | VERIFIED |
+| tooling/record delivery review candidate | PR #192 head commit/tree and candidate-record blob emitted by required check | REVIEW CANDIDATE; NOT DELIVERED |
+| immutable post-merge delivery commit/tree | final merged identity plus unchanged candidate-record blob | PENDING POST-MERGE RECORDING; STOP |
 | service profile | `yukh-coordination/private-primitives-staging-v1` | VERIFIED |
 | bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` | VERIFIED |
-| hermetic qualification | post-merge run `31018394591`, job `92348429268` | VERIFIED |
+| recorded-source hermetic qualification | exact-source candidate CI rebuild; two isolated archives; network disabled | AUTOMATED; PASS REQUIRED |
+| ordinary checkout qualification | current checkout/PR merge build | AUTOMATED SEPARATELY; NOT RECORDED-SOURCE EVIDENCE |
 | MCP consumer commit | `e303b3671bf9b4c5202ae147b882ab763964d5ed` | VERIFIED |
 | build toolchain | Go `1.26.5`, Linux AMD64 archive SHA-256 `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` | LOCALLY VERIFIED |
-| service artifact SHA-256 | `598adbc49a727bffef773d97e724c915960e8404509e3b9d6941dd447040720c` | INDEPENDENTLY REPRODUCED |
-| bootstrap artifact SHA-256 | `73f59bec1ea4fd76baa6b3b637859e08fd88fe7ca0cb7530d59f85380214c923` | INDEPENDENTLY REPRODUCED |
-| descriptor launcher SHA-256 | `f120742330e675d7b59e1e8e715fd3c4cefbedca8bbdc2add2ebb2f9192f35c7` | INDEPENDENTLY REPRODUCED |
-| superseding OCI manifest SHA-256 | `13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe` | INDEPENDENTLY REPRODUCED |
-| superseding OCI config SHA-256 | `1ba350b044f511915bfc4076584d95494213aee63c441e103ac79eac148f223a` | INDEPENDENTLY REPRODUCED |
-| superseding OCI layer SHA-256 | `c273cf19b7bfed29ab6d1b775c5749ea947fd5a01a48c4fe95b1c8781bf755f4` | INDEPENDENTLY REPRODUCED |
-| superseding OCI SBOM SHA-256 | `eede90b9eee7a5e98ef735abf3304657223fb197dc779c7a9d2363e9fe6ba064`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED |
-| immutable registry reference | digest-qualified reference with provider-observed manifest digest | `ghcr.io/nomed/yukh-coordination-private-primitives@sha256:13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe`; PROVIDER-OBSERVED PASS |
+| service artifact SHA-256 | `e6561075524e699b58b5c6fca3aa0dbae1a00e75e9750807167eb2da8f97d585` | INDEPENDENTLY REPRODUCED |
+| bootstrap artifact SHA-256 | `65a3d0b2f123180ca93c3ce5542b3b29010f29ce20589b929b6d499fdc7302d5` | INDEPENDENTLY REPRODUCED |
+| descriptor launcher SHA-256 | `4eecf130db6431d6f89079ee6ec9a8273d8c8107ba47e6aabb1adc89f0e29d31` | INDEPENDENTLY REPRODUCED |
+| superseding OCI manifest SHA-256 | `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7` | INDEPENDENTLY REPRODUCED; LOCAL CANDIDATE ONLY |
+| superseding OCI config SHA-256 | `2e4f4c2575efbb71464c6b6527df4a49745b24ddb0c1958380be7d8061fd9a71` | INDEPENDENTLY REPRODUCED; LOCAL CANDIDATE ONLY |
+| superseding OCI layer SHA-256 | `df686b0e685fc23a72d9c077a776a7b0d56f4ecc3977bdd1ca5af3984539555c` | INDEPENDENTLY REPRODUCED; LOCAL CANDIDATE ONLY |
+| superseding OCI SBOM SHA-256 | `72fbe3c9184e0244aaee06ba1e0b90a4fc75525c16f2b03fee4663b50911439f`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED; LOCAL CANDIDATE ONLY |
+| immutable registry reference | digest-qualified reference with provider-observed manifest digest | PENDING SEPARATELY AUTHORIZED PUBLICATION AND PROVIDER PULL; STOP |
 
-The executable and OCI digests were independently reproduced from the exact
-delivery commit `ce607210c8ae9bd71c4d4adfc1414112cb2fa008`, which embeds the
-immutable source candidate above. The artifact digests came from two
-byte-identical builds at the exact
-source candidate with `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, an empty Go
-build ID and the reviewed embedded revision. A later commit, mutable tag,
-unrecorded compiler/toolchain or non-identical rebuild rejects the packet.
-The separately authorized registry operation published exactly one private
-new private package version under tag `staging-v1-podip-13b97c16c376`. GHCR
-reported OCI image-manifest media type, size `402` and
-the exact manifest digest above. The package remains private and owner-only;
-no repository Actions access was granted. The owner accepted the bounded
-publication residual risk that the existing operational PAT had broader
-scopes than the planned one-shot package-write-only publisher. Its temporary
-ORAS login state, toolchain, OCI layout and worktree were destroyed after
-verification. The digest-qualified reference, never its publication tag, is
-the only admissible target pull identity.
+The executable and OCI digests were independently reproduced from exact source
+commit
+`92678da9d1d866c50371a683845c4675bf45c055`. Repository-owned tooling created
+two isolated source archives and complete OCI layouts with `CGO_ENABLED=0`,
+`-trimpath`, `-buildvcs=false`, an empty Go build ID and the reviewed embedded
+revision. Their bytes matched, the exact three-executable layer allowlist
+passed, and all temporary source archives, layouts and workspaces were removed
+and verified absent. A later commit, mutable tag, unrecorded compiler/toolchain
+or non-identical rebuild rejects the packet.
 
-The OCI values recorded by issues #141 and #159, including manifest
+The machine-readable candidate record also fixes the source tree, all seven
+artifact digests, two-build complete-layout byte identity, executable allowlist
+and cleanup outcome. Candidate-specific CI archives and builds that source
+rather than the checkout/merge bytes, exact-compares every field, and includes
+negative tests for digest mismatch and stale source/tree. Both OCI
+qualifications use a network-disabled namespace and contain no publication,
+provider or credential operation.
+
+The source commit is not the delivery commit for this revised tooling and
+packet. PR #192 remains a review candidate whose exact head commit/tree/record
+blob are emitted by its required check. After merge, the `main` check emits the
+immutable merged identity and unchanged record blob; the owner records it in
+issue #184 and a later reconciliation verifies it without calling that later
+recording commit the delivery commit. This packet cannot request Step 5 while
+that post-merge identity is pending.
+
+No registry authentication, publication, push, pull or provider comparison
+occurred. The exact next approval must authorize one new private, non-retagged
+GHCR version for candidate manifest
+`aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,
+provider pull by returned digest, byte comparison of manifest, config and layer,
+retention of prior versions, and destruction of temporary authentication and
+layouts. It must explicitly exclude target pull, Kubernetes access, credential
+generation, Step 5 and traffic.
+
+The OCI values recorded by issues #141, #159 and #174, including manifests
 `27ee06d3cc2a0b804424625e2570e3018b22bdd9b0dba7c28cd54e3b05d6ce7b`,
-are retained rollback evidence and are not deployable after the PodIP-aware
-launcher. Only the superseding digest set above may enter the private
-Kubernetes runbook.
+and `13b97c16c376d98767123bf78af5c16cb65ab09960b16fec122eb017317fefbe`,
+are retained rollback evidence and are not deployable after the runtime
+directory correction. The local candidate digest set above cannot enter the
+private Kubernetes runbook until publication and provider comparison pass.
 
 ## Accountable roles
 
@@ -106,7 +125,7 @@ input. Digests are evidence references, not substitutes for private review.
 | endpoint/trust match review | closed `PASS` or `REJECT` | PASS |
 | encrypted-custody and plaintext-destruction review | closed `PASS` or `REJECT` | PASS; redacted receipt SHA-256 `972bb20f1ae778668c3e641cdf131497d4cf881d466597a115d72a394eb9f1bd` |
 | root and policy validity bound | absolute UTC timestamp | `2026-09-04T08:01:13Z` |
-| server-leaf validity bound | absolute UTC timestamp | `2026-08-06T11:05:05Z`; LEAF ROTATION PASS; ROTATE AGAIN IF STEP 5 CANNOT COMPLETE SAFELY BEFORE EXPIRY |
+| server-leaf validity bound | absolute UTC timestamp | `2026-08-06T11:05:05Z`; REJECT FOR A FUTURE STEP-5 WINDOW; fresh separately authorized RFC-0024 leaf-only rotation and packet rebinding required |
 
 The private review must prove that the NATS policy reaches only the nonce,
 lease and capability-budget KV buckets and only the JetStream operations
@@ -199,13 +218,17 @@ step 6. The security reviewer records one of these closed decisions:
 - `REJECT`: one or more closed rejection reasons, with no provisioning;
 - `REQUEST_STEP_5_APPROVAL`: complete packet presented to the project owner.
 
-Current decision: `READY_TO_REQUEST_STEP_5_APPROVAL_TIME_CRITICAL`.
+Current decision: `NOT_READY_TO_REQUEST_STEP_5_APPROVAL`.
 
-No pre-step-5 packet field remains pending. The selected rotated server leaf
-expires at `2026-08-06T11:05:05Z`; if review and a safe step-5/step-6 interval cannot
-complete before then, the leaf must be rotated through a separately authorized
-ceremony and rebound before any step-5 approval request. Readiness to request
-approval is not an approval request and grants no step-5 authority.
+The immutable post-merge delivery identity, immutable registry reference and
+provider byte comparison remain pending.
+The selected server leaf expires at `2026-08-06T11:05:05Z` and cannot supply a
+safe future step-5/step-6 interval. The project owner must separately approve
+the existing RFC-0024 leaf-only rotation runbook, limited to one replacement
+leaf under the retained root, encrypted-custody replacement, reopen
+verification, plaintext destruction and public digest/validity rebinding. That
+approval must grant no trust-root or policy-key rotation, registry, target,
+Kubernetes, Step 5, MCP or traffic authority.
 
 ## Authorization boundary
 

@@ -2,14 +2,15 @@
 set -euo pipefail
 
 revision="$(git rev-parse HEAD)"
+repository_root="$(git rev-parse --show-toplevel)"
 
 qualify() {
   local package="$1"
   local ldflags="$2"
   local marker="$3"
   local first second contents
-  first="$(mktemp)"
-  second="$(mktemp)"
+  first="$(mktemp "${repository_root}/.qualification-primitives-executable-first.XXXXXXXXXX")"
+  second="$(mktemp "${repository_root}/.qualification-primitives-executable-second.XXXXXXXXXX")"
   CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$first" "$package"
   CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$second" "$package"
   cmp -- "$first" "$second"
