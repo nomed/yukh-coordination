@@ -1,90 +1,148 @@
 # JetStream state and secret boundaries
 
 Yukh Coordination uses NATS JetStream as a bounded runtime dependency in its
-private staging profile. JetStream stores coordination state. It does not
-replace credential custody, identity, TLS, or capability-key management.
+private staging profile. JetStream stores three classes of coordination state.
+It is not the only durable state in the profile, and it does not replace
+credential custody, identity, TLS, audit, or capability-key management.
 
 This is an explanation of the intended, gated profile. It is not an
 installation guide and does not indicate that a live NATS server, bucket,
 credential, listener, or traffic path exists.
 
-## Four separate layers
+The accepted
+[RFC-0022](https://github.com/nomed/yukh-coordination/blob/main/.context/rfcs/RFC-0022-private-staging-primitives-service.md),
+[deployment plan](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-deployment-plan.md),
+and
+[threat model](https://github.com/nomed/yukh-coordination/blob/main/.context/security/threat-model.md)
+remain authoritative.
+
+## Separate executable and custody boundaries
 
 ```text
-reviewed OCI image
-    -> starts the Coordination executable
-    -> consumes custody-delivered runtime material
-    -> authenticates to local NATS JetStream
-    -> reads and updates bounded coordination state
-
-separate custody boundary
-    -> holds NATS credentials, TLS identity, and capability material
+reviewed OCI
+    -> one-shot bootstrap executable
+       -> bootstrap NATS credential
+       -> create or exactly verify three buckets
+       -> exit, then revoke and destroy the credential
+    -> normal service executable
+       -> runtime NATS credential
+       -> open and exactly verify the same three buckets
+       -> serve only after all readiness gates pass
 ```
 
-The OCI image packages reviewed executable bytes and a closed launcher. It
-does not contain a NATS credential, TLS private key, capability keyring, token,
-or DPoP key.
+The OCI packages the reviewed executables and closed launcher. It contains no
+NATS credential, TLS private key, capability keyring, workload token, or DPoP
+private key. Changing any packaged executable or launcher bytes invalidates the
+reviewed OCI binding.
 
-The NATS JetStream server is a separate runtime dependency in the isolated
-staging boundary. It stores state only after the Coordination process has
-authenticated with a separately delivered, least-privilege NATS credential.
+The one-shot bootstrap executable and normal service executable are not
+interchangeable:
+
+- bootstrap has no listener, service runtime, registration, capability key,
+  replay database, or audit database access;
+- bootstrap may only create missing buckets or verify their complete immutable
+  configuration and positive restore epoch;
+- normal service start always disables bucket creation and fails closed unless
+  all three existing buckets exactly match the reviewed profile and epoch.
+
+The selected profile permits only a literal loopback `nats://` target. The NATS
+server and Coordination process are co-located inside the isolated staging
+boundary, but remain separate processes. Remote NATS, TLS NATS, clustering,
+service discovery, and automatic failover are outside this profile.
 
 ## The three JetStream KV buckets
 
-The private staging bootstrap creates and verifies exactly these three
-JetStream key-value buckets:
+Only these JetStream key-value buckets belong to the profile:
 
 | Bucket | State it holds | Why it exists |
 | --- | --- | --- |
 | `YUKH_COORDINATION_NONCES_V1` | Consumed external nonces | Prevents an external request from being replayed. |
-| `YUKH_COORDINATION_LEASES_V1` | Fenced lease state | Prevents stale or concurrent holders from acting as current. |
-| `YUKH_COORDINATION_CAPABILITY_BUDGET_V1` | Bounded capability accounting state | Enforces the configured capability resource limit. |
+| `YUKH_COORDINATION_LEASES_V1` | Current and terminal fenced-lease values and revisions | Prevents stale or concurrent holders from acting as current. |
+| `YUKH_COORDINATION_CAPABILITY_BUDGET_V1` | Bounded capability-accounting reservations | Enforces the configured capability resource limit. |
 
 These buckets are JetStream-managed state stores. They are not object storage,
 secret stores, or a substitute for an approval system. The bucket names do not
 grant access; NATS authorization and the selected custody profile do.
 
-## Credentials are outside JetStream
+Nonce reuse is never made safe by deletion or expiry. Lease release writes a
+terminal value rather than deleting the key, and rollback preserves terminal
+and fencing state. A restore uses a positive epoch shared by the service and
+all three buckets; mismatch, rollback, or ambiguity denies readiness.
 
-The profile separates three categories of sensitive material from the buckets:
+## State outside JetStream
 
-| Material | Boundary | Purpose |
+JetStream does not hold every durable record needed by the service:
+
+| State | Storage boundary | JetStream access |
 | --- | --- | --- |
-| Bootstrap NATS credential | One-shot bootstrap custody | Creates and verifies the fixed buckets, then is revoked and destroyed. |
-| Runtime NATS credential | Runtime custody | Grants only the reviewed operations on the fixed buckets. |
-| TLS identity and capability keyring | Independent custody boundaries | Establishes the private service identity and governed capability semantics. |
+| DPoP proof replay reservations | Dedicated local SQLite database | None |
+| Mandatory authentication, authorization, readiness, key-lifecycle, and storage audit | Separate local SQLite audit ledger | None |
+| Signed public workload registration | Supervisor-owned regular file | None |
+| Closed non-secret runtime configuration | Supervisor-owned regular file | Names and configures the exact NATS profile, but contains no credential |
 
-An MCP consumer, only after its own later gate, receives distinct short-lived
-consumer material. It does not receive NATS connection information or a NATS
-credential.
+The replay and audit databases are separate from the NATS process and its
+storage. The NATS container also does not mount Coordination's private rendered
+runtime directory. Losing any required state or exact configuration evidence
+fails readiness; one store is never treated as a backup authority for another.
+
+## Secrets and identities stay outside JetStream
+
+Each sensitive input has one purpose and delivery boundary:
+
+| Material | Recipient and delivery | Lifetime and authority |
+| --- | --- | --- |
+| Bootstrap NATS credential | One-shot bootstrap executable through its inherited descriptor | Short-lived; only the fixed create/verify operations; revoked and destroyed after bootstrap |
+| Runtime NATS credential | Normal service through a distinct inherited descriptor | Only reviewed runtime operations on the fixed buckets; held by the adapter until connection close, then cleared |
+| Capability keyring | Normal service through its own inherited descriptor | Seals lease capabilities; never available to bootstrap or NATS |
+| TLS private key | Normal service through a supervisor-owned, non-writable regular file | Establishes the exact private service identity; never available to NATS |
+| Workload token and DPoP private key | Future MCP consumer through distinct inherited descriptors | At most 15 minutes; never enter Coordination or NATS |
+
+Coordination receives only the signed public registration for the workload
+token and DPoP key. The future MCP consumer receives no NATS connection
+information or NATS credential.
 
 Putting a credential into a JetStream bucket would collapse the boundary the
 profile is designed to preserve. A NATS credential authorizes access to the
 buckets; it is never data stored by them.
 
-## Why OCI rebinding blocks bucket creation
+## Why OCI rebinding blocks Step 5
 
-The three buckets are created only by the reviewed bootstrap executable running
-in the reviewed Coordination deployment composition. A launcher or runtime
-directory correction changes the OCI bytes that are allowed to start that
-composition. It does not change JetStream's purpose, but it invalidates the
-prior artifact binding.
+A launcher or runtime-directory correction changes the OCI bytes that would run
+both reviewed executable paths. It does not change JetStream's purpose, but it
+invalidates the prior artifact binding.
 
-Before a bucket can be created after such a change, the corrected OCI must be
-independently reproduced, published and verified by digest, and rebound into
-the redacted operator packet. The owner must then approve the renewed Step 5
-packet. This prevents an approved bootstrap operation from silently running
-different executable bytes.
+Before Step 5 can be reassessed:
+
+1. the corrected OCI must be independently reproduced and its complete
+   executable and layer allowlist verified;
+2. separately authorized publication must produce an immutable registry digest,
+   and a pull by that digest must match the reviewed manifest, configuration,
+   and layer bytes;
+3. the implementation record, deployment plan, threat model, and redacted
+   operator packet must bind those exact identities;
+4. the packet must still contain current trust, credential-policy, limits,
+   restore-epoch, filesystem, rollback, and time-valid certificate evidence;
+5. the project owner must explicitly approve that complete, digest-specific
+   packet.
+
+Preparation, offline reproduction, documentation, or a passing repository check
+does not satisfy those gates.
 
 ## Current maturity boundary
 
-The JetStream adapter and disposable-server qualification exist in the
-repository. The private staging bootstrap is designed to create and verify the
-three buckets during the separately approved no-traffic Step 5.
+The adapters, distinct bootstrap and service executables, and disposable-server
+qualification exist in the repository. That is hermetic implementation
+evidence, not evidence of a live deployment.
 
 The current Step 5 path is paused at
 [issue #184](https://github.com/nomed/yukh-coordination/issues/184) while the
-corrected OCI is rebound. No live bucket, runtime NATS credential, NATS pod,
-listener, or MCP traffic is implied by this documentation. See
+corrected OCI binding is renewed. No live bucket, NATS credential, NATS pod,
+TLS identity, capability keyring, workload credential, listener, or MCP traffic
+is implied by this documentation.
+
+Even a later Step 5 approval would authorize provisioning with the public
+listener blocked and no network request. Step 6 must independently verify the
+resulting no-traffic evidence. A separate Step 7 owner approval would still be
+required before any bounded synthetic MCP request. See
 [issue #167](https://github.com/nomed/yukh-coordination/issues/167) for the
 gated no-traffic provisioning path.
