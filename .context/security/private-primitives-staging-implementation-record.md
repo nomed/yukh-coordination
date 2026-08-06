@@ -13,19 +13,30 @@ The reviewed implementation candidate is exactly:
 | Field | Value |
 |---|---|
 | Repository | `nomed/yukh-coordination` |
-| Source candidate commit | `92678da9d1d866c50371a683845c4675bf45c055` |
-| Source candidate tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` |
-| Delivery commit | `92678da9d1d866c50371a683845c4675bf45c055` |
-| Delivery tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` |
+| Exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` |
+| Exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` |
+| Tooling/record delivery review candidate | PR #192 head commit, tree and candidate-record blob emitted by its required `Go` check; `REVIEW CANDIDATE`, not delivered |
+| Immutable post-merge delivery commit/tree | `PENDING POST-MERGE RECORDING`; provisioning stop |
 | Service profile | `yukh-coordination/private-primitives-staging-v1` |
 | Bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` |
-| Qualification check | local execution-forbidden OCI preparation; two isolated exact-commit archives; Go 1.26.5 Linux AMD64; network disabled |
+| Recorded-source qualification check | candidate-specific CI rebuild of the exact source commit; two isolated archives; Go 1.26.5 Linux AMD64; network namespace disabled |
+| Checkout qualification check | separate CI qualification of checked-out/merge bytes; not evidence for the recorded source |
 
-The source candidate and tree are the exact embedded executable identity; the
-delivery commit and tree are the reviewed merge that binds its build and
-qualification records. A later commit, rebuilt archive, branch or mutable tag
-is not this candidate. The operator packet binds reproducibly built artifacts
-and their private registry identity to these exact source and delivery values.
+The executable source is the exact identity embedded in and used to construct
+the recorded OCI bytes. It predates this PR and is not the commit that delivers
+the revised tooling or records. PR #192 is the tooling/record delivery review
+candidate. Its required check externally binds the exact PR head commit, tree
+and `.github/records/private-primitives-oci-review-candidate.txt` blob for each
+reviewed run, so a changed head necessarily creates a new review candidate.
+
+The final immutable delivery identity cannot be stated inside the commit that
+does not yet exist. After merge, the successful `main` check emits the merged
+commit, tree and candidate-record blob. The owner records those values in issue
+#184 and a later packet-reconciliation commit verifies ancestry and unchanged
+record-blob identity. That later recording commit is evidence about the
+delivery commit; it is not renamed as the delivery commit. Until this
+non-circular post-merge recording is complete, the delivery identity is
+`PENDING` and provisioning remains stopped.
 
 This record supersedes the source and OCI bindings at
 `25ec7901796208785ec25f20b5fc4c0d7bc05eba`,
@@ -97,6 +108,17 @@ bytes were independently hashed from the layer.
 | OCI layer | `df686b0e685fc23a72d9c077a776a7b0d56f4ecc3977bdd1ca5af3984539555c` |
 | SPDX SBOM | `72fbe3c9184e0244aaee06ba1e0b90a4fc75525c16f2b03fee4663b50911439f` |
 
+These exact values and the source tree, two-build result, complete-layout byte
+identity, executable allowlist and cleanup result are recorded in
+`.github/records/private-primitives-oci-review-candidate.txt`. The
+candidate-specific verifier checks out that exact source from the local Git
+object database, independently rebuilds it twice, validates every manifest,
+config, layer, SBOM and executable digest, and requires an exact record match.
+The builder normalizes the non-special tar device fields and header checksums
+to the recorded GNU tar 1.34 encoding so a runner's GNU tar 1.35 empty-field
+change cannot silently alter the layer. Mismatch and stale source/tree failure
+tests run before that verification.
+
 Both source archives, OCI layouts and build workspaces were removed and their
 absence verified before the preparation command returned success. These are
 local review-candidate identities only. No registry authentication,
@@ -104,12 +126,16 @@ publication, push, pull or provider comparison occurred.
 
 ## Qualification claim
 
-At the recorded tree, the repository workflow installs pinned disposable NATS,
-runs the complete Go suite with the race detector, exercises bootstrap
+The repository workflow separately qualifies its ordinary checkout/PR merge
+bytes; that result is not substituted for the recorded-source result. It also
+installs pinned disposable NATS, runs the complete Go suite with the race
+detector, exercises bootstrap
 create-then-verify against exactly three buckets, qualifies TLS, registration,
 descriptor custody, replay, audit, readiness, shutdown and negative ambiguity
 cases, proves reproducible executable builds, and runs the dependency-free
-Node qualification offline.
+Node qualification offline. Both OCI paths run in a network-disabled namespace.
+The candidate path performs no registry/provider operation and receives no
+credential.
 
 This is hermetic implementation evidence. It does not prove a hardened host,
 private routing, concrete trust or policy digests, a provisioned real bucket,

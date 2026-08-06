@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check repository structure
         run: .github/scripts/check-repository-structure.sh
       - name: Check public documentation structure
@@ -27,8 +29,46 @@ jobs:
         run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
       - name: Build reproducible private primitives executables
         run: .github/scripts/qualify-primitives-executable.sh
-      - name: Build reproducible private primitives OCI layout
-        run: .github/scripts/qualify-primitives-oci.sh
+      - name: Qualify checkout private primitives OCI layout
+        run: |
+          sudo env "PATH=$PATH" "HOME=$HOME" \
+            "GOMODCACHE=$(go env GOMODCACHE)" "GOCACHE=$(go env GOCACHE)" \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
+            "GIT_CONFIG_VALUE_0=$PWD" unshare --net bash -c \
+            '.github/scripts/qualify-primitives-oci.sh'
+      - name: Test recorded OCI candidate failure boundaries
+        run: .github/scripts/test-primitives-oci-record.sh
+      - name: Verify exact recorded OCI review candidate
+        run: |
+          sudo env "PATH=$PATH" "HOME=$HOME" \
+            "GOMODCACHE=$(go env GOMODCACHE)" "GOCACHE=$(go env GOCACHE)" \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
+            "GIT_CONFIG_VALUE_0=$PWD" unshare --net bash -c \
+            '.github/scripts/verify-recorded-primitives-oci.sh'
+      - name: Bind delivery review candidate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REVIEW_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          review_tree="$(git rev-parse "${REVIEW_COMMIT}^{tree}")"
+          record_blob="$(git rev-parse \
+            "${REVIEW_COMMIT}:.github/records/private-primitives-oci-review-candidate.txt")"
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            heading="delivery review candidate"
+            status="review candidate only; immutable delivery identity awaits merge"
+          else
+            heading="post-merge delivery identity"
+            status="immutable main identity emitted; issue #184 recording remains required"
+          fi
+          {
+            echo "### Private primitives OCI ${heading}"
+            echo
+            echo "- commit: \`${REVIEW_COMMIT}\`"
+            echo "- tree: \`${review_tree}\`"
+            echo "- candidate-record blob: \`${record_blob}\`"
+            echo "- executable source remains: \`92678da9d1d866c50371a683845c4675bf45c055\`"
+            echo "- status: ${status}"
+          } >>"$GITHUB_STEP_SUMMARY"
       - name: Build reproducible offline ceremony executable
         run: .github/scripts/qualify-offline-ceremony-executable.sh
       - uses: actions/setup-node@v6

@@ -26,13 +26,14 @@ public packet.
 | Field | Required value | Status |
 |---|---|---|
 | repository | `nomed/yukh-coordination` | VERIFIED |
-| source candidate commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
-| source candidate tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` | VERIFIED |
-| delivery commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
-| delivery tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` | VERIFIED |
+| exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
+| exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` | VERIFIED |
+| tooling/record delivery review candidate | PR #192 head commit/tree and candidate-record blob emitted by required check | REVIEW CANDIDATE; NOT DELIVERED |
+| immutable post-merge delivery commit/tree | final merged identity plus unchanged candidate-record blob | PENDING POST-MERGE RECORDING; STOP |
 | service profile | `yukh-coordination/private-primitives-staging-v1` | VERIFIED |
 | bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` | VERIFIED |
-| hermetic qualification | exact-commit offline OCI preparation; two isolated archives; network disabled | LOCALLY VERIFIED |
+| recorded-source hermetic qualification | exact-source candidate CI rebuild; two isolated archives; network disabled | AUTOMATED; PASS REQUIRED |
+| ordinary checkout qualification | current checkout/PR merge build | AUTOMATED SEPARATELY; NOT RECORDED-SOURCE EVIDENCE |
 | MCP consumer commit | `e303b3671bf9b4c5202ae147b882ab763964d5ed` | VERIFIED |
 | build toolchain | Go `1.26.5`, Linux AMD64 archive SHA-256 `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` | LOCALLY VERIFIED |
 | service artifact SHA-256 | `e6561075524e699b58b5c6fca3aa0dbae1a00e75e9750807167eb2da8f97d585` | INDEPENDENTLY REPRODUCED |
@@ -44,7 +45,8 @@ public packet.
 | superseding OCI SBOM SHA-256 | `72fbe3c9184e0244aaee06ba1e0b90a4fc75525c16f2b03fee4663b50911439f`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED; LOCAL CANDIDATE ONLY |
 | immutable registry reference | digest-qualified reference with provider-observed manifest digest | PENDING SEPARATELY AUTHORIZED PUBLICATION AND PROVIDER PULL; STOP |
 
-The executable and OCI digests were independently reproduced from exact commit
+The executable and OCI digests were independently reproduced from exact source
+commit
 `92678da9d1d866c50371a683845c4675bf45c055`. Repository-owned tooling created
 two isolated source archives and complete OCI layouts with `CGO_ENABLED=0`,
 `-trimpath`, `-buildvcs=false`, an empty Go build ID and the reviewed embedded
@@ -52,6 +54,22 @@ revision. Their bytes matched, the exact three-executable layer allowlist
 passed, and all temporary source archives, layouts and workspaces were removed
 and verified absent. A later commit, mutable tag, unrecorded compiler/toolchain
 or non-identical rebuild rejects the packet.
+
+The machine-readable candidate record also fixes the source tree, all seven
+artifact digests, two-build complete-layout byte identity, executable allowlist
+and cleanup outcome. Candidate-specific CI archives and builds that source
+rather than the checkout/merge bytes, exact-compares every field, and includes
+negative tests for digest mismatch and stale source/tree. Both OCI
+qualifications use a network-disabled namespace and contain no publication,
+provider or credential operation.
+
+The source commit is not the delivery commit for this revised tooling and
+packet. PR #192 remains a review candidate whose exact head commit/tree/record
+blob are emitted by its required check. After merge, the `main` check emits the
+immutable merged identity and unchanged record blob; the owner records it in
+issue #184 and a later reconciliation verifies it without calling that later
+recording commit the delivery commit. This packet cannot request Step 5 while
+that post-merge identity is pending.
 
 No registry authentication, publication, push, pull or provider comparison
 occurred. The exact next approval must authorize one new private, non-retagged
@@ -202,7 +220,8 @@ step 6. The security reviewer records one of these closed decisions:
 
 Current decision: `NOT_READY_TO_REQUEST_STEP_5_APPROVAL`.
 
-The immutable registry reference and provider byte comparison remain pending.
+The immutable post-merge delivery identity, immutable registry reference and
+provider byte comparison remain pending.
 The selected server leaf expires at `2026-08-06T11:05:05Z` and cannot supply a
 safe future step-5/step-6 interval. The project owner must separately approve
 the existing RFC-0024 leaf-only rotation runbook, limited to one replacement

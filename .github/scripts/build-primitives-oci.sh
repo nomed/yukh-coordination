@@ -19,7 +19,7 @@ if [[ "$(go env GOOS)/$(go env GOARCH)" != "linux/amd64" ]] ||
   exit 1
 fi
 
-work="$(mktemp -d)"
+work="$(mktemp -d "$(dirname "$output")/.qualification-build-primitives-oci.XXXXXXXXXX")"
 cleanup() {
   chmod -R u+w "$work" 2>/dev/null || true
   rm -rf -- "$work"
@@ -59,6 +59,8 @@ chmod 0555 "$work/rootfs/usr" "$work/rootfs/usr/local" "$work/rootfs/usr/local/b
 tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
   --format=posix --pax-option=delete=atime,delete=ctime \
   -C "$work/rootfs" -cf "$work/layer.tar" .
+"$(dirname "${BASH_SOURCE[0]}")/normalize-primitives-oci-layer.py" \
+  "$work/layer.tar"
 layer_digest="$(sha256sum "$work/layer.tar" | cut -d' ' -f1)"
 layer_size="$(stat -c '%s' "$work/layer.tar")"
 

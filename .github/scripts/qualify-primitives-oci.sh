@@ -7,8 +7,10 @@ if [[ ! "$candidate" =~ ^[0-9a-f]{40}$ ]]; then
   echo "OCI qualification requires an exact source commit" >&2
   exit 1
 fi
+candidate_tree="$(git rev-parse --verify "${candidate}^{tree}")"
 
-work="$(mktemp -d)"
+repository_root="$(git rev-parse --show-toplevel)"
+work="$(mktemp -d "${repository_root}/.qualification-primitives-oci.XXXXXXXXXX")"
 cleanup() {
   chmod -R u+w "$work" 2>/dev/null || true
   rm -rf -- "$work"
@@ -19,11 +21,13 @@ second_source="$work/source-second"
 first="$work/oci-first"
 second="$work/oci-second"
 mkdir "$first_source" "$second_source"
-git archive "$candidate" | tar -x -C "$first_source"
-git archive "$candidate" | tar -x -C "$second_source"
+git archive "$candidate" | tar --no-same-owner -x -C "$first_source"
+git archive "$candidate" | tar --no-same-owner -x -C "$second_source"
 
-.github/scripts/build-primitives-oci.sh "$first" "$first_source" "$candidate"
-.github/scripts/build-primitives-oci.sh "$second" "$second_source" "$candidate"
+"$repository_root/.github/scripts/build-primitives-oci.sh" \
+  "$first" "$first_source" "$candidate"
+"$repository_root/.github/scripts/build-primitives-oci.sh" \
+  "$second" "$second_source" "$candidate"
 diff -ru --no-dereference "$first" "$second"
 
 manifest_digest="$(awk -F= '$1 == "manifest" {sub(/^sha256:/, "", $2); print $2}' "$first/digests.txt")"
@@ -77,4 +81,8 @@ evidence="$(cat "$first/digests.txt")"
 cleanup
 trap - EXIT
 test ! -e "$work"
-printf '%s\nbuilds=2\nbyte_identity=verified\nexecutable_allowlist=verified\ncleanup=verified\n' "$evidence"
+printf 'record_format=private-primitives-oci-review-candidate-v1\n'
+printf 'source_tree=%s\n' "$candidate_tree"
+printf '%s\n' "$evidence"
+printf 'builds=2\nbyte_identity=verified\n'
+printf 'executable_allowlist=verified\ncleanup=verified\n'

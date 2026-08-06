@@ -20,18 +20,31 @@ executables and the separately reviewed accountable three-bucket bootstrap.
 That closes the implementation prerequisites but does not itself authorize
 provisioning. No infrastructure or credential work may begin until a concrete,
 redacted operator packet binds reproducible artifact digests and every item
-below to source and delivery commit
-`92678da9d1d866c50371a683845c4675bf45c055`, tree
-`7633caa18d16d1a3c488cd28f78ac808876cc5a5`, immutable provider-observed
-registry identity and the exact reviewed OCI blobs, and the owner explicitly
-approves that complete packet.
+below to exact executable source commit
+`92678da9d1d866c50371a683845c4675bf45c055` and tree
+`7633caa18d16d1a3c488cd28f78ac808876cc5a5`, the separately identified
+post-merge commit/tree that delivers the tooling and records, immutable
+provider-observed registry identity and the exact reviewed OCI blobs, and the
+owner explicitly approves that complete packet.
+
+PR #192 is only the tooling/record delivery review candidate. Its required
+check emits the exact PR-head commit/tree and candidate-record blob. Because a
+merge identity cannot self-record before it exists, the successful post-merge
+`main` check must emit the final commit/tree/record blob; the owner then records
+them in issue #184 and a later reconciliation verifies ancestry and unchanged
+record bytes. Until then, immutable delivery identity is
+`PENDING POST-MERGE RECORDING` and the plan remains execution-forbidden.
 
 The execution-forbidden issue #184 preparation reproduced manifest
 `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,
 config `2e4f4c2575efbb71464c6b6527df4a49745b24ddb0c1958380be7d8061fd9a71`
 and layer `df686b0e685fc23a72d9c077a776a7b0d56f4ecc3977bdd1ca5af3984539555c`
 twice from that exact commit. Those local identities are review evidence, not
-an installable registry identity.
+an installable registry identity. CI qualifies ordinary checkout/merge bytes
+separately. Its candidate-specific, network-disabled path archives the recorded
+source commit, rebuilds twice and exact-compares all recorded executable,
+manifest, config, layer and SBOM digests plus byte-identity, allowlist and
+cleanup outcomes. Stale source/tree and digest mismatch tests must fail closed.
 
 ## Accountable roles
 
@@ -75,7 +88,8 @@ descriptor boundary. It receives no NATS information or credential.
 The operator must prepare one review packet containing only these redacted
 fields:
 
-- implementation commit, Git tree and reproducible artifact digest;
+- exact executable source commit/tree, post-merge tooling/record delivery
+  commit/tree and reproducible artifact digest;
 - immutable private-registry manifest plus provider-returned manifest, config
   and layer byte comparison;
 - closed executable and bootstrap operation versions;

@@ -555,12 +555,31 @@ byte-identical complete layouts, checks the closed layer path and executable
 allowlist, hashes each executable from the layer, and verifies temporary source
 and layout cleanup before success.
 
+That commit is solely the executable source identity. It is not called the
+delivery commit for PR #192's revised tooling and records. The required check
+externally binds each delivery review candidate by exact PR-head commit, tree
+and candidate-record blob. The final merged identity remains pending until the
+post-merge `main` check emits its commit/tree/record blob and the owner records
+it in issue #184; a later reconciliation verifies that evidence rather than
+making a circular claim that it delivered itself.
+
 The local review candidate is manifest
 `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,
 config `2e4f4c2575efbb71464c6b6527df4a49745b24ddb0c1958380be7d8061fd9a71`
 and layer `df686b0e685fc23a72d9c077a776a7b0d56f4ecc3977bdd1ca5af3984539555c`.
+The machine record also fixes all three executable and SBOM digests plus
+two-build byte identity, allowlist and cleanup outcomes. CI keeps ordinary
+checkout/merge qualification separate, then enters a network-disabled
+namespace, archives the exact recorded source and exact-compares every field.
+The builder canonicalizes non-special tar device fields and checksums to the
+recorded encoding, removing the GNU tar 1.34/1.35 header-version ambiguity.
+Negative tests reject digest mismatch and stale source/tree. This prevents a
+successful merge-ref build from being misrepresented as verification of
+different recorded bytes.
+
 These values prove only reproducible preparation. Provider substitution,
-publication mismatch and stale private-registry identity remain uncontrolled
+publication mismatch, post-merge delivery identity and stale private-registry
+identity remain uncontrolled
 until a separately authorized one-version private publication is pulled by
 digest and its manifest, config and layer bytes are compared.
 
