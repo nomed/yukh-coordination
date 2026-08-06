@@ -10,13 +10,20 @@ installation guide and does not indicate that a live NATS server, bucket,
 credential, listener, or traffic path exists.
 
 The accepted
-[RFC-0022](https://github.com/nomed/yukh-coordination/blob/main/.context/rfcs/RFC-0022-private-staging-primitives-service.md),
-[deployment plan](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-deployment-plan.md),
-[implementation record](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-implementation-record.md),
-[redacted operator packet](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-operator-packet.md),
+[RFC-0022](https://github.com/nomed/yukh-coordination/blob/main/.context/rfcs/RFC-0022-private-staging-primitives-service.md)
 and
 [threat model](https://github.com/nomed/yukh-coordination/blob/main/.context/security/threat-model.md)
-remain authoritative.
+remain authoritative. The related records retain their exact, non-approval
+statuses:
+
+- the [deployment plan](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-deployment-plan.md)
+  is a **reconciled review candidate; execution forbidden**;
+- the [implementation record](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-implementation-record.md)
+  is a **superseding immutable implementation candidate**;
+- the [redacted operator packet](https://github.com/nomed/yukh-coordination/blob/main/.context/security/private-primitives-staging-operator-packet.md)
+  is a **rebound review candidate; provisioning forbidden**.
+
+None of those candidate records grants execution or provisioning authority.
 
 ## Separate executable and custody boundaries
 
