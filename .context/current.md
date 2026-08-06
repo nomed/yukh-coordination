@@ -1,12 +1,13 @@
 # Current context
 
-- Updated: 2026-08-05
-- Governing issue: #167
-- Last delivery pull request: #181
-- Active Coordination increments: renewed RFC-0022 Step 5 is paused at #182
-  after the restricted namespace foundation and immutable target pull exposed
-  the non-root runtime-directory ownership gap; #6 composes the client process
-  after #7 closed its two-process qualification
+- Updated: 2026-08-06
+- Governing issues: #6, #167 and #184
+- Last delivery pull request: #183
+- Active Coordination increments: #185 connects the client CLI to the accepted
+  bootstrap exchange; #189 documents the JetStream state and secret boundaries
+  needed to reassess RFC-0022 Step 5 after #182 and #183 closed the non-root
+  runtime-directory ownership gap. Both pull requests remain drafts and are not
+  accepted delivery
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -37,14 +38,21 @@
   were reconciled in #130; the bounded MCP handoff was recorded in #132;
   RFC-0023 fixed the mandatory transcript lifecycle and retention boundary in
   #134; its schema and capability-segregated port foundation was delivered in
-  #140 and its non-destructive SQLite preparation transaction in #151; verified
-  synthetic primary payload removal was delivered in #155; the RFC-0022 packet
+  #140, its non-destructive SQLite preparation transaction in #151, verified
+  synthetic primary payload removal in #155, and its synthetic backup evidence
+  and completion persistence in #168; the RFC-0022 packet
   deferred-state gates were corrected in #161 and its immutable registry
   reference was bound in #162; the
   RFC-0022 operator packet was prepared in #138, consolidated in
   #146 and its first reproducible artifact digests recorded in #139 without
   authorizing provisioning or live traffic; RFC-0024 fixed the offline trust
   ceremony in #148 and its execution-forbidden tooling was delivered in #150
+  and completed in #166; the coordination event publication, conversation
+  events and CLI signal boundaries were delivered in #170, #172, #173 and #175;
+  the four-agent, two-process qualification closed in #176 and #178; the client
+  process boundary and bootstrap saga were delivered in #180 and #181; the
+  PodIP-aware launcher and immutable OCI evidence were corrected in #171 and
+  #179; the non-root runtime-directory boundary was closed in #183
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
@@ -52,13 +60,14 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: review and merge #182, reproduce/rebind its superseding OCI and
-  reassess the server-leaf window before resuming Step 5. Separately
-  connect the client executable to the accepted bootstrap exchange, concrete
-  custody and receipt verification adapters. Real backup providers, lifecycle workers,
-  target pull, Kubernetes credentials and objects, Step 5, operational
-  completion, worker, physical media sanitization, traffic, Matrix, MCP live
-  use and production use remain separately gated
+- Next action: complete and review #189, then reassess the superseding OCI and
+  server-leaf window under #184 before requesting a new explicit authorization
+  for RFC-0022 Step 5. Separately, #185 may connect the client executable to the
+  accepted bootstrap exchange, concrete custody and receipt-verification
+  adapters. RFC-0023 lifecycle-worker composition remains design-only in #177.
+  Real backup providers, lifecycle workers, target pull, Kubernetes credentials
+  and objects, Step 5, operational completion, physical-media sanitization,
+  traffic, Matrix, MCP live use and production use remain separately gated
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
