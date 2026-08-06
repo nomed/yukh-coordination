@@ -15,34 +15,42 @@ public evidence.
 
 ## Stop condition before provisioning approval
 
-The immutable source candidate now contains both reproducibly qualified
-executables and the separately reviewed accountable three-bucket bootstrap.
-That closes the implementation prerequisites but does not itself authorize
-provisioning. No infrastructure or credential work may begin until a concrete,
-redacted operator packet binds reproducible artifact digests and every item
-below to exact executable source commit
+The immutable executable candidate at executable/OCI reproduction source commit
 `92678da9d1d866c50371a683845c4675bf45c055` and tree
-`7633caa18d16d1a3c488cd28f78ac808876cc5a5`, the separately identified
-post-merge commit/tree that delivers the tooling and records, immutable
-provider-observed registry identity and the exact reviewed OCI blobs, and the
-owner explicitly approves that complete packet.
+`7633caa18d16d1a3c488cd28f78ac808876cc5a5` contains both reproducibly
+qualified executables and the separately reviewed accountable three-bucket
+bootstrap. The completed implementation prerequisites do not authorize
+provisioning. No
+infrastructure or credential work may begin until a concrete, redacted operator
+packet binds the executable and OCI digests to executable/OCI reproduction
+source commit `92678da9d1d866c50371a683845c4675bf45c055`, binds the revised tooling
+and preparation records to immutable delivery commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, binds the provider-observed
+registry identity to the exact reviewed OCI blobs, and the owner explicitly
+approves the complete packet.
 
-PR #192 is only the tooling/record delivery review candidate. Its required
-check emits the exact PR-head commit/tree and candidate-record blob. Because a
-merge identity cannot self-record before it exists, the successful post-merge
-`main` check must emit the final commit/tree/record blob; the owner then records
-them in issue #184 and a later reconciliation verifies ancestry and unchanged
-record bytes. Until then, immutable delivery identity is
-`PENDING POST-MERGE RECORDING` and the plan remains execution-forbidden.
+PR #192 delivered the revised tooling and preparation records at immutable
+delivery commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
+`8cf2a7590b13184c9a1a0eec53b011be62a164f9` and unchanged candidate-record
+blob `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. The successful post-merge
+`main` check emitted the PR #192 delivery commit, tree and candidate-record blob,
+and issue #184 records the same values. PR #193 verifies the PR #192 binding;
+the PR #193 reconciliation commit is not identified as the PR #192 delivery
+commit. The plan remains execution-forbidden.
 
-The execution-forbidden issue #184 preparation reproduced manifest
+The execution-forbidden issue #184 preparation reproduced, from executable/OCI
+reproduction source commit
+`92678da9d1d866c50371a683845c4675bf45c055`, manifest
 `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,
 config `2e4f4c2575efbb71464c6b6527df4a49745b24ddb0c1958380be7d8061fd9a71`
 and layer `df686b0e685fc23a72d9c077a776a7b0d56f4ecc3977bdd1ca5af3984539555c`
-twice from that exact commit. Those local identities are review evidence, not
-an installable registry identity. CI qualifies ordinary checkout/merge bytes
-separately. Its candidate-specific, network-disabled path archives the recorded
-source commit, rebuilds twice and exact-compares all recorded executable,
+twice. These local digests are review evidence, not an installable registry
+identity. CI qualifies ordinary checkout/merge bytes separately. The
+candidate-specific, network-disabled CI path archives executable/OCI
+reproduction source commit
+`92678da9d1d866c50371a683845c4675bf45c055`, rebuilds twice and exact-compares
+all recorded executable,
 manifest, config, layer and SBOM digests plus byte-identity, allowlist and
 cleanup outcomes. Stale source/tree and digest mismatch tests must fail closed.
 
@@ -88,8 +96,9 @@ descriptor boundary. It receives no NATS information or credential.
 The operator must prepare one review packet containing only these redacted
 fields:
 
-- exact executable source commit/tree, post-merge tooling/record delivery
-  commit/tree and reproducible artifact digest;
+- executable/OCI reproduction source commit/tree, immutable revised
+  tooling/preparation-record delivery commit/tree and reproducible artifact
+  digest;
 - immutable private-registry manifest plus provider-returned manifest, config
   and layer byte comparison;
 - closed executable and bootstrap operation versions;
@@ -108,9 +117,9 @@ fields:
 
 Any missing, mismatched, expired or non-redacted item stops the process.
 
-Private GHCR publication and provider pull comparison are not authorized by
-this plan or by issue #184 preparation. They require an explicit owner approval
-that names source commit
+Neither the deployment plan nor issue #184 preparation authorizes private GHCR
+publication or provider pull comparison. Explicit owner approval is required
+and must name executable/OCI reproduction source commit
 `92678da9d1d866c50371a683845c4675bf45c055`, candidate manifest
 `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,
 the private package, one new non-retagged version, pull-by-digest verification

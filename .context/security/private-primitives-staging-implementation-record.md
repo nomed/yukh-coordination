@@ -13,30 +13,29 @@ The reviewed implementation candidate is exactly:
 | Field | Value |
 |---|---|
 | Repository | `nomed/yukh-coordination` |
-| Exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` |
+| Executable/OCI reproduction source commit | `92678da9d1d866c50371a683845c4675bf45c055` |
 | Exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` |
-| Tooling/record delivery review candidate | PR #192 head commit, tree and candidate-record blob emitted by its required `Go` check; `REVIEW CANDIDATE`, not delivered |
-| Immutable post-merge delivery commit/tree | `PENDING POST-MERGE RECORDING`; provisioning stop |
+| Revised tooling/preparation-record delivery | PR #192, immutable delivery commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree `8cf2a7590b13184c9a1a0eec53b011be62a164f9` |
+| Candidate-record blob at delivery | `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`; unchanged from the reviewed record |
 | Service profile | `yukh-coordination/private-primitives-staging-v1` |
 | Bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` |
-| Recorded-source qualification check | candidate-specific CI rebuild of the exact source commit; two isolated archives; Go 1.26.5 Linux AMD64; network namespace disabled |
+| Recorded-source qualification check | `PASS`, post-merge run `31102494002`; candidate-specific rebuild of executable/OCI reproduction source commit `92678da9d1d866c50371a683845c4675bf45c055`; two isolated archives; Go 1.26.5 Linux AMD64; network namespace disabled |
 | Checkout qualification check | separate CI qualification of checked-out/merge bytes; not evidence for the recorded source |
 
-The executable source is the exact identity embedded in and used to construct
-the recorded OCI bytes. It predates this PR and is not the commit that delivers
-the revised tooling or records. PR #192 is the tooling/record delivery review
-candidate. Its required check externally binds the exact PR head commit, tree
-and `.github/records/private-primitives-oci-review-candidate.txt` blob for each
-reviewed run, so a changed head necessarily creates a new review candidate.
-
-The final immutable delivery identity cannot be stated inside the commit that
-does not yet exist. After merge, the successful `main` check emits the merged
-commit, tree and candidate-record blob. The owner records those values in issue
-#184 and a later packet-reconciliation commit verifies ancestry and unchanged
-record-blob identity. That later recording commit is evidence about the
-delivery commit; it is not renamed as the delivery commit. Until this
-non-circular post-merge recording is complete, the delivery identity is
-`PENDING` and provisioning remains stopped.
+Executable/OCI reproduction source commit
+`92678da9d1d866c50371a683845c4675bf45c055` is embedded in and was used to
+construct the recorded OCI bytes. PR #192 immutable delivery commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c` identifies delivery of the revised
+tooling and preparation records; the PR #192 delivery commit is not the source
+identity used to construct the recorded OCI bytes. The successful post-merge
+`main` check for PR #192 emitted immutable delivery commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
+`8cf2a7590b13184c9a1a0eec53b011be62a164f9` and candidate-record blob
+`b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. Issue #184 records the PR #192
+delivery values and check run `31102494002`. PR #193 verifies source ancestry
+and the unchanged record blob; the PR #193 reconciliation commit is not
+identified as the PR #192 delivery commit. Provisioning remains stopped by the
+separate gates below.
 
 This record supersedes the source and OCI bindings at
 `25ec7901796208785ec25f20b5fc4c0d7bc05eba`,
@@ -59,6 +58,7 @@ evidence and are not deployable candidates.
 | Kubernetes PodIP-aware descriptor launcher | #171 | `ce607210c8ae9bd71c4d4adfc1414112cb2fa008` |
 | Non-root runtime-directory closure | #183 | `ee8d74d89fdc30f37d4d8e8c75c922a473c6d9c6` |
 | JetStream state and secret boundary documentation | #189 | `92678da9d1d866c50371a683845c4675bf45c055` |
+| Corrected OCI preparation tooling and records | #192 | `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c` |
 
 The final candidate contains every earlier implementation boundary. The chain
 is traceability evidence, not a set of independently substitutable artifacts.
@@ -91,7 +91,7 @@ or pre-population states.
 
 ## Offline OCI preparation evidence
 
-Repository-owned tooling archived exact commit
+Repository-owned tooling archived executable/OCI reproduction source commit
 `92678da9d1d866c50371a683845c4675bf45c055` twice and built each archive under
 Go 1.26.5 Linux AMD64 with networking disabled. The complete OCI layouts were
 byte-identical. The layer path allowlist contained only the three reviewed
