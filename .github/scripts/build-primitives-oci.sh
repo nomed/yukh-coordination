@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly candidate="25ec7901796208785ec25f20b5fc4c0d7bc05eba"
-readonly service_sha="598adbc49a727bffef773d97e724c915960e8404509e3b9d6941dd447040720c"
-readonly bootstrap_sha="73f59bec1ea4fd76baa6b3b637859e08fd88fe7ca0cb7530d59f85380214c923"
-readonly output="${1:?usage: build-primitives-oci.sh OUTPUT_DIRECTORY}"
+readonly output="${1:?usage: build-primitives-oci.sh OUTPUT_DIRECTORY SOURCE_DIRECTORY SOURCE_COMMIT}"
+readonly source="${2:?usage: build-primitives-oci.sh OUTPUT_DIRECTORY SOURCE_DIRECTORY SOURCE_COMMIT}"
+readonly candidate="${3:?usage: build-primitives-oci.sh OUTPUT_DIRECTORY SOURCE_DIRECTORY SOURCE_COMMIT}"
 
 if [[ -e "$output" ]]; then
   echo "OCI output already exists" >&2
+  exit 1
+fi
+if [[ ! "$candidate" =~ ^[0-9a-f]{40}$ ]] || [[ ! -f "$source/go.mod" ]]; then
+  echo "OCI build requires an exact source archive and full commit" >&2
   exit 1
 fi
 if [[ "$(go env GOOS)/$(go env GOARCH)" != "linux/amd64" ]] ||
@@ -25,22 +28,23 @@ trap cleanup EXIT
 mkdir -p "$work/rootfs/usr/local/bin" "$work/rootfs/etc" "$work/rootfs/var/empty"
 
 service_revision="yukh-coordination-revision:$candidate"
-CGO_ENABLED=0 go build -trimpath -buildvcs=false \
-  -ldflags "-buildid= -X main.buildRevision=$service_revision" \
-  -o "$work/rootfs/usr/local/bin/yukh-coordination-primitives" \
-  ./internal/primitivesstaging/cmd/yukh-coordination-primitives
-CGO_ENABLED=0 go build -trimpath -buildvcs=false \
-  -ldflags "-buildid= -X main.buildRevision=$candidate" \
-  -o "$work/rootfs/usr/local/bin/yukh-coordination-primitives-bootstrap" \
-  ./internal/primitivesbootstrap/cmd/yukh-coordination-primitives-bootstrap
-CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-buildid=" \
-  -o "$work/rootfs/usr/local/bin/yukh-coordination-secret-launcher" \
-  ./internal/primitiveslauncher/cmd/yukh-coordination-secret-launcher
+(
+  cd "$source"
+  CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+    -ldflags "-buildid= -X main.buildRevision=$service_revision" \
+    -o "$work/rootfs/usr/local/bin/yukh-coordination-primitives" \
+    ./internal/primitivesstaging/cmd/yukh-coordination-primitives
+  CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+    -ldflags "-buildid= -X main.buildRevision=$candidate" \
+    -o "$work/rootfs/usr/local/bin/yukh-coordination-primitives-bootstrap" \
+    ./internal/primitivesbootstrap/cmd/yukh-coordination-primitives-bootstrap
+  CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-buildid=" \
+    -o "$work/rootfs/usr/local/bin/yukh-coordination-secret-launcher" \
+    ./internal/primitiveslauncher/cmd/yukh-coordination-secret-launcher
+)
 
-printf '%s  %s\n' "$service_sha" \
-  "$work/rootfs/usr/local/bin/yukh-coordination-primitives" | sha256sum --check --status
-printf '%s  %s\n' "$bootstrap_sha" \
-  "$work/rootfs/usr/local/bin/yukh-coordination-primitives-bootstrap" | sha256sum --check --status
+service_sha="$(sha256sum "$work/rootfs/usr/local/bin/yukh-coordination-primitives" | cut -d' ' -f1)"
+bootstrap_sha="$(sha256sum "$work/rootfs/usr/local/bin/yukh-coordination-primitives-bootstrap" | cut -d' ' -f1)"
 launcher_sha="$(sha256sum "$work/rootfs/usr/local/bin/yukh-coordination-secret-launcher" | cut -d' ' -f1)"
 
 printf '%s\n' 'nonroot:x:65532:65532:nonroot:/var/empty:/sbin/nologin' >"$work/rootfs/etc/passwd"
@@ -83,6 +87,7 @@ cat >"$output/sbom.spdx.json" <<EOF
 EOF
 sbom_digest="$(sha256sum "$output/sbom.spdx.json" | cut -d' ' -f1)"
 
-printf 'manifest=sha256:%s\nconfig=sha256:%s\nlayer=sha256:%s\nsbom=sha256:%s\nlauncher=sha256:%s\n' \
-  "$manifest_digest" "$config_digest" "$layer_digest" "$sbom_digest" "$launcher_sha" \
-  >"$output/digests.txt"
+printf 'source=%s\nservice=sha256:%s\nbootstrap=sha256:%s\nlauncher=sha256:%s\nmanifest=sha256:%s\nconfig=sha256:%s\nlayer=sha256:%s\nsbom=sha256:%s\n' \
+"$candidate" "$service_sha" "$bootstrap_sha" "$launcher_sha" \
+"$manifest_digest" "$config_digest" "$layer_digest" "$sbom_digest" \
+>"$output/digests.txt"
