@@ -28,11 +28,11 @@ public packet.
 | repository | `nomed/yukh-coordination` | VERIFIED |
 | exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
 | exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` | VERIFIED |
-| tooling/record delivery review candidate | PR #192 head commit/tree and candidate-record blob emitted by required check | REVIEW CANDIDATE; NOT DELIVERED |
-| immutable post-merge delivery commit/tree | final merged identity plus unchanged candidate-record blob | PENDING POST-MERGE RECORDING; STOP |
+| tooling/record delivery | PR #192 commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`; tree `8cf2a7590b13184c9a1a0eec53b011be62a164f9` | VERIFIED |
+| candidate-record blob at delivery | `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4` | VERIFIED UNCHANGED |
 | service profile | `yukh-coordination/private-primitives-staging-v1` | VERIFIED |
 | bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` | VERIFIED |
-| recorded-source hermetic qualification | exact-source candidate CI rebuild; two isolated archives; network disabled | AUTOMATED; PASS REQUIRED |
+| recorded-source hermetic qualification | exact-source candidate CI rebuild; two isolated archives; network disabled; post-merge run `31102494002` | PASS |
 | ordinary checkout qualification | current checkout/PR merge build | AUTOMATED SEPARATELY; NOT RECORDED-SOURCE EVIDENCE |
 | MCP consumer commit | `e303b3671bf9b4c5202ae147b882ab763964d5ed` | VERIFIED |
 | build toolchain | Go `1.26.5`, Linux AMD64 archive SHA-256 `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` | LOCALLY VERIFIED |
@@ -64,12 +64,12 @@ qualifications use a network-disabled namespace and contain no publication,
 provider or credential operation.
 
 The source commit is not the delivery commit for this revised tooling and
-packet. PR #192 remains a review candidate whose exact head commit/tree/record
-blob are emitted by its required check. After merge, the `main` check emits the
-immutable merged identity and unchanged record blob; the owner records it in
-issue #184 and a later reconciliation verifies it without calling that later
-recording commit the delivery commit. This packet cannot request Step 5 while
-that post-merge identity is pending.
+packet. PR #192 delivered them at commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
+`8cf2a7590b13184c9a1a0eec53b011be62a164f9` and unchanged record blob
+`b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. The successful post-merge `main`
+check emitted that binding and issue #184 records it. This later reconciliation
+verifies the evidence without calling its own commit the delivery commit.
 
 No registry authentication, publication, push, pull or provider comparison
 occurred. The exact next approval must authorize one new private, non-retagged
@@ -220,8 +220,7 @@ step 6. The security reviewer records one of these closed decisions:
 
 Current decision: `NOT_READY_TO_REQUEST_STEP_5_APPROVAL`.
 
-The immutable post-merge delivery identity, immutable registry reference and
-provider byte comparison remain pending.
+The immutable registry reference and provider byte comparison remain pending.
 The selected server leaf expires at `2026-08-06T11:05:05Z` and cannot supply a
 safe future step-5/step-6 interval. The project owner must separately approve
 the existing RFC-0024 leaf-only rotation runbook, limited to one replacement

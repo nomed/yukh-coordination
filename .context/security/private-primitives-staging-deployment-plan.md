@@ -27,13 +27,13 @@ post-merge commit/tree that delivers the tooling and records, immutable
 provider-observed registry identity and the exact reviewed OCI blobs, and the
 owner explicitly approves that complete packet.
 
-PR #192 is only the tooling/record delivery review candidate. Its required
-check emits the exact PR-head commit/tree and candidate-record blob. Because a
-merge identity cannot self-record before it exists, the successful post-merge
-`main` check must emit the final commit/tree/record blob; the owner then records
-them in issue #184 and a later reconciliation verifies ancestry and unchanged
-record bytes. Until then, immutable delivery identity is
-`PENDING POST-MERGE RECORDING` and the plan remains execution-forbidden.
+PR #192 delivered the tooling and records at immutable commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
+`8cf2a7590b13184c9a1a0eec53b011be62a164f9` and unchanged candidate-record
+blob `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. The successful post-merge
+`main` check emitted those identities and issue #184 records them. This
+non-circular reconciliation verifies the binding; it does not make its own
+commit the delivery identity. The plan remains execution-forbidden.
 
 The execution-forbidden issue #184 preparation reproduced manifest
 `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,

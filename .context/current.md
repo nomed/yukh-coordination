@@ -2,12 +2,9 @@
 
 - Updated: 2026-08-06
 - Governing issues: #6, #167 and #184
-- Last delivery pull request: #183
-- Active Coordination increments: #185 connects the client CLI to the accepted
-  bootstrap exchange; #189 documents the JetStream state and secret boundaries
-  needed to reassess RFC-0022 Step 5 after #182 and #183 closed the non-root
-  runtime-directory ownership gap. Both pull requests remain drafts and are not
-  accepted delivery
+- Last delivery pull request: #192
+- Active Coordination increment: #185 connects the client CLI to the accepted
+  bootstrap exchange; it remains a draft and is not accepted delivery
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
@@ -52,7 +49,10 @@
   the four-agent, two-process qualification closed in #176 and #178; the client
   process boundary and bootstrap saga were delivered in #180 and #181; the
   PodIP-aware launcher and immutable OCI evidence were corrected in #171 and
-  #179; the non-root runtime-directory boundary was closed in #183
+  #179; the non-root runtime-directory boundary was closed in #183; the
+  JetStream state and secret boundaries were documented in #189; corrected OCI
+  preparation tooling and records were delivered in #192 with executable source
+  and tooling-delivery identities kept distinct
 - Accepted design: RFC-0014 client credential custody and proof signing in #56,
   RFC-0018 Linux Secret Service custody composition in #70, RFC-0019 bounded
   capability accounting and terminal inspection in #76, and RFC-0020 Google
@@ -60,9 +60,10 @@
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
   staging offline trust ceremony in #148
-- Next action: complete and review #189, then reassess the superseding OCI and
-  server-leaf window under #184 before requesting a new explicit authorization
-  for RFC-0022 Step 5. Separately, #185 may connect the client executable to the
+- Next action: under #184, obtain separate explicit authorization for one
+  private OCI publication and provider comparison and for a fresh server-leaf
+  window before requesting a new explicit authorization for RFC-0022 Step 5.
+  Separately, #185 may connect the client executable to the
   accepted bootstrap exchange, concrete custody and receipt-verification
   adapters. RFC-0023 lifecycle-worker composition remains design-only in #177.
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials

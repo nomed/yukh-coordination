@@ -556,12 +556,13 @@ allowlist, hashes each executable from the layer, and verifies temporary source
 and layout cleanup before success.
 
 That commit is solely the executable source identity. It is not called the
-delivery commit for PR #192's revised tooling and records. The required check
-externally binds each delivery review candidate by exact PR-head commit, tree
-and candidate-record blob. The final merged identity remains pending until the
-post-merge `main` check emits its commit/tree/record blob and the owner records
-it in issue #184; a later reconciliation verifies that evidence rather than
-making a circular claim that it delivered itself.
+delivery commit for PR #192's revised tooling and records. The successful
+post-merge `main` check emitted delivery commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
+`8cf2a7590b13184c9a1a0eec53b011be62a164f9` and unchanged candidate-record
+blob `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`; issue #184 records them. This
+later reconciliation verifies that evidence rather than making a circular
+claim that it delivered itself.
 
 The local review candidate is manifest
 `aed277ad73266bcbef2e8e88fc9fd4fc99bf775b9e627abed5a0c36bdd3900d7`,
@@ -578,8 +579,7 @@ successful merge-ref build from being misrepresented as verification of
 different recorded bytes.
 
 These values prove only reproducible preparation. Provider substitution,
-publication mismatch, post-merge delivery identity and stale private-registry
-identity remain uncontrolled
+publication mismatch and stale private-registry identity remain uncontrolled
 until a separately authorized one-version private publication is pulled by
 digest and its manifest, config and layer bytes are compared.
 
