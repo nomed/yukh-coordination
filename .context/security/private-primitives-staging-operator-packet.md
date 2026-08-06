@@ -26,9 +26,9 @@ public packet.
 | Field | Required value | Status |
 |---|---|---|
 | repository | `nomed/yukh-coordination` | VERIFIED |
-| exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
+| executable/OCI reproduction source commit | `92678da9d1d866c50371a683845c4675bf45c055` | VERIFIED |
 | exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` | VERIFIED |
-| tooling/record delivery | PR #192 commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`; tree `8cf2a7590b13184c9a1a0eec53b011be62a164f9` | VERIFIED |
+| revised tooling/preparation-record delivery | PR #192 immutable delivery commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`; tree `8cf2a7590b13184c9a1a0eec53b011be62a164f9` | VERIFIED |
 | candidate-record blob at delivery | `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4` | VERIFIED UNCHANGED |
 | service profile | `yukh-coordination/private-primitives-staging-v1` | VERIFIED |
 | bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` | VERIFIED |
@@ -45,8 +45,8 @@ public packet.
 | superseding OCI SBOM SHA-256 | `72fbe3c9184e0244aaee06ba1e0b90a4fc75525c16f2b03fee4663b50911439f`; deterministic SPDX 2.3 over exactly three executables | INDEPENDENTLY REPRODUCED; LOCAL CANDIDATE ONLY |
 | immutable registry reference | digest-qualified reference with provider-observed manifest digest | PENDING SEPARATELY AUTHORIZED PUBLICATION AND PROVIDER PULL; STOP |
 
-The executable and OCI digests were independently reproduced from exact source
-commit
+The executable and OCI digests were independently reproduced from
+executable/OCI reproduction source commit
 `92678da9d1d866c50371a683845c4675bf45c055`. Repository-owned tooling created
 two isolated source archives and complete OCI layouts with `CGO_ENABLED=0`,
 `-trimpath`, `-buildvcs=false`, an empty Go build ID and the reviewed embedded
@@ -57,19 +57,23 @@ or non-identical rebuild rejects the packet.
 
 The machine-readable candidate record also fixes the source tree, all seven
 artifact digests, two-build complete-layout byte identity, executable allowlist
-and cleanup outcome. Candidate-specific CI archives and builds that source
-rather than the checkout/merge bytes, exact-compares every field, and includes
-negative tests for digest mismatch and stale source/tree. Both OCI
-qualifications use a network-disabled namespace and contain no publication,
-provider or credential operation.
+and cleanup outcome. Candidate-specific CI archives and builds executable/OCI
+reproduction source commit
+`92678da9d1d866c50371a683845c4675bf45c055` rather than the checkout/merge
+bytes, exact-compares every field, and includes negative tests for digest
+mismatch and stale source/tree. Both OCI qualifications use a network-disabled
+namespace and contain no publication, provider or credential operation.
 
-The source commit is not the delivery commit for this revised tooling and
-packet. PR #192 delivered them at commit
+Executable/OCI reproduction source commit
+`92678da9d1d866c50371a683845c4675bf45c055` is not the immutable delivery
+commit for the revised tooling and preparation records. PR #192 delivered the
+revised tooling and preparation records at immutable delivery commit
 `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
 `8cf2a7590b13184c9a1a0eec53b011be62a164f9` and unchanged record blob
 `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. The successful post-merge `main`
-check emitted that binding and issue #184 records it. This later reconciliation
-verifies the evidence without calling its own commit the delivery commit.
+check emitted the PR #192 delivery binding, and issue #184 records the same
+binding. PR #193 verifies the PR #192 evidence; the PR #193 reconciliation
+commit is not identified as the PR #192 delivery commit.
 
 No registry authentication, publication, push, pull or provider comparison
 occurred. The exact next approval must authorize one new private, non-retagged

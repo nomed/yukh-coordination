@@ -13,25 +13,29 @@ The reviewed implementation candidate is exactly:
 | Field | Value |
 |---|---|
 | Repository | `nomed/yukh-coordination` |
-| Exact executable source commit | `92678da9d1d866c50371a683845c4675bf45c055` |
+| Executable/OCI reproduction source commit | `92678da9d1d866c50371a683845c4675bf45c055` |
 | Exact executable source tree | `7633caa18d16d1a3c488cd28f78ac808876cc5a5` |
-| Tooling/record delivery | PR #192, immutable commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree `8cf2a7590b13184c9a1a0eec53b011be62a164f9` |
+| Revised tooling/preparation-record delivery | PR #192, immutable delivery commit `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree `8cf2a7590b13184c9a1a0eec53b011be62a164f9` |
 | Candidate-record blob at delivery | `b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`; unchanged from the reviewed record |
 | Service profile | `yukh-coordination/private-primitives-staging-v1` |
 | Bootstrap profile | `yukh-coordination/private-primitives-staging-bootstrap-v1` |
-| Recorded-source qualification check | `PASS`, post-merge run `31102494002`; candidate-specific rebuild of the exact source commit; two isolated archives; Go 1.26.5 Linux AMD64; network namespace disabled |
+| Recorded-source qualification check | `PASS`, post-merge run `31102494002`; candidate-specific rebuild of executable/OCI reproduction source commit `92678da9d1d866c50371a683845c4675bf45c055`; two isolated archives; Go 1.26.5 Linux AMD64; network namespace disabled |
 | Checkout qualification check | separate CI qualification of checked-out/merge bytes; not evidence for the recorded source |
 
-The executable source is the exact identity embedded in and used to construct
-the recorded OCI bytes. It predates PR #192 and is not the commit that delivers
-the revised tooling or records. The successful post-merge `main` check for PR
-#192 emitted delivery commit
+Executable/OCI reproduction source commit
+`92678da9d1d866c50371a683845c4675bf45c055` is embedded in and was used to
+construct the recorded OCI bytes. PR #192 immutable delivery commit
+`97fe30869f9fd73d3e6eeb163cce2a41fa0e527c` identifies delivery of the revised
+tooling and preparation records; the PR #192 delivery commit is not the source
+identity used to construct the recorded OCI bytes. The successful post-merge
+`main` check for PR #192 emitted immutable delivery commit
 `97fe30869f9fd73d3e6eeb163cce2a41fa0e527c`, tree
 `8cf2a7590b13184c9a1a0eec53b011be62a164f9` and candidate-record blob
-`b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. Issue #184 records those values
-and check run `31102494002`; this reconciliation verifies source ancestry and
-the unchanged record blob without relabeling its own commit as the delivery
-commit. Provisioning remains stopped by the separate gates below.
+`b0af1631fde7b6d5c787b80927fe4fbf07b1a4f4`. Issue #184 records the PR #192
+delivery values and check run `31102494002`. PR #193 verifies source ancestry
+and the unchanged record blob; the PR #193 reconciliation commit is not
+identified as the PR #192 delivery commit. Provisioning remains stopped by the
+separate gates below.
 
 This record supersedes the source and OCI bindings at
 `25ec7901796208785ec25f20b5fc4c0d7bc05eba`,
@@ -87,7 +91,7 @@ or pre-population states.
 
 ## Offline OCI preparation evidence
 
-Repository-owned tooling archived exact commit
+Repository-owned tooling archived executable/OCI reproduction source commit
 `92678da9d1d866c50371a683845c4675bf45c055` twice and built each archive under
 Go 1.26.5 Linux AMD64 with networking disabled. The complete OCI layouts were
 byte-identical. The layer path allowlist contained only the three reviewed
