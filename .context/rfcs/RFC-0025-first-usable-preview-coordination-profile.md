@@ -4,6 +4,7 @@
 - Authors: Nomed with implementation support
 - Created: 2026-08-09
 - Accepted: 2026-08-09
+- Decider: project owner
 - Governing issue: #195
 - Governing suite issue: `nomed/nomed.github.io#40`
 - Governing suite architecture: accepted `nomed.github.io` RFC-0005 on `main`
@@ -32,16 +33,12 @@ Accepted client records do not select a preview bootstrap authority or a
 container lifecycle. Treating those records as implicit suite-preview authority
 would cross security and component boundaries without review.
 
-The project owner explicitly accepted RFC-0025 in #195 on 2026-08-09 by stating
-"Accetto tutti e tre", including this Coordination RFC at review-clean proposal
-head `d06820bd1444acffc1190620cb681f2d1837777a`.
-
-Acceptance authorizes only a separately reviewed, execution-forbidden
-implementation and hermetic synthetic qualification. It does not authorize
-infrastructure provisioning, OCI publication, credential creation outside a
-test-owned ephemeral process, live traffic, GitHub mutation, provider
-registration or execution, preview publication, production use or a
-production-readiness claim.
+The project owner explicitly accepted this RFC on 2026-08-09. Acceptance
+authorizes only a separately reviewed, execution-forbidden implementation and
+hermetic synthetic qualification. It authorizes no runtime code,
+infrastructure, OCI publication, credential creation outside a test-owned
+ephemeral process, live traffic, GitHub mutation, provider registration or
+execution, preview publication, production use or readiness claim.
 
 ## Profile identity and ownership
 
@@ -599,10 +596,9 @@ or deployment authority to this profile.
 
 The acceptance and delivery sequence is:
 
-1. merge the Proposed record and its threat-model/navigation delta in #196 at
-   `b89dab83dac6fae19ba30e056ceb607e9854b510`;
-2. record the project owner's explicit acceptance in #195;
-3. merge this governance-only follow-up changing status and recording the exact
+1. merge this accepted record and its threat-model/navigation delta;
+2. record the explicit owner decision in #195;
+3. merge this follow-up record changing status and recording the exact
    acceptance;
 4. only then open one execution-forbidden implementation issue for closed
    schemas, component-local assembly and hermetic tests;
@@ -611,9 +607,9 @@ The acceptance and delivery sequence is:
    infrastructure, credential materialization, artifact publication or live
    traffic.
 
-This accepted record completes the architecture gate through step 3. It creates
-no implementation issue and performs no implementation or execution. Any later
-step remains separately reviewed and subject to the prohibitions above.
+The exact current gate is step 4. No implementation may begin from this
+accepted record alone, an issue label, a suite RFC acceptance or a merged
+design-only pull request.
 
 ## Alternatives rejected
 
@@ -657,4 +653,7 @@ evidence schemas. Those choices may not change the ownership, isolation,
 authority, failure, teardown or public-artifact boundaries fixed here.
 
 Acceptance does not resolve those choices or authorize them outside the
-separately reviewed, execution-forbidden implementation boundary above.
+separately reviewed, execution-forbidden implementation boundary above. No
+unresolved choice permits implementation before the separately reviewed
+execution-forbidden implementation issue and later component-contract/test-
+readiness review.

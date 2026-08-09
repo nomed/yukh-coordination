@@ -9,7 +9,12 @@
 - Accepted decision: RFC-0025 defines the execution-forbidden Coordination
   profile for accepted `nomed.github.io` RFC-0005 on `main` at
   `12d9215f10c4b7fb1762a5025367e3e81543800f`. The project owner explicitly
-  accepted it in #195 on 2026-08-09 by stating "Accetto tutti e tre"
+  accepted it in #195 on 2026-08-09 by stating "Accetto tutti e tre".
+  Acceptance authorizes only separately reviewed execution-forbidden
+  implementation and hermetic synthetic qualification; it authorizes no
+  runtime code, infrastructure, OCI publication, credentials outside
+  test-owned ephemeral processes, live traffic, provider execution, mutation,
+  preview publication, production use or readiness claims.
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017
@@ -75,12 +80,13 @@
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
   traffic, Matrix, MCP live use and production use remain separately gated
-- First usable preview governance: RFC-0025 is accepted in #195. Acceptance
-  permits only a separately reviewed, execution-forbidden implementation and
-  hermetic synthetic qualification. This governance record creates no
-  implementation issue and authorizes no infrastructure, OCI publication,
-  credentials outside test-owned ephemeral processes, live traffic, provider
-  execution, mutation, preview publication, production use or readiness claim
+- First usable preview gate: RFC-0025 is accepted in #195. Acceptance
+  authorizes only separately reviewed execution-forbidden implementation and
+  hermetic synthetic qualification; it authorizes no runtime code,
+  infrastructure, OCI publication, credentials outside test-owned ephemeral
+  processes, live traffic, provider execution, mutation, preview publication,
+  production use or readiness claims. A separate implementation issue remains
+  required before any implementation work.
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
