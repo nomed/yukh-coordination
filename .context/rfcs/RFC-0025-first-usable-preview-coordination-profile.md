@@ -234,9 +234,13 @@ The **Effect B binding schema** contains exactly:
 
 Every field is represented directly in the closed schema, canonicalized with
 the complete binding and exact-equality checked before provider invocation. The
-two effects use distinct values for every authority-bearing field. The two
-canonical absence markers in Effect A are schema constants, not reusable
-authority values, wildcards or omitted comparisons.
+two effects use distinct complete bindings and distinct effect-specific plans,
+approvals, nonces, leases, idempotency keys, verifier identities and authority
+artifacts. Compatibility-scope fields such as repository and Project identity
+may be equal only when each independent binding includes and verifies the exact
+same value. The item target or ordered operation set remains disjoint between
+the effects. The two canonical absence markers in Effect A are schema constants,
+not reusable authority values, wildcards or omitted comparisons.
 
 The Coordination transcript epoch and primitives-service restore epoch are
 independent canonical fields. The transcript epoch scopes relay records and
@@ -343,6 +347,12 @@ representations or derivation domains ad hoc. Conformance vectors must freeze:
 - changed-scope vectors that hold the approved nonce `value_digest` constant,
   require denial before a second primitives call and prove no second `consumed`
   outcome or terminal nonce record is created;
+- a valid vector in which repository and Project identity are shared while the
+  effect targets, operation sets and every effect-specific authority artifact
+  remain distinct;
+- negative vectors that reuse a plan, approval, nonce, lease, idempotency key,
+  verifier identity or complete binding across effects despite a shared
+  repository or Project;
 - fencing generation, lease expiry and remaining-freshness boundaries; and
 - exact-equality outcomes before any consumer can use the profile.
 
