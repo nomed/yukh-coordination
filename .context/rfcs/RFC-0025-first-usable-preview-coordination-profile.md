@@ -193,6 +193,7 @@ The **Effect A binding schema** contains exactly:
 - exact unique approval nonce;
 - exact Projects component-scoped idempotency key;
 - exact Coordination transcript epoch;
+- exact Effect A primitives-service restore epoch;
 - exact Effect A lease resource identity and holder identity;
 - exact Effect A fencing token or lease generation;
 - exact Effect A lease expiry and required remaining-freshness bound;
@@ -222,6 +223,7 @@ The **Effect B binding schema** contains exactly:
 - exact unique approval nonce;
 - exact MCP component-scoped idempotency key;
 - exact Coordination transcript epoch;
+- exact Effect B primitives-service restore epoch;
 - exact Effect B lease resource identity and holder identity;
 - exact Effect B fencing token or lease generation;
 - exact Effect B lease expiry and required remaining-freshness bound;
@@ -234,23 +236,33 @@ two effects use distinct values for every authority-bearing field. The two
 canonical absence markers in Effect A are schema constants, not reusable
 authority values, wildcards or omitted comparisons.
 
+The Coordination transcript epoch and primitives-service restore epoch are
+independent canonical fields. The transcript epoch scopes relay records and
+replay. The effect-specific primitives restore epoch scopes nonce values, lease
+records, sealed capabilities and fencing validity under RFC-0012 and RFC-0015.
+Neither value can default from, equal by implication to or substitute for the
+other. Effect A and Effect B use distinct primitives restore epochs even when
+their relay statements share one Coordination transcript epoch.
+
 Lease acquisition uses a closed effect-specific pre-lease projection containing
 the exact repository, Project, item, operation scope, policy commit, producer
 release, snapshot, ordered operation-set digest, applicable capability/provider
 digests, environment, workflow, component idempotency key, Coordination
-transcript epoch, intended holder, verifier and declared postconditions. A plan
-identifier, plan digest, approval fields and observed lease state do not yet
-exist and are therefore not members of this non-authorizing projection. The
-projection derives only the requested lease resource and holder identities; it
-grants no invocation authority.
+transcript epoch, effect-specific primitives restore epoch, intended holder,
+verifier and declared postconditions. A plan identifier, plan digest, approval
+fields and observed lease state do not yet exist and are therefore not members
+of this non-authorizing projection. The projection derives only the requested
+lease resource and holder identities; it grants no invocation authority.
 
 After acquisition, the planner creates a fresh plan that binds the exact
 lease resource identity, observed fencing token or lease generation, exact lease
 expiry and required remaining-freshness bound together with every pre-lease
 field. The final plan identifier and canonical plan digest then enter the
-binding. The approval binds that exact plan and all explicit approval fields.
-The resulting complete canonical Effect A or Effect B binding is the sole
-authority-bearing object evaluated at invocation.
+binding. The plan and approval therefore bind both the Coordination transcript
+epoch and the independent effect-specific primitives restore epoch. The
+approval binds that exact plan and all explicit approval fields. The resulting
+complete canonical Effect A or Effect B binding is the sole authority-bearing
+object evaluated at invocation.
 
 The derivations are:
 
@@ -280,6 +292,12 @@ effect_b_nonce_value = SHA-256(
 )
 ```
 
+Because each pre-lease projection contains its exact primitives restore epoch,
+every lease-resource and lease-holder digest binds that epoch. Because each
+final binding contains the same epoch, every nonce-value digest binds it again.
+A restore-epoch substitution therefore changes every derived identity and
+cannot preserve a valid capability or lease under unchanged bytes.
+
 Even identical source bytes therefore produce different effect and purpose
 digests. A future implementation may not select field names, canonical
 representations or derivation domains ad hoc. Conformance vectors must freeze:
@@ -289,6 +307,8 @@ representations or derivation domains ad hoc. Conformance vectors must freeze:
 - every field-level wrong, missing, reordered, substituted and cross-effect
   negative;
 - every domain string and lease-resource, lease-holder and nonce-value digest;
+- distinct transcript/restore epoch values, cross-substitution negatives and
+  restore-epoch increment invalidation;
 - fencing generation, lease expiry and remaining-freshness boundaries; and
 - exact-equality outcomes before any consumer can use the profile.
 
@@ -307,13 +327,16 @@ For each effect:
    invocation;
 7. require byte-for-byte equality for the complete binding and exact equality
    for every individual field;
-8. require the observed lease resource, holder, fencing token or generation and
+8. require the live primitives service and opened capability to report the exact
+   effect-specific restore epoch bound by the plan and approval, independently
+   of the Coordination transcript epoch;
+9. require the observed lease resource, holder, fencing token or generation and
    expiry to equal the binding and satisfy the bound remaining-freshness rule;
-9. forbid provider invocation on replay, changed bytes, stale approval,
+10. forbid provider invocation on replay, changed bytes, stale approval,
    insufficient lease freshness, ambiguous state or any unequal field;
-10. treat provider acknowledgement as non-verifying;
-11. permit explicit release only after verified completion;
-12. record a possible effect with lost or ambiguous response as
+11. treat provider acknowledgement as non-verifying;
+12. permit explicit release only after verified completion;
+13. record a possible effect with lost or ambiguous response as
     `completion_unknown`, perform no automatic retry and do not release the
     lease as successful.
 
@@ -321,13 +344,16 @@ Changing any repository, Project, item, operation scope, policy commit, producer
 release, snapshot identity, plan identifier, plan digest, ordered operation-set
 digest, capability digest, provider digest, environment, workflow, approval
 issuer, approval subject or principal, approval issued-at, approval expiry,
-approval nonce, component idempotency key, Coordination transcript epoch, lease
-resource or holder, fencing token or lease generation, lease expiry or
-freshness bound, verifier or postcondition invalidates the complete binding.
-Every such change requires a fresh plan and fresh approval before invocation.
-Nonce replay, replacement or expiry and lease contention, loss, renewal,
-generation change, expiry or replacement can never be repaired under the
-existing plan or approval.
+approval nonce, component idempotency key, Coordination transcript epoch,
+effect-specific primitives restore epoch, lease resource or holder, fencing
+token or lease generation, lease expiry or freshness bound, verifier or
+postcondition invalidates the complete binding. Every such change requires a
+fresh plan and fresh approval before invocation. A primitives restore increments
+its epoch and thereby invalidates every prior nonce, lease and capability even
+when the relay transcript epoch is unchanged. Nonce replay, replacement or
+expiry and lease contention, loss, renewal, generation change, expiry,
+replacement or restore-epoch change can never be repaired under the existing
+plan or approval.
 
 Coordination stores enforce replay and concurrency only. A nonce result, lease,
 fencing token, receipt, event, audit entry or successful teardown never grants
