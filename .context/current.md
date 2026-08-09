@@ -7,8 +7,9 @@
   bootstrap exchange; #185 remains a draft and is not accepted delivery
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
 - Proposed decision: RFC-0025 defines the execution-forbidden Coordination
-  profile for accepted `nomed.github.io` RFC-0005. It remains Proposed under
-  #195 and requires explicit owner acceptance before implementation
+  profile for accepted `nomed.github.io` RFC-0005 on `main` at
+  `12d9215f10c4b7fb1762a5025367e3e81543800f`. It remains Proposed under #195
+  and requires explicit owner acceptance before implementation
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017

@@ -1011,12 +1011,14 @@ closed adapter boundaries and are never formatted or returned.
 ### Proposed RFC-0025 first usable preview profile — 2026-08-09
 
 Issue #195 proposes the Coordination component boundary required by accepted
-`nomed.github.io` RFC-0005. The proposal combines a JetStream relay command log,
-two isolated clients, two effect-specific primitives instances, preview-only
-bootstrap and receipt signing, closed public evidence and whole-sandbox
-teardown. No accepted Coordination record currently authorizes this
-composition: RFC-0006 is an adapter contract, RFC-0022 is a one-identity
-primitives profile with no relay, and RFC-0023 excludes JetStream lifecycle.
+`nomed.github.io` RFC-0005 on `main` at
+`12d9215f10c4b7fb1762a5025367e3e81543800f` through PR #42. The proposal
+combines a JetStream relay command log, two isolated clients, two
+effect-specific primitives instances, preview-only bootstrap and receipt
+signing, closed public evidence and whole-sandbox teardown. No accepted
+Coordination record currently authorizes this composition: RFC-0006 is an
+adapter contract, RFC-0022 is a one-identity primitives profile with no relay,
+and RFC-0023 excludes JetStream lifecycle.
 
 The proposed profile adds these trust boundaries:
 

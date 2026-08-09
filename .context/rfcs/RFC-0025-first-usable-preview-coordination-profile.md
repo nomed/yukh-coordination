@@ -5,8 +5,8 @@
 - Created: 2026-08-09
 - Governing issue: #195
 - Governing suite issue: `nomed/nomed.github.io#40`
-- Governing suite architecture: accepted `nomed.github.io` RFC-0005 at
-  `b23f47f2c90ec6b106eb4c9c746f6d1958e0c182`
+- Governing suite architecture: accepted `nomed.github.io` RFC-0005 on `main`
+  at `12d9215f10c4b7fb1762a5025367e3e81543800f` through PR #42
 - Governing Coordination architecture: RFC-0002, RFC-0003, RFC-0006,
   RFC-0009 through RFC-0017, RFC-0019, RFC-0021 through RFC-0024
 
