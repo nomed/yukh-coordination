@@ -1008,19 +1008,21 @@ exchange. Once the exchange begins, ambiguity retains the signer and never
 claims a usable session. Tokens, revisions and private keys remain behind their
 closed adapter boundaries and are never formatted or returned.
 
-### Proposed RFC-0025 first usable preview profile — 2026-08-09
+### Accepted RFC-0025 first usable preview profile — 2026-08-09
 
-Issue #195 proposes the Coordination component boundary required by accepted
+The project owner explicitly accepted RFC-0025 in issue #195 on 2026-08-09 by
+stating "Accetto tutti e tre", including the Coordination component boundary
+required by accepted
 `nomed.github.io` RFC-0005 on `main` at
-`12d9215f10c4b7fb1762a5025367e3e81543800f` through PR #42. The proposal
+`12d9215f10c4b7fb1762a5025367e3e81543800f` through PR #42. The accepted profile
 combines a JetStream relay command log, two isolated clients, two
 effect-specific primitives instances, preview-only bootstrap and receipt
-signing, closed public evidence and whole-sandbox teardown. No accepted
-Coordination record currently authorizes this composition: RFC-0006 is an
-adapter contract, RFC-0022 is a one-identity primitives profile with no relay,
-and RFC-0023 excludes JetStream lifecycle.
+signing, closed public evidence and whole-sandbox teardown. Earlier accepted
+Coordination records did not authorize this composition: RFC-0006 is an adapter
+contract, RFC-0022 is a one-identity primitives profile with no relay, and
+RFC-0023 excludes JetStream lifecycle.
 
-The proposed profile adds these trust boundaries:
+The accepted profile adds these trust boundaries:
 
 - immutable suite inputs to a component-local container sandbox;
 - per-run preview identity and receipt-signing services to relay clients;
@@ -1029,28 +1031,29 @@ The proposed profile adds these trust boundaries:
 - verified private runtime evidence to a closed public evidence schema;
 - Coordination process lifecycle to a bounded teardown controller.
 
-| Threat | Proposed control | Residual risk / later gate |
+| Threat | Accepted control | Residual risk / later gate |
 | --- | --- | --- |
 | Coordination receipt or broker ACK becomes effect authority | receipts prove only relay attribution; each effect revalidates its own plan, approval, nonce, lease, fence and verifier immediately before invocation | owning Projects/MCP implementation and cross-suite review |
 | authority-bearing material crosses between Effects A and B | distinct complete bindings and effect authority artifacts plus separate domains, primitives services, NATS accounts, buckets, epochs, credentials, verifiers and audit chains | compromise of the single sandbox host can observe both |
 | approved nonce value is replayed under another structurally valid scope | each effect derives a domain-separated nonce scope, binds it through plan and approval, and requires exact equality before any changed-scope service call | compromise of the protected consumer identity can still submit arbitrary RFC-0015 requests |
-| preview-only bootstrap becomes an insecure runtime mode | conformance-only construction, per-run roots, isolated network, no fixed/default credential and no normal executable path | owner acceptance plus implementation review |
+| preview-only bootstrap becomes an insecure runtime mode | conformance-only construction, per-run roots, isolated network, no fixed/default credential and no normal executable path | separate implementation review |
 | public evidence discloses credentials or private topology | evidence is produced directly from closed safe values; unrestricted output is never captured for later redaction | controlled operator evidence remains sensitive |
 | teardown hides unknown completion or destroys proof | evidence freezes before deletion; failure records `teardown_incomplete` and quarantines exact test resources | host compromise can defeat absence verification |
 | container runtime or host becomes a confused deputy | no runtime socket, source checkout, ambient cloud identity, unrestricted host mount or workload broker credential | one-host logical isolation is not hardened tenancy |
 | whole-sandbox deletion is misrepresented as transcript lifecycle | the profile claims only bounded ephemeral destruction and explicitly excludes retained JetStream lifecycle or restore | any retained distributed service requires a separate RFC |
 
-The proposal sets the same fail-closed posture as the accepted component
+RFC-0025 sets the same fail-closed posture as the accepted component
 records. Artifact, trust, bootstrap, receipt, replay, audit, epoch, nonce,
 nonce-scope, lease, cross-effect or teardown ambiguity prevents success. Unknown
 provider completion is durable and never automatically retried. Coordination
 storage never grants approval or provider authority.
 
-RFC-0025 is **Proposed**. This delta records review scope only. It creates no
-implementation, artifact, infrastructure, key, token, certificate, registration,
-credential, listener, network traffic, provider call, mutation, preview release
-or production authority. Explicit owner acceptance in #195 and a follow-up
-accepted record are required before implementation may begin.
+RFC-0025 is **Accepted**. This governance-only delta records the accepted
+security boundary but creates no implementation, artifact, infrastructure, key,
+token, certificate, registration, credential, listener, network traffic,
+provider call, mutation, preview release or production authority. Acceptance
+permits only separately reviewed, execution-forbidden implementation and
+hermetic synthetic qualification.
 
 ## Formal design record
 

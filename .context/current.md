@@ -5,11 +5,11 @@
 - Last delivery pull request: #193
 - Active Coordination increment: #185 connects the client CLI to the accepted
   bootstrap exchange; #185 remains a draft and is not accepted delivery
-- Runtime decisions: RFC-0003 through RFC-0024 Accepted
-- Proposed decision: RFC-0025 defines the execution-forbidden Coordination
+- Runtime decisions: RFC-0003 through RFC-0025 Accepted
+- Accepted decision: RFC-0025 defines the execution-forbidden Coordination
   profile for accepted `nomed.github.io` RFC-0005 on `main` at
-  `12d9215f10c4b7fb1762a5025367e3e81543800f`. It remains Proposed under #195
-  and requires explicit owner acceptance before implementation
+  `12d9215f10c4b7fb1762a5025367e3e81543800f`. The project owner explicitly
+  accepted it in #195 on 2026-08-09 by stating "Accetto tutti e tre"
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017
@@ -63,8 +63,9 @@
   capability accounting and terminal inspection in #76, and RFC-0020 Google
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92,
-  RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
-  staging offline trust ceremony in #148
+  RFC-0023 transcript lifecycle and retention in #134, RFC-0024 private staging
+  offline trust ceremony in #148, and RFC-0025 first usable preview Coordination
+  profile in #195
 - Next action: issue #184 preparation is complete. Private OCI publication and
   provider comparison, server-leaf rotation, and RFC-0022 Steps 5, 6 and 7
   remain gated and require separate explicit authorization. Separately, #185
@@ -74,10 +75,12 @@
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
   traffic, Matrix, MCP live use and production use remain separately gated
-- First usable preview gate: review proposed RFC-0025 in #195. Merging the
-  proposal does not authorize container assembly, infrastructure, credentials,
-  live traffic, artifact publication, external effects or production claims.
-  A follow-up accepted record is required before any implementation issue
+- First usable preview governance: RFC-0025 is accepted in #195. Acceptance
+  permits only a separately reviewed, execution-forbidden implementation and
+  hermetic synthetic qualification. This governance record creates no
+  implementation issue and authorizes no infrastructure, OCI publication,
+  credentials outside test-owned ephemeral processes, live traffic, provider
+  execution, mutation, preview publication, production use or readiness claim
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.

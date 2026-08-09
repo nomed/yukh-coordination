@@ -23,12 +23,13 @@ change architecture, protocol, security boundaries or acceptance state.
 ## Record navigation
 
 - [Current context](current.md) is a navigation aid, not an authority record.
-- [RFC-0003 through RFC-0024](rfcs/) are the currently accepted runtime RFCs.
+- [RFC-0003 through RFC-0025](rfcs/) are the currently accepted runtime RFCs.
 - [RFC-0025](rfcs/RFC-0025-first-usable-preview-coordination-profile.md) is a
-  Proposed first-usable-preview Coordination profile governed by issue #195.
-  It authorizes no implementation until explicit owner acceptance is recorded.
+  first-usable-preview Coordination profile accepted by the project owner in
+  issue #195 on 2026-08-09. Acceptance authorizes only separately reviewed,
+  execution-forbidden implementation and hermetic synthetic qualification.
 - [The threat model](security/threat-model.md) records security boundaries and
-  proposal deltas without changing RFC acceptance state.
+  accepted RFC deltas without independently changing RFC acceptance state.
 
 ## Repository map
 

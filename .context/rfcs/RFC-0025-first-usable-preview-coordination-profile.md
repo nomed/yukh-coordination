@@ -1,8 +1,9 @@
 # RFC-0025: First usable preview Coordination profile
 
-- Status: Proposed
+- Status: Accepted
 - Authors: Nomed with implementation support
 - Created: 2026-08-09
+- Accepted: 2026-08-09
 - Governing issue: #195
 - Governing suite issue: `nomed/nomed.github.io#40`
 - Governing suite architecture: accepted `nomed.github.io` RFC-0005 on `main`
@@ -10,7 +11,7 @@
 - Governing Coordination architecture: RFC-0002, RFC-0003, RFC-0006,
   RFC-0009 through RFC-0017, RFC-0019, RFC-0021 through RFC-0024
 
-## Decision requested
+## Decision
 
 Accept one explicitly non-production Coordination profile for the first usable
 Yukh suite preview. The profile composes:
@@ -23,7 +24,7 @@ Yukh suite preview. The profile composes:
   and
 - one bounded whole-sandbox teardown lifecycle.
 
-This proposal is required because no accepted Coordination record authorizes
+This RFC is required because no earlier accepted Coordination record authorizes
 that composition. RFC-0006 qualifies the distributed relay adapter but not a
 distributed executable profile. RFC-0022 selects one private staging primitives
 identity and no relay. RFC-0023 explicitly excludes JetStream lifecycle.
@@ -31,12 +32,11 @@ Accepted client records do not select a preview bootstrap authority or a
 container lifecycle. Treating those records as implicit suite-preview authority
 would cross security and component boundaries without review.
 
-This record remains **Proposed**. Merging it in this state authorizes no
-implementation or execution. The project owner must explicitly accept this RFC
-in #195 and a follow-up accepted record before any implementation issue may
-begin.
+The project owner explicitly accepted RFC-0025 in #195 on 2026-08-09 by stating
+"Accetto tutti e tre", including this Coordination RFC at review-clean proposal
+head `d06820bd1444acffc1190620cb681f2d1837777a`.
 
-If accepted, this RFC authorizes only a separately reviewed, execution-forbidden
+Acceptance authorizes only a separately reviewed, execution-forbidden
 implementation and hermetic synthetic qualification. It does not authorize
 infrastructure provisioning, OCI publication, credential creation outside a
 test-owned ephemeral process, live traffic, GitHub mutation, provider
@@ -45,7 +45,7 @@ production-readiness claim.
 
 ## Profile identity and ownership
 
-The proposed profile identifier is:
+The accepted profile identifier is:
 
 ```text
 yukh-coordination/first-usable-preview-v1
@@ -132,9 +132,9 @@ not reused as deployment authority: its one-identity private staging profile,
 operator packet, credentials, trust material, buckets and approvals remain
 independent and inaccessible.
 
-Credential generation and use belong only to a later hermetic test after this
-RFC is accepted and implementation is separately approved. This proposal
-creates no key, token, certificate, registration or credential.
+Credential generation and use belong only to a later hermetic test after
+implementation is separately approved. This governance record creates no key,
+token, certificate, registration or credential.
 
 ## Client receipt and replay verification
 
@@ -593,16 +593,17 @@ a registry, a cloud provider, an adopter resource or an operator path.
 
 This profile changes no accepted event, receipt, HTTP/SSE, primitives or
 capability wire bytes. It composes existing neutral ports behind a new profile
-and adds only profile-specific manifest, evidence and teardown contracts after
-acceptance. RFC-0022 remains a separate private staging profile and supplies no
-credential or deployment authority to this proposal.
+and adds only profile-specific manifest, evidence and teardown contracts.
+RFC-0022 remains a separate private staging profile and supplies no credential
+or deployment authority to this profile.
 
-The sequence is:
+The acceptance and delivery sequence is:
 
-1. merge this Proposed record and its threat-model/navigation delta;
-2. obtain an explicit owner decision in #195;
-3. if accepted, merge a follow-up record changing status and recording the
-   exact acceptance;
+1. merge the Proposed record and its threat-model/navigation delta in #196 at
+   `b89dab83dac6fae19ba30e056ceb607e9854b510`;
+2. record the project owner's explicit acceptance in #195;
+3. merge this governance-only follow-up changing status and recording the exact
+   acceptance;
 4. only then open one execution-forbidden implementation issue for closed
    schemas, component-local assembly and hermetic tests;
 5. return for independent component contract and test-readiness review;
@@ -610,9 +611,9 @@ The sequence is:
    infrastructure, credential materialization, artifact publication or live
    traffic.
 
-The exact current gate is step 2. No implementation may begin from a Proposed
-record, an issue label, a suite RFC acceptance or a merged design-only pull
-request.
+This accepted record completes the architecture gate through step 3. It creates
+no implementation issue and performs no implementation or execution. Any later
+step remains separately reviewed and subject to the prohibitions above.
 
 ## Alternatives rejected
 
@@ -655,4 +656,5 @@ non-secret manifest syntax, per-run preview authority implementation and public
 evidence schemas. Those choices may not change the ownership, isolation,
 authority, failure, teardown or public-artifact boundaries fixed here.
 
-No unresolved choice permits implementation while this RFC remains Proposed.
+Acceptance does not resolve those choices or authorize them outside the
+separately reviewed, execution-forbidden implementation boundary above.
