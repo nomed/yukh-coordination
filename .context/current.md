@@ -1,11 +1,14 @@
 # Current context
 
-- Updated: 2026-08-06
-- Governing issues: #6, #167 and #184
+- Updated: 2026-08-09
+- Governing issues: #6, #167, #184 and #195
 - Last delivery pull request: #193
 - Active Coordination increment: #185 connects the client CLI to the accepted
   bootstrap exchange; #185 remains a draft and is not accepted delivery
 - Runtime decisions: RFC-0003 through RFC-0024 Accepted
+- Proposed decision: RFC-0025 defines the execution-forbidden Coordination
+  profile for accepted `nomed.github.io` RFC-0005. It remains Proposed under
+  #195 and requires explicit owner acceptance before implementation
 - Completed delivery: RFC-0011 in #47, RFC-0012 in #46, the RFC-0013
   read-only client foundation in #52, its DPoP credential foundation in #53,
   the RFC-0014 neutral client-authentication refactor in #62, the RFC-0017
@@ -70,6 +73,10 @@
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
   traffic, Matrix, MCP live use and production use remain separately gated
+- First usable preview gate: review proposed RFC-0025 in #195. Merging the
+  proposal does not authorize container assembly, infrastructure, credentials,
+  live traffic, artifact publication, external effects or production claims.
+  A follow-up accepted record is required before any implementation issue
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
