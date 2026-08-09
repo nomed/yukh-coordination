@@ -235,10 +235,11 @@ The **Effect B binding schema** contains exactly:
 Every field is represented directly in the closed schema, canonicalized with
 the complete binding and exact-equality checked before provider invocation. The
 two effects use distinct complete canonical bindings, binding digests and
-effect-specific authority artifacts. Distinct artifacts include nonce
-scope/value digests, lease resources, holders and fences, plan identifiers and
-digests, approvals and approval nonces, component idempotency keys and verifier
-identities; none may be reused by the other effect.
+effect-specific authority artifacts. Distinct artifacts include precondition
+snapshot identities, nonce scope/value digests, lease resources, holders and
+fences, plan identifiers and digests, approvals and approval nonces, component
+idempotency keys and verifier identities; none may be reused by the other
+effect.
 
 Compatibility-scope fields such as repository and Project identity may
 intentionally be equal when each independent binding explicitly contains,
@@ -347,9 +348,10 @@ representations or derivation domains ad hoc. Conformance vectors must freeze:
   nonce-scope projections;
 - canonical positive bytes for Effect A and Effect B;
 - every field-level wrong, missing, reordered and substituted negative;
-- cross-effect negatives that attempt to reuse a binding digest, nonce
-  scope/value, lease resource/holder/fence, plan identifier/digest, approval,
-  approval nonce, component idempotency key or verifier identity;
+- cross-effect negatives that attempt to reuse a binding digest, precondition
+  snapshot, nonce scope/value, lease resource/holder/fence, plan
+  identifier/digest, approval, approval nonce, component idempotency key or
+  verifier identity;
 - every domain string and nonce-scope, lease-resource, lease-holder and
   nonce-value digest;
 - distinct transcript/restore epoch values, cross-substitution negatives and
@@ -360,9 +362,9 @@ representations or derivation domains ad hoc. Conformance vectors must freeze:
 - valid vectors in which repository and Project identity are shared while the
   effect targets differ and/or their ordered operation sets are disjoint and
   every effect-specific authority artifact remains distinct;
-- negative vectors that reuse a plan, approval, nonce, lease, idempotency key,
-  verifier identity or complete binding across effects despite a shared
-  repository or Project;
+- negative vectors that reuse a precondition snapshot, plan, approval, nonce,
+  lease, idempotency key, verifier identity or complete binding across effects
+  despite a shared repository or Project;
 - fencing generation, lease expiry and remaining-freshness boundaries; and
 - exact-equality outcomes before any consumer can use the profile.
 
@@ -570,8 +572,8 @@ A later implementation is not reviewable without deterministic evidence for:
 - separate Effect A/B nonce, lease, budget, epoch and audit state;
 - allowed shared repository/Project compatibility scope with different targets
   and/or disjoint ordered operation sets;
-- cross-effect binding, digest, credential, nonce, lease, capability, fence,
-  plan, approval, idempotency and verifier reuse rejection;
+- cross-effect binding, digest, precondition snapshot, credential, nonce, lease,
+  capability, fence, plan, approval, idempotency and verifier reuse rejection;
 - same approved nonce value with a changed structurally valid scope denied before
   a second consume call, with one terminal `consumed` record only;
 - zero provider calls for every required pre-effect denial;
