@@ -166,91 +166,168 @@ The suite RFC requires Effects A and B to remain independent. The preview
 therefore uses separate primitives instances rather than extending RFC-0022's
 single registered workload into a shared multi-effect authority.
 
-Each effect has one complete canonical authority binding. It contains exactly:
+Each effect has its own closed canonical authority-binding schema. The schemas
+do not use an `approval_identity`, `lease` or other shorthand object whose
+contents can vary outside canonical comparison.
 
-- repository, Project, item and ordered operation scope;
-- policy commit and immutable producer release;
-- fresh precondition snapshot identity;
-- plan identifier and canonical plan digest;
-- ordered operation-set digest;
-- capability-definition and provider-implementation digests where MCP applies;
-- environment and protected-workflow identity;
-- approval issuer, authenticated approval subject, issue time, expiry and unique
-  approval nonce;
-- component-scoped idempotency key;
-- Coordination epoch and exact fenced-lease identity; and
-- verifier identity and declared postconditions.
+The **Effect A binding schema** contains exactly:
 
-The fenced-lease identity canonically binds the effect-specific scope, holder
-and Coordination epoch. Provider revisions and the returned fencing token remain
-runtime evidence, not approval authority, but they must resolve to that exact
-approved lease identity and be current immediately before invocation.
+- exact repository identity;
+- exact Project identity;
+- exact item identity;
+- exact ordered operation scope;
+- exact policy commit;
+- exact immutable Projects producer release;
+- exact fresh precondition snapshot identity;
+- exact plan identifier;
+- exact canonical plan digest;
+- exact ordered operation-set digest;
+- a canonically absent MCP capability-definition digest;
+- a canonically absent MCP provider-implementation digest;
+- exact environment identity;
+- exact protected-workflow identity;
+- exact approval issuer;
+- exact authenticated approval subject or principal;
+- exact approval issued-at time;
+- exact approval expiry time;
+- exact unique approval nonce;
+- exact Projects component-scoped idempotency key;
+- exact Coordination transcript epoch;
+- exact Effect A lease resource identity and holder identity;
+- exact Effect A fencing token or lease generation;
+- exact Effect A lease expiry and required remaining-freshness bound;
+- exact Projects verifier identity; and
+- exact declared Projects postconditions.
 
-The two effects use distinct values for every authority-bearing field above.
-Effect A cannot omit or reuse a binding because it invokes Projects directly.
-Effect B cannot reuse an Effect A binding because its MCP capability adds
-another admission boundary. A field that does not apply to Effect A is
-canonically absent under the closed Effect A schema; it is never copied from
-Effect B, set to a wildcard or ignored during comparison.
+The **Effect B binding schema** contains exactly:
 
-Each effect derives its nonce value, lease scope and lease holder digests from
-that complete canonical binding using effect-specific domains:
+- exact repository identity;
+- exact Project identity;
+- exact item identity;
+- exact ordered operation scope;
+- exact policy commit;
+- exact immutable MCP and Projects producer releases;
+- exact fresh precondition snapshot identity;
+- exact plan identifier;
+- exact canonical plan digest;
+- exact ordered operation-set digest;
+- exact MCP capability-definition digest;
+- exact MCP provider-implementation digest;
+- exact environment identity;
+- exact protected-workflow identity;
+- exact approval issuer;
+- exact authenticated approval subject or principal;
+- exact approval issued-at time;
+- exact approval expiry time;
+- exact unique approval nonce;
+- exact MCP component-scoped idempotency key;
+- exact Coordination transcript epoch;
+- exact Effect B lease resource identity and holder identity;
+- exact Effect B fencing token or lease generation;
+- exact Effect B lease expiry and required remaining-freshness bound;
+- exact MCP verifier identity; and
+- exact declared MCP postconditions.
+
+Every field is represented directly in the closed schema, canonicalized with
+the complete binding and exact-equality checked before provider invocation. The
+two effects use distinct values for every authority-bearing field. The two
+canonical absence markers in Effect A are schema constants, not reusable
+authority values, wildcards or omitted comparisons.
+
+Lease acquisition uses a closed effect-specific pre-lease projection containing
+the exact repository, Project, item, operation scope, policy commit, producer
+release, snapshot, ordered operation-set digest, applicable capability/provider
+digests, environment, workflow, component idempotency key, Coordination
+transcript epoch, intended holder, verifier and declared postconditions. A plan
+identifier, plan digest, approval fields and observed lease state do not yet
+exist and are therefore not members of this non-authorizing projection. The
+projection derives only the requested lease resource and holder identities; it
+grants no invocation authority.
+
+After acquisition, the planner creates a fresh plan that binds the exact
+lease resource identity, observed fencing token or lease generation, exact lease
+expiry and required remaining-freshness bound together with every pre-lease
+field. The final plan identifier and canonical plan digest then enter the
+binding. The approval binds that exact plan and all explicit approval fields.
+The resulting complete canonical Effect A or Effect B binding is the sole
+authority-bearing object evaluated at invocation.
+
+The derivations are:
 
 ```text
-effect_a_nonce = SHA-256(
-  "yukh-suite-preview:effect-a:nonce:v1\n" || canonical_effect_a_binding
-)
-effect_a_lease_scope = SHA-256(
-  "yukh-suite-preview:effect-a:scope:v1\n" || canonical_effect_a_binding
+effect_a_lease_resource = SHA-256(
+  "yukh-suite-preview:effect-a:lease-resource:v1\n" ||
+  canonical_effect_a_prelease_projection
 )
 effect_a_lease_holder = SHA-256(
-  "yukh-suite-preview:effect-a:holder:v1\n" || canonical_effect_a_binding
+  "yukh-suite-preview:effect-a:lease-holder:v1\n" ||
+  canonical_effect_a_prelease_projection
+)
+effect_a_nonce_value = SHA-256(
+  "yukh-suite-preview:effect-a:nonce:v1\n" || canonical_effect_a_binding
 )
 
-effect_b_nonce = SHA-256(
-  "yukh-suite-preview:effect-b:nonce:v1\n" || canonical_effect_b_binding
-)
-effect_b_lease_scope = SHA-256(
-  "yukh-suite-preview:effect-b:scope:v1\n" || canonical_effect_b_binding
+effect_b_lease_resource = SHA-256(
+  "yukh-suite-preview:effect-b:lease-resource:v1\n" ||
+  canonical_effect_b_prelease_projection
 )
 effect_b_lease_holder = SHA-256(
-  "yukh-suite-preview:effect-b:holder:v1\n" || canonical_effect_b_binding
+  "yukh-suite-preview:effect-b:lease-holder:v1\n" ||
+  canonical_effect_b_prelease_projection
+)
+effect_b_nonce_value = SHA-256(
+  "yukh-suite-preview:effect-b:nonce:v1\n" || canonical_effect_b_binding
 )
 ```
 
 Even identical source bytes therefore produce different effect and purpose
-digests. Conformance vectors must freeze both closed canonical binding schemas
-and every derivation before a consumer can use the profile.
+digests. A future implementation may not select field names, canonical
+representations or derivation domains ad hoc. Conformance vectors must freeze:
+
+- both closed final binding schemas and the two pre-lease projections;
+- canonical positive bytes for Effect A and Effect B;
+- every field-level wrong, missing, reordered, substituted and cross-effect
+  negative;
+- every domain string and lease-resource, lease-holder and nonce-value digest;
+- fencing generation, lease expiry and remaining-freshness boundaries; and
+- exact-equality outcomes before any consumer can use the profile.
 
 For each effect:
 
-1. its own workload identity consumes the exact nonce derived from the complete
-   approved binding;
-2. replay, changed bytes or ambiguity stops before provider invocation;
-3. it acquires the exact effect-specific lease identity derived from the same
-   binding, with no implicit retry;
-4. the protected consumer reconstructs the complete canonical binding from its
-   authenticated plan, approval, snapshot, environment, nonce and lease inputs
-   and requires byte-for-byte equality with the approved canonical binding;
-5. it independently verifies current nonce consumption, lease validity and
-   fencing token immediately before effect without treating any of them as
-   authority outside the canonical binding;
-6. provider invocation is forbidden unless every canonical field and derived
-   value is exactly equal and current;
-7. provider acknowledgement is not verification;
-8. verified completion permits explicit release;
-9. possible effect with lost or ambiguous response records
-   `completion_unknown`, performs no automatic retry and does not release the
-   lease as successful.
+1. derive and acquire only the lease resource and holder named by the canonical
+   pre-lease projection, with no implicit retry;
+2. materialize a fresh plan containing the observed fencing token or lease
+   generation, lease expiry and freshness requirement;
+3. obtain an approval whose explicit issuer, authenticated subject or principal,
+   issued-at, expiry and unique nonce bind that exact plan;
+4. construct and canonicalize the complete Effect A or Effect B binding;
+5. consume the exact nonce value derived from that complete approved binding;
+6. reconstruct the complete canonical binding from authenticated plan,
+   approval, snapshot, environment, nonce and lease inputs immediately before
+   invocation;
+7. require byte-for-byte equality for the complete binding and exact equality
+   for every individual field;
+8. require the observed lease resource, holder, fencing token or generation and
+   expiry to equal the binding and satisfy the bound remaining-freshness rule;
+9. forbid provider invocation on replay, changed bytes, stale approval,
+   insufficient lease freshness, ambiguous state or any unequal field;
+10. treat provider acknowledgement as non-verifying;
+11. permit explicit release only after verified completion;
+12. record a possible effect with lost or ambiguous response as
+    `completion_unknown`, perform no automatic retry and do not release the
+    lease as successful.
 
-Any changed policy, release, repository, Project, item, operation scope,
-snapshot, plan identifier, plan digest, ordered operation set, capability,
-provider, environment, workflow, approval field, nonce, idempotency key,
-Coordination epoch, lease identity, verifier or postcondition invalidates the
-binding. The consumer must obtain a new plan and a new approval before acquiring
-or invoking under the changed value. In particular, nonce replay, replacement
-or expiry and lease contention, loss, expiry or replacement cannot be repaired
-under the existing plan or approval.
+Changing any repository, Project, item, operation scope, policy commit, producer
+release, snapshot identity, plan identifier, plan digest, ordered operation-set
+digest, capability digest, provider digest, environment, workflow, approval
+issuer, approval subject or principal, approval issued-at, approval expiry,
+approval nonce, component idempotency key, Coordination transcript epoch, lease
+resource or holder, fencing token or lease generation, lease expiry or
+freshness bound, verifier or postcondition invalidates the complete binding.
+Every such change requires a fresh plan and fresh approval before invocation.
+Nonce replay, replacement or expiry and lease contention, loss, renewal,
+generation change, expiry or replacement can never be repaired under the
+existing plan or approval.
 
 Coordination stores enforce replay and concurrency only. A nonce result, lease,
 fencing token, receipt, event, audit entry or successful teardown never grants
