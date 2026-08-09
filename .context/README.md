@@ -20,6 +20,16 @@ and handoffs. Chat history and tool-local memory are never authoritative.
 Sessions and handoffs preserve continuity and evidence. They cannot silently
 change architecture, protocol, security boundaries or acceptance state.
 
+## Record navigation
+
+- [Current context](current.md) is a navigation aid, not an authority record.
+- [RFC-0003 through RFC-0024](rfcs/) are the currently accepted runtime RFCs.
+- [RFC-0025](rfcs/RFC-0025-first-usable-preview-coordination-profile.md) is a
+  Proposed first-usable-preview Coordination profile governed by issue #195.
+  It authorizes no implementation until explicit owner acceptance is recorded.
+- [The threat model](security/threat-model.md) records security boundaries and
+  proposal deltas without changing RFC acceptance state.
+
 ## Repository map
 
 Every top-level directory has exactly one current responsibility:
