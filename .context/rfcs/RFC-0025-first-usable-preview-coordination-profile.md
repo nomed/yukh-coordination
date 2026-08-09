@@ -234,13 +234,21 @@ The **Effect B binding schema** contains exactly:
 
 Every field is represented directly in the closed schema, canonicalized with
 the complete binding and exact-equality checked before provider invocation. The
-two effects use distinct complete bindings and distinct effect-specific plans,
-approvals, nonces, leases, idempotency keys, verifier identities and authority
-artifacts. Compatibility-scope fields such as repository and Project identity
-may be equal only when each independent binding includes and verifies the exact
-same value. The item target or ordered operation set remains disjoint between
-the effects. The two canonical absence markers in Effect A are schema constants,
-not reusable authority values, wildcards or omitted comparisons.
+two effects use distinct complete canonical bindings, binding digests and
+effect-specific authority artifacts. Distinct artifacts include nonce
+scope/value digests, lease resources, holders and fences, plan identifiers and
+digests, approvals and approval nonces, component idempotency keys and verifier
+identities; none may be reused by the other effect.
+
+Compatibility-scope fields such as repository and Project identity may
+intentionally be equal when each independent binding explicitly contains,
+canonicalizes and verifies the exact same value. Shared fields are never
+inherited by reference or treated as implicit authority. The effects must use
+different target item identities and/or disjoint ordered operation sets. If
+they share a target, their operation sets must be disjoint, and no operation on
+that target may be authorized by both bindings. The two canonical absence
+markers in Effect A are schema constants, not reusable authority values,
+wildcards or omitted comparisons.
 
 The Coordination transcript epoch and primitives-service restore epoch are
 independent canonical fields. The transcript epoch scopes relay records and
@@ -338,8 +346,10 @@ representations or derivation domains ad hoc. Conformance vectors must freeze:
 - both closed final binding schemas, the two pre-lease projections and the two
   nonce-scope projections;
 - canonical positive bytes for Effect A and Effect B;
-- every field-level wrong, missing, reordered, substituted and cross-effect
-  negative;
+- every field-level wrong, missing, reordered and substituted negative;
+- cross-effect negatives that attempt to reuse a binding digest, nonce
+  scope/value, lease resource/holder/fence, plan identifier/digest, approval,
+  approval nonce, component idempotency key or verifier identity;
 - every domain string and nonce-scope, lease-resource, lease-holder and
   nonce-value digest;
 - distinct transcript/restore epoch values, cross-substitution negatives and
@@ -347,9 +357,9 @@ representations or derivation domains ad hoc. Conformance vectors must freeze:
 - changed-scope vectors that hold the approved nonce `value_digest` constant,
   require denial before a second primitives call and prove no second `consumed`
   outcome or terminal nonce record is created;
-- a valid vector in which repository and Project identity are shared while the
-  effect targets, operation sets and every effect-specific authority artifact
-  remain distinct;
+- valid vectors in which repository and Project identity are shared while the
+  effect targets differ and/or their ordered operation sets are disjoint and
+  every effect-specific authority artifact remains distinct;
 - negative vectors that reuse a plan, approval, nonce, lease, idempotency key,
   verifier identity or complete binding across effects despite a shared
   repository or Project;
@@ -518,7 +528,8 @@ The profile fails closed before provider invocation on:
 - nonce replay, nonce scope mismatch or substitution, lease contention/loss,
   stale fence or primitives ambiguity;
 - unavailable mandatory audit, signer, JetStream account or teardown evidence;
-- cross-effect binding, credential, account, key, nonce or lease reuse;
+- cross-effect binding, binding digest, credential, account, key, nonce, lease,
+  plan, approval, component idempotency key or verifier reuse;
 - sandbox lifetime expiry or resource-bound exhaustion.
 
 Failures have closed, bounded classes and no provider text. There is no hidden
@@ -531,7 +542,7 @@ effect and proven verified completion.
 | Threat | Required control | Residual risk |
 | --- | --- | --- |
 | Coordination delivery treated as approval | component authority matrix and independent effect validation immediately before invocation | consumer implementation defect |
-| Effect A authority reused by Effect B | separate canonical domains, services, accounts, credentials, buckets, epochs, verifiers and audit chains | compromised sandbox host can observe both |
+| Effect A authority reused by Effect B | distinct complete bindings and effect authority artifacts plus separate domains, services, accounts, credentials, buckets, epochs, verifiers and audit chains | compromised sandbox host can observe both |
 | approved nonce value replayed under a different valid scope | domain-separated scope derivation, plan/approval binding and exact pre-call equality with zero changed-scope service calls | compromised protected consumer identity can still submit arbitrary RFC-0015 requests |
 | insecure preview identity escapes into a normal executable | conformance-only construction, fresh per-run roots, isolated network and no compiled/default credential | source or build compromise |
 | receipt or replay substitution | canonical byte, signature, binding, sequence and projection verification in each isolated client | run-scoped signer compromise |
@@ -557,7 +568,10 @@ A later implementation is not reviewable without deterministic evidence for:
 - independent client bootstrap, custody and receipt/replay verification;
 - two-process reconnect to the same final projection digest;
 - separate Effect A/B nonce, lease, budget, epoch and audit state;
-- cross-effect credential, scope, nonce, lease, capability and fence rejection;
+- allowed shared repository/Project compatibility scope with different targets
+  and/or disjoint ordered operation sets;
+- cross-effect binding, digest, credential, nonce, lease, capability, fence,
+  plan, approval, idempotency and verifier reuse rejection;
 - same approved nonce value with a changed structurally valid scope denied before
   a second consume call, with one terminal `consumed` record only;
 - zero provider calls for every required pre-effect denial;

@@ -1032,7 +1032,7 @@ The proposed profile adds these trust boundaries:
 | Threat | Proposed control | Residual risk / later gate |
 | --- | --- | --- |
 | Coordination receipt or broker ACK becomes effect authority | receipts prove only relay attribution; each effect revalidates its own plan, approval, nonce, lease, fence and verifier immediately before invocation | owning Projects/MCP implementation and cross-suite review |
-| authority-bearing material crosses between Effects A and B | distinct domain-separated bindings, identities, primitives services, NATS accounts, buckets, epochs, credentials, verifiers and audit chains | compromise of the single sandbox host can observe both |
+| authority-bearing material crosses between Effects A and B | distinct complete bindings and effect authority artifacts plus separate domains, primitives services, NATS accounts, buckets, epochs, credentials, verifiers and audit chains | compromise of the single sandbox host can observe both |
 | approved nonce value is replayed under another structurally valid scope | each effect derives a domain-separated nonce scope, binds it through plan and approval, and requires exact equality before any changed-scope service call | compromise of the protected consumer identity can still submit arbitrary RFC-0015 requests |
 | preview-only bootstrap becomes an insecure runtime mode | conformance-only construction, per-run roots, isolated network, no fixed/default credential and no normal executable path | owner acceptance plus implementation review |
 | public evidence discloses credentials or private topology | evidence is produced directly from closed safe values; unrestricted output is never captured for later redaction | controlled operator evidence remains sensitive |
