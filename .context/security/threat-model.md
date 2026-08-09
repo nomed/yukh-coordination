@@ -1033,6 +1033,7 @@ The proposed profile adds these trust boundaries:
 | --- | --- | --- |
 | Coordination receipt or broker ACK becomes effect authority | receipts prove only relay attribution; each effect revalidates its own plan, approval, nonce, lease, fence and verifier immediately before invocation | owning Projects/MCP implementation and cross-suite review |
 | authority-bearing material crosses between Effects A and B | distinct domain-separated bindings, identities, primitives services, NATS accounts, buckets, epochs, credentials, verifiers and audit chains | compromise of the single sandbox host can observe both |
+| approved nonce value is replayed under another structurally valid scope | each effect derives a domain-separated nonce scope, binds it through plan and approval, and requires exact equality before any changed-scope service call | compromise of the protected consumer identity can still submit arbitrary RFC-0015 requests |
 | preview-only bootstrap becomes an insecure runtime mode | conformance-only construction, per-run roots, isolated network, no fixed/default credential and no normal executable path | owner acceptance plus implementation review |
 | public evidence discloses credentials or private topology | evidence is produced directly from closed safe values; unrestricted output is never captured for later redaction | controlled operator evidence remains sensitive |
 | teardown hides unknown completion or destroys proof | evidence freezes before deletion; failure records `teardown_incomplete` and quarantines exact test resources | host compromise can defeat absence verification |
@@ -1040,10 +1041,10 @@ The proposed profile adds these trust boundaries:
 | whole-sandbox deletion is misrepresented as transcript lifecycle | the profile claims only bounded ephemeral destruction and explicitly excludes retained JetStream lifecycle or restore | any retained distributed service requires a separate RFC |
 
 The proposal sets the same fail-closed posture as the accepted component
-records. Artifact, trust, bootstrap, receipt, replay, audit, epoch, nonce, lease,
-cross-effect or teardown ambiguity prevents success. Unknown provider completion
-is durable and never automatically retried. Coordination storage never grants
-approval or provider authority.
+records. Artifact, trust, bootstrap, receipt, replay, audit, epoch, nonce,
+nonce-scope, lease, cross-effect or teardown ambiguity prevents success. Unknown
+provider completion is durable and never automatically retried. Coordination
+storage never grants approval or provider authority.
 
 RFC-0025 is **Proposed**. This delta records review scope only. It creates no
 implementation, artifact, infrastructure, key, token, certificate, registration,

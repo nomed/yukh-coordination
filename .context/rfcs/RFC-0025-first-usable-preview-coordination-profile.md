@@ -191,6 +191,7 @@ The **Effect A binding schema** contains exactly:
 - exact approval issued-at time;
 - exact approval expiry time;
 - exact unique approval nonce;
+- exact domain-separated Effect A nonce `scope_digest`;
 - exact Projects component-scoped idempotency key;
 - exact Coordination transcript epoch;
 - exact Effect A primitives-service restore epoch;
@@ -221,6 +222,7 @@ The **Effect B binding schema** contains exactly:
 - exact approval issued-at time;
 - exact approval expiry time;
 - exact unique approval nonce;
+- exact domain-separated Effect B nonce `scope_digest`;
 - exact MCP component-scoped idempotency key;
 - exact Coordination transcript epoch;
 - exact Effect B primitives-service restore epoch;
@@ -247,26 +249,38 @@ their relay statements share one Coordination transcript epoch.
 Lease acquisition uses a closed effect-specific pre-lease projection containing
 the exact repository, Project, item, operation scope, policy commit, producer
 release, snapshot, ordered operation-set digest, applicable capability/provider
-digests, environment, workflow, component idempotency key, Coordination
-transcript epoch, effect-specific primitives restore epoch, intended holder,
-verifier and declared postconditions. A plan identifier, plan digest, approval
-fields and observed lease state do not yet exist and are therefore not members
-of this non-authorizing projection. The projection derives only the requested
-lease resource and holder identities; it grants no invocation authority.
+digests, environment, workflow, derived effect-specific nonce `scope_digest`,
+component idempotency key, Coordination transcript epoch, effect-specific
+primitives restore epoch, intended holder, verifier and declared postconditions.
+A plan identifier, plan digest, approval fields and observed lease state do not
+yet exist and are therefore not members of this non-authorizing projection. The
+projection derives only the requested lease resource and holder identities; it
+grants no invocation authority.
+
+Each nonce `scope_digest` is derived before the pre-lease projection from a
+closed effect-specific nonce-scope projection. That source projection contains
+exactly the corresponding pre-lease fields except the derived `scope_digest`
+itself. It is non-authorizing and prevents circular derivation. The resulting
+lowercase SHA-256 digest is not caller-selected: it is inserted into the
+pre-lease projection and thereafter treated as an exact authority field.
 
 After acquisition, the planner creates a fresh plan that binds the exact
 lease resource identity, observed fencing token or lease generation, exact lease
 expiry and required remaining-freshness bound together with every pre-lease
 field. The final plan identifier and canonical plan digest then enter the
 binding. The plan and approval therefore bind both the Coordination transcript
-epoch and the independent effect-specific primitives restore epoch. The
-approval binds that exact plan and all explicit approval fields. The resulting
-complete canonical Effect A or Effect B binding is the sole authority-bearing
-object evaluated at invocation.
+epoch, the independent effect-specific primitives restore epoch and the exact
+effect-specific nonce `scope_digest`. The approval binds that exact plan and all
+explicit approval fields. The resulting complete canonical Effect A or Effect B
+binding is the sole authority-bearing object evaluated at invocation.
 
 The derivations are:
 
 ```text
+effect_a_nonce_scope_digest = SHA-256(
+  "yukh-suite-preview:effect-a:nonce-scope:v1\n" ||
+  canonical_effect_a_nonce_scope_projection
+)
 effect_a_lease_resource = SHA-256(
   "yukh-suite-preview:effect-a:lease-resource:v1\n" ||
   canonical_effect_a_prelease_projection
@@ -279,6 +293,10 @@ effect_a_nonce_value = SHA-256(
   "yukh-suite-preview:effect-a:nonce:v1\n" || canonical_effect_a_binding
 )
 
+effect_b_nonce_scope_digest = SHA-256(
+  "yukh-suite-preview:effect-b:nonce-scope:v1\n" ||
+  canonical_effect_b_nonce_scope_projection
+)
 effect_b_lease_resource = SHA-256(
   "yukh-suite-preview:effect-b:lease-resource:v1\n" ||
   canonical_effect_b_prelease_projection
@@ -298,30 +316,48 @@ final binding contains the same epoch, every nonce-value digest binds it again.
 A restore-epoch substitution therefore changes every derived identity and
 cannot preserve a valid capability or lease under unchanged bytes.
 
+The Effect A and Effect B nonce-scope domain strings, source projections and
+digests are distinct. The derived `scope_digest` and `value_digest` form the
+exact RFC-0015 nonce authority pair. A requester may not submit a structurally
+valid alternative scope with an approved value. Before a nonce service call,
+the protected consumer derives the expected scope and value from authenticated
+canonical inputs and requires exact equality with the plan, approval, final
+binding and request body. Because the pre-lease projection contains the derived
+`scope_digest`, both lease-resource and lease-holder derivations bind it.
+Because the final binding contains it, the nonce `value_digest` derivation binds
+it as well.
+
 Even identical source bytes therefore produce different effect and purpose
 digests. A future implementation may not select field names, canonical
 representations or derivation domains ad hoc. Conformance vectors must freeze:
 
-- both closed final binding schemas and the two pre-lease projections;
+- both closed final binding schemas, the two pre-lease projections and the two
+  nonce-scope projections;
 - canonical positive bytes for Effect A and Effect B;
 - every field-level wrong, missing, reordered, substituted and cross-effect
   negative;
-- every domain string and lease-resource, lease-holder and nonce-value digest;
+- every domain string and nonce-scope, lease-resource, lease-holder and
+  nonce-value digest;
 - distinct transcript/restore epoch values, cross-substitution negatives and
   restore-epoch increment invalidation;
+- changed-scope vectors that hold the approved nonce `value_digest` constant,
+  require denial before a second primitives call and prove no second `consumed`
+  outcome or terminal nonce record is created;
 - fencing generation, lease expiry and remaining-freshness boundaries; and
 - exact-equality outcomes before any consumer can use the profile.
 
 For each effect:
 
-1. derive and acquire only the lease resource and holder named by the canonical
+1. derive the effect-specific nonce `scope_digest`, insert it into the canonical
+   pre-lease projection and require exact local equality before any primitives
+   call;
+2. derive and acquire only the lease resource and holder named by that canonical
    pre-lease projection, with no implicit retry;
-2. materialize a fresh plan containing the observed fencing token or lease
+3. materialize a fresh plan containing the observed fencing token or lease
    generation, lease expiry and freshness requirement;
-3. obtain an approval whose explicit issuer, authenticated subject or principal,
+4. obtain an approval whose explicit issuer, authenticated subject or principal,
    issued-at, expiry and unique nonce bind that exact plan;
-4. construct and canonicalize the complete Effect A or Effect B binding;
-5. consume the exact nonce value derived from that complete approved binding;
+5. construct and canonicalize the complete Effect A or Effect B binding;
 6. reconstruct the complete canonical binding from authenticated plan,
    approval, snapshot, environment, nonce and lease inputs immediately before
    invocation;
@@ -330,13 +366,19 @@ For each effect:
 8. require the live primitives service and opened capability to report the exact
    effect-specific restore epoch bound by the plan and approval, independently
    of the Coordination transcript epoch;
-9. require the observed lease resource, holder, fencing token or generation and
+9. derive the nonce `scope_digest` and `value_digest` again from the authenticated
+   canonical inputs and require exact equality with the plan, approval, final
+   binding and closed RFC-0015 request body before sending that body;
+10. consume exactly that `(scope_digest, value_digest, epoch)` tuple; treat
+    `replayed` as non-success and deny a changed scope before any second service
+    call so it cannot create a second `consumed` outcome;
+11. require the observed lease resource, holder, fencing token or generation and
    expiry to equal the binding and satisfy the bound remaining-freshness rule;
-10. forbid provider invocation on replay, changed bytes, stale approval,
+12. forbid provider invocation on replay, changed bytes, stale approval,
    insufficient lease freshness, ambiguous state or any unequal field;
-11. treat provider acknowledgement as non-verifying;
-12. permit explicit release only after verified completion;
-13. record a possible effect with lost or ambiguous response as
+13. treat provider acknowledgement as non-verifying;
+14. permit explicit release only after verified completion;
+15. record a possible effect with lost or ambiguous response as
     `completion_unknown`, perform no automatic retry and do not release the
     lease as successful.
 
@@ -344,16 +386,17 @@ Changing any repository, Project, item, operation scope, policy commit, producer
 release, snapshot identity, plan identifier, plan digest, ordered operation-set
 digest, capability digest, provider digest, environment, workflow, approval
 issuer, approval subject or principal, approval issued-at, approval expiry,
-approval nonce, component idempotency key, Coordination transcript epoch,
-effect-specific primitives restore epoch, lease resource or holder, fencing
-token or lease generation, lease expiry or freshness bound, verifier or
-postcondition invalidates the complete binding. Every such change requires a
+approval nonce, nonce `scope_digest`, component idempotency key, Coordination
+transcript epoch, effect-specific primitives restore epoch, lease resource or
+holder, fencing token or lease generation, lease expiry or freshness bound,
+verifier or postcondition invalidates the complete binding. Every such change,
+including any source-field change that derives a new nonce scope, requires a
 fresh plan and fresh approval before invocation. A primitives restore increments
 its epoch and thereby invalidates every prior nonce, lease and capability even
-when the relay transcript epoch is unchanged. Nonce replay, replacement or
-expiry and lease contention, loss, renewal, generation change, expiry,
-replacement or restore-epoch change can never be repaired under the existing
-plan or approval.
+when the relay transcript epoch is unchanged. Nonce replay, scope substitution,
+replacement or expiry and lease contention, loss, renewal, generation change,
+expiry, replacement or restore-epoch change can never be repaired under the
+existing plan or approval.
 
 Coordination stores enforce replay and concurrency only. A nonce result, lease,
 fencing token, receipt, event, audit entry or successful teardown never grants
@@ -376,7 +419,9 @@ Public evidence may contain only:
 - canonical run-manifest, compatibility-matrix and operation-set digests;
 - relay receipt-chain, replay-projection and audit-checkpoint verification
   outcomes and digests;
-- closed nonce, lease, denial, verification and completion classes;
+- closed nonce scope-binding, call-count, outcome, lease, denial, verification
+  and completion classes, including proof that a changed scope caused no second
+  consume call or `consumed` outcome;
 - bounded resource and cleanup outcomes;
 - final teardown state and teardown-receipt digest;
 - known limitations and residual-risk decisions.
@@ -392,6 +437,7 @@ transcripts:
 
 - tokens, proofs, private keys, NATS credentials, capability keys and lease
   capabilities;
+- raw nonce `scope_digest` and `value_digest` inputs;
 - approval envelopes, OIDC assertions and provider credentials;
 - provider request/response bodies and private observations;
 - raw event transcripts, event payload content and credential-bearing URLs;
@@ -459,7 +505,8 @@ The profile fails closed before provider invocation on:
 - artifact, manifest, profile, policy, trust or configuration mismatch;
 - bootstrap, custody, DPoP, authentication or authorization failure;
 - receipt, audit, replay, cursor, epoch or projection verification failure;
-- nonce replay, lease contention/loss, stale fence or primitives ambiguity;
+- nonce replay, nonce scope mismatch or substitution, lease contention/loss,
+  stale fence or primitives ambiguity;
 - unavailable mandatory audit, signer, JetStream account or teardown evidence;
 - cross-effect binding, credential, account, key, nonce or lease reuse;
 - sandbox lifetime expiry or resource-bound exhaustion.
@@ -475,6 +522,7 @@ effect and proven verified completion.
 | --- | --- | --- |
 | Coordination delivery treated as approval | component authority matrix and independent effect validation immediately before invocation | consumer implementation defect |
 | Effect A authority reused by Effect B | separate canonical domains, services, accounts, credentials, buckets, epochs, verifiers and audit chains | compromised sandbox host can observe both |
+| approved nonce value replayed under a different valid scope | domain-separated scope derivation, plan/approval binding and exact pre-call equality with zero changed-scope service calls | compromised protected consumer identity can still submit arbitrary RFC-0015 requests |
 | insecure preview identity escapes into a normal executable | conformance-only construction, fresh per-run roots, isolated network and no compiled/default credential | source or build compromise |
 | receipt or replay substitution | canonical byte, signature, binding, sequence and projection verification in each isolated client | run-scoped signer compromise |
 | public evidence leaks secrets or topology | closed public schemas produced directly from safe values | controlled operator record still contains sensitive detail |
@@ -500,6 +548,8 @@ A later implementation is not reviewable without deterministic evidence for:
 - two-process reconnect to the same final projection digest;
 - separate Effect A/B nonce, lease, budget, epoch and audit state;
 - cross-effect credential, scope, nonce, lease, capability and fence rejection;
+- same approved nonce value with a changed structurally valid scope denied before
+  a second consume call, with one terminal `consumed` record only;
 - zero provider calls for every required pre-effect denial;
 - duplicate, reorder, reconnect, contention, lease loss, audit outage and
   unknown-completion outcomes;
