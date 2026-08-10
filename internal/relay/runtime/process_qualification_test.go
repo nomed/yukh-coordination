@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -345,37 +346,100 @@ func openQualificationStream(t *testing.T, client *http.Client, config processCo
 
 func readQualificationSSERecord(t *testing.T, scanner *bufio.Scanner) sanitizedRecord {
 	t.Helper()
-	var sequence uint64
+	record, err := parseQualificationSSERecord(scanner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+func parseQualificationSSERecord(scanner *bufio.Scanner) (sanitizedRecord, error) {
+	var frame []string
 	for scanner.Scan() {
 		line := scanner.Text()
-		switch {
-		case line == "" && sequence != 0:
-			t.Fatal("SSE record missing data")
-		case line == "":
+		if line != "" {
+			frame = append(frame, line)
 			continue
-		case len(line) > 4 && line[:4] == "id: ":
-			value, err := strconv.ParseUint(line[4:], 10, 64)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sequence = value
-		case len(line) > 6 && line[:6] == "data: ":
-			var record struct {
-				Event struct {
-					Type        string `json:"type"`
-					Participant struct {
-						ID string `json:"id"`
-					} `json:"participant"`
-				} `json:"event"`
-			}
-			if sequence == 0 || json.Unmarshal([]byte(line[6:]), &record) != nil {
-				t.Fatalf("invalid SSE data: %q", line)
-			}
-			return sanitizedRecord{Sequence: sequence, Type: record.Event.Type, Participant: record.Event.Participant.ID}
 		}
+		if len(frame) == 0 {
+			continue
+		}
+		if len(frame) == 1 && (frame[0] == "retry: 3000" || frame[0] == ": heartbeat") {
+			frame = frame[:0]
+			continue
+		}
+		if len(frame) != 3 || !strings.HasPrefix(frame[0], "id: ") || frame[1] != "event: record" || !strings.HasPrefix(frame[2], "data: ") {
+			return sanitizedRecord{}, fmt.Errorf("invalid SSE record frame: %q", frame)
+		}
+		id := strings.TrimPrefix(frame[0], "id: ")
+		sequence, err := strconv.ParseUint(id, 10, 64)
+		if err != nil || sequence == 0 || strconv.FormatUint(sequence, 10) != id {
+			return sanitizedRecord{}, fmt.Errorf("invalid SSE record id: %q", id)
+		}
+		data := []byte(strings.TrimPrefix(frame[2], "data: "))
+		canonical, err := jsoncanonicalizer.Transform(data)
+		if err != nil || !bytes.Equal(canonical, data) {
+			return sanitizedRecord{}, fmt.Errorf("non-canonical SSE record data")
+		}
+		var members map[string]json.RawMessage
+		if json.Unmarshal(data, &members) != nil || len(members) != 2 || len(members["event"]) == 0 || len(members["receipt"]) == 0 {
+			return sanitizedRecord{}, fmt.Errorf("invalid SSE record shape")
+		}
+		var event struct {
+			Type        string `json:"type"`
+			Participant struct {
+				ID string `json:"id"`
+			} `json:"participant"`
+		}
+		var receipt struct {
+			Sequence uint64 `json:"sequence"`
+		}
+		if json.Unmarshal(members["event"], &event) != nil || json.Unmarshal(members["receipt"], &receipt) != nil ||
+			event.Type == "" || event.Participant.ID == "" || receipt.Sequence != sequence {
+			return sanitizedRecord{}, fmt.Errorf("invalid SSE record data")
+		}
+		return sanitizedRecord{Sequence: sequence, Type: event.Type, Participant: event.Participant.ID}, nil
 	}
-	t.Fatalf("SSE ended before record: %v", scanner.Err())
-	return sanitizedRecord{}
+	if err := scanner.Err(); err != nil {
+		return sanitizedRecord{}, fmt.Errorf("read SSE record: %w", err)
+	}
+	if len(frame) != 0 {
+		return sanitizedRecord{}, fmt.Errorf("SSE record missing blank-line terminator: %q", frame)
+	}
+	return sanitizedRecord{}, fmt.Errorf("SSE ended before record")
+}
+
+func TestQualificationSSERecordParserRejectsMalformedFraming(t *testing.T) {
+	validData := `{"event":{"participant":{"id":"agent:C"},"type":"join"},"receipt":{"sequence":3}}`
+	tests := map[string]string{
+		"missing event":      "id: 3\ndata: " + validData + "\n\n",
+		"wrong event":        "id: 3\nevent: boundary-incomplete\ndata: " + validData + "\n\n",
+		"duplicate data":     "id: 3\nevent: record\ndata: " + validData + "\ndata: " + validData + "\n\n",
+		"noncanonical id":    "id: 03\nevent: record\ndata: " + validData + "\n\n",
+		"incomplete framing": "id: 3\nevent: record\ndata: " + validData + "\n",
+		"missing receipt":    "id: 3\nevent: record\ndata: {\"event\":{\"participant\":{\"id\":\"agent:C\"},\"type\":\"join\"}}\n\n",
+		"sequence mismatch":  "id: 3\nevent: record\ndata: {\"event\":{\"participant\":{\"id\":\"agent:C\"},\"type\":\"join\"},\"receipt\":{\"sequence\":4}}\n\n",
+		"noncanonical data":  "id: 3\nevent: record\ndata: {\"receipt\":{\"sequence\":3},\"event\":{\"type\":\"join\",\"participant\":{\"id\":\"agent:C\"}}}\n\n",
+	}
+	for name, stream := range tests {
+		t.Run(name, func(t *testing.T) {
+			scanner := bufio.NewScanner(strings.NewReader(stream))
+			if record, err := parseQualificationSSERecord(scanner); err == nil {
+				t.Fatalf("accepted malformed frame as %+v", record)
+			}
+		})
+	}
+}
+
+func TestQualificationSSERecordParserRequiresCompleteRecordFrame(t *testing.T) {
+	stream := "retry: 3000\n\n: heartbeat\n\nid: 3\nevent: record\ndata: {\"event\":{\"participant\":{\"id\":\"agent:C\"},\"type\":\"join\"},\"receipt\":{\"sequence\":3}}\n\n"
+	record, err := parseQualificationSSERecord(bufio.NewScanner(strings.NewReader(stream)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record != (sanitizedRecord{Sequence: 3, Type: "join", Participant: "agent:C"}) {
+		t.Fatalf("record = %+v", record)
+	}
 }
 
 type replayEvent struct {
