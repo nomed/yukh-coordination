@@ -71,6 +71,15 @@ Run the current relay contract tests with:
 go test ./...
 ```
 
+Run the deterministic local multi-process HTTPS/SSE scenario with:
+
+```sh
+.github/scripts/qualify-coordination-e2e.sh
+```
+
+The scenario is hermetic and synthetic; see
+[the local E2E qualification guide](documentation/how-to/qualify-local-e2e.md).
+
 ## License
 
 Apache License 2.0.

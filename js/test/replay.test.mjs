@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -184,8 +184,9 @@ test("non-origin and deleted exports are incomplete with both diagnostics", () =
   assert.deepEqual(result.projection.diagnostics.map((item) => item.code), ["INCOMPLETE_TRANSCRIPT", "NON_ACTIVE_TRANSCRIPT"]);
 });
 
-test("CLI accepts JSONL and emits canonical output", async () => {
+test("CLI accepts JSONL and emits canonical output", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "yukh-js-replay-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
   const header = transcript([], { high_water_sequence: 1 }); delete header.records;
   const path = join(directory, "transcript.jsonl");
   await writeFile(path, `${JSON.stringify({ transcript: header })}\n${JSON.stringify(record(claimA(), 1))}\n`);

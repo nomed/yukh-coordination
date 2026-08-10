@@ -44,6 +44,7 @@ nav:
       - Replay the first transcript: tutorials/first-replay.md
   - How-to:
       - Validate the conformance corpus: how-to/validate-conformance.md
+      - Qualify the local E2E flow: how-to/qualify-local-e2e.md
   - Reference:
       - Protocol surface: reference/protocol.md
       - Replay CLI: reference/replay-cli.md

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ed25519"
@@ -11,10 +12,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,7 +31,7 @@ import (
 	"github.com/nomed/yukh-coordination/internal/relay/service"
 )
 
-const processQualificationWork = "https://github.com/nomed/yukh-coordination/issues/7"
+const processQualificationWork = "https://github.com/nomed/yukh-coordination/issues/6"
 
 type processConfig struct {
 	Role       string            `json:"role"`
@@ -137,6 +141,13 @@ func startQualificationProcess(t *testing.T, config processConfig, role string) 
 	if err := process.command.Start(); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if process.command.ProcessState != nil {
+			return
+		}
+		_ = process.command.Process.Kill()
+		_ = process.command.Wait()
+	})
 	return process
 }
 
@@ -194,7 +205,7 @@ func TestFourAgentProcessHelper(t *testing.T) {
 	if config.Role == "implementation" {
 		runImplementationSession(t, agents, clients["A"], config.Instances["B"])
 	} else if config.Role == "review" {
-		runReviewSession(t, agents, clients["C"])
+		runReviewSession(t, agents, clients["C"], httpClient, config)
 		replayClient = clients["C"]
 	} else {
 		t.Fatal("invalid role")
@@ -269,20 +280,137 @@ func runImplementationSession(t *testing.T, agents map[string]clientcli.SignalRu
 	runSignal(t, agents["A"], "review", "request", map[string]any{"work_uri": processQualificationWork, "claim_id": claimID, "subject": "four-agent flow", "criteria": []string{"verified receipt"}, "independence_required": true})
 	replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "verdict") == 1 })
 	offer := runSignal(t, agents["A"], "handoff", "offer", map[string]any{"work_uri": processQualificationWork, "correlation_id": claimEvent, "causation_id": progressEvent, "claim_id": claimID, "generation": "0", "parent_claim_event_id": progressEvent, "to_participant_instance_id": recipient, "boundary": "continue qualification", "next_action": "accept ownership", "unresolved_risks": []string{}})
+	replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "leave") == 1 })
 	accept := runSignal(t, agents["B"], "handoff", "accept", map[string]any{"work_uri": processQualificationWork, "correlation_id": claimEvent, "offer_event_id": stringField(t, offer, "event_id"), "source_claim_event_id": claimEvent, "handoff_id": stringField(t, offer, "handoff_id"), "claim_id": claimID, "generation": "0", "boundary_digest": stringField(t, offer, "boundary_digest"), "evidence_set_digest": stringField(t, offer, "evidence_set_digest")})
 	runSignal(t, agents["B"], "work", "claim", map[string]any{"work_uri": processQualificationWork, "generation": "1", "scope": "implementation", "boundary": "successor", "expected_active_claims": []string{claimID}, "predecessor_handoff_event": stringField(t, accept, "event_id")})
 	runSignal(t, agents["A"], "work", "release", map[string]any{"work_uri": processQualificationWork, "correlation_id": claimEvent, "causation_id": stringField(t, accept, "event_id"), "claim_id": claimID, "generation": "0", "parent_claim_event_id": stringField(t, accept, "event_id"), "outcome": "superseded", "reason": "handoff complete"})
 }
 
-func runReviewSession(t *testing.T, agents map[string]clientcli.SignalRunner, replayClient *coordclient.Client) {
-	replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "join") == 2 })
+func runReviewSession(t *testing.T, agents map[string]clientcli.SignalRunner, replayClient *coordclient.Client, httpClient *http.Client, config processConfig) {
+	replay := replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "join") == 2 })
+	stream := openQualificationStream(t, httpClient, config, config.Tokens["C"], replay.HighWaterSequence)
+	defer stream.Close()
+	scanner := bufio.NewScanner(stream)
 	runSignal(t, agents["C"], "session", "join", map[string]any{"capabilities": []string{"publish", "replay"}, "status": "available", "session_label": "review-C"})
 	runSignal(t, agents["D"], "session", "join", map[string]any{"capabilities": []string{"publish", "replay"}, "status": "available", "session_label": "review-D"})
-	replay := replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "review_request") == 1 })
+	for sequence, participant := range []string{"agent:C", "agent:D"} {
+		record := readQualificationSSERecord(t, scanner)
+		if record.Sequence != replay.HighWaterSequence+uint64(sequence)+1 || record.Type != "join" || record.Participant != participant {
+			t.Fatalf("unexpected SSE record: %+v", record)
+		}
+	}
+	replay = replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "review_request") == 1 })
 	reviewEvent, evidenceDigest := eventFields(t, replay, "review_request", "id", "evidence_set_digest")
 	runSignal(t, agents["C"], "review", "verdict", map[string]any{"work_uri": processQualificationWork, "correlation_id": reviewEvent, "review_event_id": reviewEvent, "evidence_set_digest": evidenceDigest, "outcome": "pass", "summary": "independently verified", "findings": []string{}, "reviewer_independent": true})
+	replay = replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "handoff_offer") == 1 })
+	offer := replayEventByType(t, replay, "handoff_offer")
+	before := len(replay.Records)
+	runRejectedSignal(t, agents["C"], "handoff", "accept", map[string]any{
+		"work_uri": processQualificationWork, "correlation_id": offer.CorrelationID,
+		"offer_event_id": offer.ID, "source_claim_event_id": offer.CorrelationID,
+		"handoff_id": offer.Data["handoff_id"], "claim_id": offer.Data["claim_id"],
+		"generation": offer.Data["generation"], "boundary_digest": offer.Data["boundary_digest"],
+		"evidence_set_digest": offer.Data["evidence_set_digest"],
+	})
+	replay = replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return len(result.Records) >= before })
+	if len(replay.Records) != before || countType(replay, "handoff_accept") != 0 {
+		t.Fatalf("wrong-recipient acceptance changed transcript: before=%d after=%d", before, len(replay.Records))
+	}
+	runSignal(t, agents["D"], "session", "leave", map[string]any{"reason": "wrong-recipient fence observed"})
 	replayUntil(t, replayClient, func(result coordclient.ReplayResult) bool { return countType(result, "release") == 1 })
-	runSignal(t, agents["D"], "session", "leave", map[string]any{"reason": "qualification observed"})
+}
+
+func openQualificationStream(t *testing.T, client *http.Client, config processConfig, token string, after uint64) io.ReadCloser {
+	t.Helper()
+	target := config.BaseURI + "/coordination/v1/channels/" + url.PathEscape(config.ChannelID) + "/transcripts/1/stream"
+	request, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "DPoP "+token)
+	request.Header.Set("DPoP", "a.b.c")
+	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set("Last-Event-ID", strconv.FormatUint(after, 10))
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "text/event-stream" {
+		body, _ := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		t.Fatalf("SSE open status=%d content-type=%q body=%s", response.StatusCode, response.Header.Get("Content-Type"), body)
+	}
+	return response.Body
+}
+
+func readQualificationSSERecord(t *testing.T, scanner *bufio.Scanner) sanitizedRecord {
+	t.Helper()
+	var sequence uint64
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case line == "" && sequence != 0:
+			t.Fatal("SSE record missing data")
+		case line == "":
+			continue
+		case len(line) > 4 && line[:4] == "id: ":
+			value, err := strconv.ParseUint(line[4:], 10, 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sequence = value
+		case len(line) > 6 && line[:6] == "data: ":
+			var record struct {
+				Event struct {
+					Type        string `json:"type"`
+					Participant struct {
+						ID string `json:"id"`
+					} `json:"participant"`
+				} `json:"event"`
+			}
+			if sequence == 0 || json.Unmarshal([]byte(line[6:]), &record) != nil {
+				t.Fatalf("invalid SSE data: %q", line)
+			}
+			return sanitizedRecord{Sequence: sequence, Type: record.Event.Type, Participant: record.Event.Participant.ID}
+		}
+	}
+	t.Fatalf("SSE ended before record: %v", scanner.Err())
+	return sanitizedRecord{}
+}
+
+type replayEvent struct {
+	ID            string
+	CorrelationID string
+	Data          map[string]any
+}
+
+func replayEventByType(t *testing.T, replay coordclient.ReplayResult, kind string) replayEvent {
+	t.Helper()
+	for _, record := range replay.Records {
+		var event struct {
+			ID            string         `json:"id"`
+			Type          string         `json:"type"`
+			CorrelationID string         `json:"correlation_id"`
+			Data          map[string]any `json:"data"`
+		}
+		if json.Unmarshal(record.Event, &event) == nil && event.Type == kind {
+			return replayEvent{ID: event.ID, CorrelationID: event.CorrelationID, Data: event.Data}
+		}
+	}
+	t.Fatal("event not found: " + kind)
+	return replayEvent{}
+}
+
+func runRejectedSignal(t *testing.T, runner clientcli.SignalRunner, group, action string, input map[string]any) {
+	t.Helper()
+	raw, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if status := runner.Run(context.Background(), []string{group, action}, bytes.NewReader(raw), &output); status != 5 || !bytes.Contains(output.Bytes(), []byte(`"code":"YKC-CONFLICT-001"`)) {
+		t.Fatalf("%s %s rejection status=%d output=%s", group, action, status, output.Bytes())
+	}
 }
 
 func replayUntil(t *testing.T, client *coordclient.Client, ready func(coordclient.ReplayResult) bool) coordclient.ReplayResult {
