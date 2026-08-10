@@ -80,6 +80,17 @@ Run the deterministic local multi-process HTTPS/SSE scenario with:
 The scenario is hermetic and synthetic; see
 [the local E2E qualification guide](documentation/how-to/qualify-local-e2e.md).
 
+Run the four-repository private demo qualification with:
+
+```sh
+.github/scripts/qualify-yukh-suite-e2e.sh
+```
+
+The cross-suite runner discovers sibling repositories or accepts explicit
+checkout paths. It performs no dependency installation, deployment, external
+traffic, provider execution, or live mutation. See
+[the private suite E2E guide](documentation/how-to/qualify-suite-e2e.md).
+
 ## License
 
 Apache License 2.0.
