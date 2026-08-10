@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/suite-preview-public-evidence-1.schema.json",
+  "title": "Yukh suite preview RFC-0025 public evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifacts",
+    "compatibility_matrix_digest",
+    "contracts",
+    "effects",
+    "known_limitations",
+    "operation_set_digests",
+    "profile",
+    "relay",
+    "residual_risks",
+    "resource_outcomes",
+    "run_manifest_digest",
+    "teardown"
+  ],
+  "properties": {
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["class", "component", "digest"],
+        "properties": {
+          "class": {
+            "enum": ["source", "tree", "artifact", "sbom", "provenance"]
+          },
+          "component": {
+            "enum": [
+              "coordination",
+              "relay",
+              "relay_client",
+              "preview_authority",
+              "receipt_signer",
+              "effect_a_primitives",
+              "effect_b_primitives"
+            ]
+          },
+          "digest": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
+    "compatibility_matrix_digest": { "$ref": "#/$defs/digest" },
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version"],
+        "properties": {
+          "name": {
+            "enum": [
+              "run_manifest",
+              "effect_a_binding",
+              "effect_b_binding",
+              "public_evidence",
+              "teardown",
+              "rfc_0015_nonce",
+              "rfc_0016_lease"
+            ]
+          },
+          "version": { "enum": ["v1", "rfc-0015", "rfc-0016"] }
+        }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/effectA" },
+        { "$ref": "#/$defs/effectB" }
+      ],
+      "items": false
+    },
+    "known_limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "no_runtime",
+          "no_network",
+          "no_provider",
+          "no_credentials",
+          "synthetic_only",
+          "logical_isolation_only"
+        ]
+      }
+    },
+    "operation_set_digests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect_a", "effect_b"],
+      "properties": {
+        "effect_a": { "$ref": "#/$defs/digest" },
+        "effect_b": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "profile": { "const": "yukh-suite-preview-public-evidence/v1" },
+    "relay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_checkpoint_digest",
+        "audit_checkpoint_outcome",
+        "receipt_chain_digest",
+        "receipt_chain_outcome",
+        "replay_projection_digest",
+        "replay_projection_outcome"
+      ],
+      "properties": {
+        "audit_checkpoint_digest": { "$ref": "#/$defs/digest" },
+        "audit_checkpoint_outcome": {
+          "enum": ["verified", "failed", "unavailable"]
+        },
+        "receipt_chain_digest": { "$ref": "#/$defs/digest" },
+        "receipt_chain_outcome": { "enum": ["verified", "failed"] },
+        "replay_projection_digest": { "$ref": "#/$defs/digest" },
+        "replay_projection_outcome": {
+          "enum": ["verified", "failed", "diverged"]
+        }
+      }
+    },
+    "residual_risks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "host_compromise",
+          "consumer_defect",
+          "operator_evidence_sensitive",
+          "no_retained_service_recovery"
+        ]
+      }
+    },
+    "resource_outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["admission_outcome", "bounds_outcome", "cleanup_outcome"],
+      "properties": {
+        "admission_outcome": {
+          "enum": ["open", "closed", "expired", "failed"]
+        },
+        "bounds_outcome": {
+          "enum": ["within_bounds", "exceeded", "unknown"]
+        },
+        "cleanup_outcome": {
+          "enum": ["not_started", "bounded", "failed", "unknown"]
+        }
+      }
+    },
+    "run_manifest_digest": { "$ref": "#/$defs/digest" },
+    "teardown": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["receipt_digest", "state"],
+          "properties": {
+            "receipt_digest": { "$ref": "#/$defs/digest" },
+            "state": { "const": "completed" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["receipt_digest", "state"],
+          "properties": {
+            "receipt_digest": { "const": "absent:teardown-incomplete" },
+            "state": { "const": "teardown_incomplete" }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha-256:[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:/@-]{0,255}$"
+    },
+    "effectBody": {
+      "type": "object",
+      "required": [
+        "completion_outcome",
+        "denial_outcome",
+        "effect",
+        "lease_outcome",
+        "nonce_consume_calls",
+        "nonce_outcome",
+        "nonce_scope_binding",
+        "verification_outcome"
+      ],
+      "properties": {
+        "completion_outcome": {
+          "enum": [
+            "not_attempted",
+            "verified",
+            "failed_without_effect",
+            "completion_unknown"
+          ]
+        },
+        "denial_outcome": {
+          "enum": [
+            "none",
+            "pre_effect_denied",
+            "changed_scope_denied",
+            "cross_effect_reuse_denied",
+            "completion_unknown"
+          ]
+        },
+        "lease_outcome": {
+          "enum": [
+            "not_requested",
+            "acquired",
+            "conflict",
+            "lost",
+            "stale",
+            "expired",
+            "released"
+          ]
+        },
+        "nonce_consume_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "nonce_outcome": {
+          "enum": ["not_called", "consumed", "replayed", "denied"]
+        },
+        "nonce_scope_binding": {
+          "enum": ["matched", "changed_scope_denied", "failed"]
+        },
+        "verification_outcome": {
+          "enum": ["not_attempted", "verified", "failed", "unknown"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "nonce_scope_binding": { "const": "changed_scope_denied" }
+            },
+            "required": ["nonce_scope_binding"]
+          },
+          "then": {
+            "properties": {
+              "completion_outcome": { "const": "not_attempted" },
+              "denial_outcome": { "const": "changed_scope_denied" },
+              "nonce_consume_calls": { "const": 0 },
+              "nonce_outcome": { "enum": ["not_called", "denied"] },
+              "verification_outcome": { "const": "not_attempted" }
+            }
+          }
+        }
+      ]
+    },
+    "effectA": {
+      "allOf": [
+        { "$ref": "#/$defs/effectBody" },
+        {
+          "type": "object",
+          "properties": { "effect": { "const": "effect_a" } },
+          "required": ["effect"]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "effectB": {
+      "allOf": [
+        { "$ref": "#/$defs/effectBody" },
+        {
+          "type": "object",
+          "properties": { "effect": { "const": "effect_b" } },
+          "required": ["effect"]
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

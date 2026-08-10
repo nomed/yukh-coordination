@@ -47,6 +47,7 @@ nav:
   - Reference:
       - Protocol surface: reference/protocol.md
       - Replay CLI: reference/replay-cli.md
+      - RFC-0025 local foundations: reference/preview-foundations.md
   - Explanation:
       - Claims are not locks: explanation/claims-not-locks.md
       - Component boundary: explanation/component-boundary.md

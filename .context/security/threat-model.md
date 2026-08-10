@@ -1053,6 +1053,27 @@ infrastructure, key, token, certificate, registration, credential, listener,
 network traffic, provider call, mutation, preview release or production
 authority.
 
+### RFC-0025 pure/local implementation foundation — 2026-08-10
+
+The execution-forbidden foundation implements only closed schemas, canonical
+Go types and derivations, deterministic synthetic vectors, a pure teardown
+state machine and a typed public-evidence allowlist. It contains no executable
+assembly, listener, broker client, container definition, credential path,
+provider adapter or effect callback.
+
+| Foundation threat | Implemented control | Residual boundary |
+| --- | --- | --- |
+| movable or ambiguous run input | canonical, unknown-member-rejecting manifest parser with fixed component identities, artifact/profile digests, lifetime, bounds and teardown target | artifact production and runtime admission remain unimplemented |
+| Effect A material reused by Effect B | closed effect-specific projections and bindings, frozen domain constants, exact field equality and explicit cross-effect artifact rejection | owning consumers must later perform the check before any provider call |
+| approved nonce value retained under a changed scope | local pre-call validator returns scope mismatch before a service call; fixture requires zero calls and zero consumed outcomes | no primitives service is invoked or claimed by this foundation |
+| teardown state skipped, reversed or rewritten after ambiguity | exact-next-only pure state machine and terminal `teardown_incomplete`, with exhaustive state-pair/failure tests | no controller or absence probe is implemented |
+| public evidence captures a secret before redaction | closed public schema and structural path allowlist with adversarial secret, nonce, lease, binding, approval and provider-body rejection | designated public digests still require trustworthy future producers |
+
+The implementation does not reduce the accepted residual risks above and does
+not create runtime E2E evidence. Relay, Docker, NATS, infrastructure,
+credentials, network access, live traffic, providers and protected effects
+remain absent and unauthorized.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

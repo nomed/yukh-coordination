@@ -25,6 +25,12 @@ operated service or turn local audit evidence into external transparency.
 - `signatures`: fixed RFC 8032-derived receipt, audit-checkpoint and recovery
   manifest signatures with an independent OpenSSL verifier.
 
+The embedded `schema/test-vectors/suite-preview-rfc-0025-1.json` fixture
+separately freezes the execution-forbidden RFC-0025 manifest, Effect A/B
+authority derivations, negative reuse outcomes and public-evidence bytes. Go
+and standards-schema tests consume it without starting a process or making a
+network call.
+
 ## Repeatable validation
 
 ```bash

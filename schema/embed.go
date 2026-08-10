@@ -4,7 +4,8 @@ package schema
 
 import "embed"
 
-// FS contains the public v0.1 JSON Schemas exactly as shipped by this module.
+// FS contains the public JSON Schemas and frozen vectors exactly as shipped by
+// this module.
 //
 //go:embed *.schema.json payloads/*.schema.json test-vectors/*.json
 var FS embed.FS

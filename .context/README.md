@@ -28,6 +28,9 @@ change architecture, protocol, security boundaries or acceptance state.
   first-usable-preview Coordination profile accepted by the project owner in
   issue #195 on 2026-08-09. Acceptance authorizes only separately reviewed,
   execution-forbidden implementation and hermetic synthetic qualification.
+- The RFC-0025 local implementation foundation is limited to public schemas,
+  pure Go validation/derivation/state-machine code and deterministic synthetic
+  vectors. It adds no executable, network, credential or provider path.
 - [The threat model](security/threat-model.md) records security boundaries and
   accepted RFC deltas without independently changing RFC acceptance state.
 

@@ -1,6 +1,6 @@
 # Current context
 
-- Updated: 2026-08-09
+- Updated: 2026-08-10
 - Governing issues: #6, #167, #184 and #195
 - Last delivery pull request: #193
 - Active Coordination increment: #185 connects the client CLI to the accepted
@@ -85,8 +85,13 @@
   hermetic synthetic qualification; it authorizes no runtime code,
   infrastructure, OCI publication, credentials outside test-owned ephemeral
   processes, live traffic, provider execution, mutation, preview publication,
-  production use or readiness claims. A separate implementation issue remains
-  required before any implementation work.
+  production use or readiness claims.
+- RFC-0025 local foundation: the canonical run-manifest, Effect A/B authority
+  projections and derivations, monotonic teardown state machine and closed
+  public-evidence allowlist now have schema, pure Go and deterministic
+  conformance foundations. They start no relay, NATS, Docker, infrastructure,
+  credential, network, provider or effect and do not establish a runtime E2E
+  foundation.
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/suite-preview-run-manifest-1.schema.json",
+  "title": "Yukh suite preview RFC-0025 run manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "components",
+    "conformance_corpus_digest",
+    "maximum_lifetime_seconds",
+    "profile",
+    "resource_bounds",
+    "run_id",
+    "source_commit",
+    "source_tree_digest",
+    "teardown_target"
+  ],
+  "properties": {
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effect_a_audit",
+        "effect_a_primitives",
+        "effect_b_audit",
+        "effect_b_primitives",
+        "preview_authority",
+        "receipt_signer",
+        "relay",
+        "relay_audit",
+        "relay_client_a",
+        "relay_client_b"
+      ],
+      "properties": {
+        "effect_a_audit": { "$ref": "#/$defs/component" },
+        "effect_a_primitives": { "$ref": "#/$defs/component" },
+        "effect_b_audit": { "$ref": "#/$defs/component" },
+        "effect_b_primitives": { "$ref": "#/$defs/component" },
+        "preview_authority": { "$ref": "#/$defs/component" },
+        "receipt_signer": { "$ref": "#/$defs/component" },
+        "relay": { "$ref": "#/$defs/component" },
+        "relay_audit": { "$ref": "#/$defs/component" },
+        "relay_client_a": { "$ref": "#/$defs/component" },
+        "relay_client_b": { "$ref": "#/$defs/component" }
+      }
+    },
+    "conformance_corpus_digest": { "$ref": "#/$defs/digest" },
+    "maximum_lifetime_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 14400
+    },
+    "profile": { "const": "yukh-suite-preview-run-manifest/v1" },
+    "resource_bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_inflight_operations",
+        "max_memory_mib",
+        "max_processes",
+        "max_storage_mib"
+      ],
+      "properties": {
+        "max_inflight_operations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "max_memory_mib": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "max_processes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "max_storage_mib": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      }
+    },
+    "run_id": { "$ref": "#/$defs/identifier" },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source_tree_digest": { "$ref": "#/$defs/digest" },
+    "teardown_target": { "const": "complete_ephemeral_sandbox" }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_digest", "logical_id", "profile_version"],
+      "properties": {
+        "artifact_digest": { "$ref": "#/$defs/digest" },
+        "logical_id": { "$ref": "#/$defs/identifier" },
+        "profile_version": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha-256:[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:/@-]{0,255}$"
+    }
+  }
+}

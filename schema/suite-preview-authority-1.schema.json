@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/suite-preview-authority-1.schema.json",
+  "title": "Yukh suite preview RFC-0025 Effect A and B authority objects v1",
+  "oneOf": [
+    { "$ref": "#/$defs/effectANonceScope" },
+    { "$ref": "#/$defs/effectAPreLease" },
+    { "$ref": "#/$defs/effectABinding" },
+    { "$ref": "#/$defs/effectBNonceScope" },
+    { "$ref": "#/$defs/effectBPreLease" },
+    { "$ref": "#/$defs/effectBBinding" }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:/@-]{0,255}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha-256:[0-9a-f]{64}$"
+    },
+    "rawDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "positiveSafeInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "identifierList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "projectionCommon": {
+      "type": "object",
+      "required": [
+        "component_idempotency_key",
+        "coordination_transcript_epoch",
+        "environment_identity",
+        "intended_holder_identity",
+        "item_identity",
+        "operation_scope",
+        "operation_set_digest",
+        "policy_commit",
+        "postconditions",
+        "precondition_snapshot_identity",
+        "primitives_restore_epoch",
+        "project_identity",
+        "protected_workflow_identity",
+        "repository_identity",
+        "verifier_identity"
+      ],
+      "properties": {
+        "component_idempotency_key": { "$ref": "#/$defs/identifier" },
+        "coordination_transcript_epoch": { "$ref": "#/$defs/positiveSafeInteger" },
+        "environment_identity": { "$ref": "#/$defs/identifier" },
+        "intended_holder_identity": { "$ref": "#/$defs/identifier" },
+        "item_identity": { "$ref": "#/$defs/identifier" },
+        "operation_scope": { "$ref": "#/$defs/identifierList" },
+        "operation_set_digest": { "$ref": "#/$defs/digest" },
+        "policy_commit": { "$ref": "#/$defs/commit" },
+        "postconditions": { "$ref": "#/$defs/identifierList" },
+        "precondition_snapshot_identity": { "$ref": "#/$defs/digest" },
+        "primitives_restore_epoch": { "$ref": "#/$defs/positiveSafeInteger" },
+        "project_identity": { "$ref": "#/$defs/identifier" },
+        "protected_workflow_identity": { "$ref": "#/$defs/identifier" },
+        "repository_identity": { "$ref": "#/$defs/identifier" },
+        "verifier_identity": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "effectAProjectionBase": {
+      "allOf": [
+        { "$ref": "#/$defs/projectionCommon" },
+        {
+          "type": "object",
+          "required": [
+            "mcp_capability_definition_digest",
+            "mcp_provider_implementation_digest",
+            "projects_producer_release"
+          ],
+          "properties": {
+            "mcp_capability_definition_digest": {
+              "const": "absent:rfc-0025:effect-a:mcp-capability-definition"
+            },
+            "mcp_provider_implementation_digest": {
+              "const": "absent:rfc-0025:effect-a:mcp-provider-implementation"
+            },
+            "projects_producer_release": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "effectBProjectionBase": {
+      "allOf": [
+        { "$ref": "#/$defs/projectionCommon" },
+        {
+          "type": "object",
+          "required": [
+            "mcp_capability_definition_digest",
+            "mcp_producer_release",
+            "mcp_provider_implementation_digest",
+            "projects_producer_release"
+          ],
+          "properties": {
+            "mcp_capability_definition_digest": { "$ref": "#/$defs/digest" },
+            "mcp_producer_release": { "$ref": "#/$defs/digest" },
+            "mcp_provider_implementation_digest": { "$ref": "#/$defs/digest" },
+            "projects_producer_release": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "effectANonceScope": {
+      "allOf": [{ "$ref": "#/$defs/effectAProjectionBase" }],
+      "unevaluatedProperties": false
+    },
+    "effectAPreLease": {
+      "allOf": [
+        { "$ref": "#/$defs/effectAProjectionBase" },
+        {
+          "type": "object",
+          "required": ["nonce_scope_digest"],
+          "properties": {
+            "nonce_scope_digest": { "$ref": "#/$defs/rawDigest" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "effectBNonceScope": {
+      "allOf": [{ "$ref": "#/$defs/effectBProjectionBase" }],
+      "unevaluatedProperties": false
+    },
+    "effectBPreLease": {
+      "allOf": [
+        { "$ref": "#/$defs/effectBProjectionBase" },
+        {
+          "type": "object",
+          "required": ["nonce_scope_digest"],
+          "properties": {
+            "nonce_scope_digest": { "$ref": "#/$defs/rawDigest" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "bindingCommon": {
+      "type": "object",
+      "required": [
+        "approval_expires_at",
+        "approval_issued_at",
+        "approval_issuer",
+        "approval_nonce",
+        "approval_subject",
+        "component_idempotency_key",
+        "coordination_transcript_epoch",
+        "environment_identity",
+        "fencing_token",
+        "item_identity",
+        "lease_expires_at",
+        "lease_holder_identity",
+        "lease_resource_identity",
+        "minimum_remaining_lease_millis",
+        "nonce_scope_digest",
+        "operation_scope",
+        "operation_set_digest",
+        "plan_digest",
+        "plan_id",
+        "policy_commit",
+        "postconditions",
+        "precondition_snapshot_identity",
+        "primitives_restore_epoch",
+        "project_identity",
+        "protected_workflow_identity",
+        "repository_identity",
+        "verifier_identity"
+      ],
+      "properties": {
+        "approval_expires_at": { "$ref": "#/$defs/time" },
+        "approval_issued_at": { "$ref": "#/$defs/time" },
+        "approval_issuer": { "$ref": "#/$defs/identifier" },
+        "approval_nonce": { "$ref": "#/$defs/identifier" },
+        "approval_subject": { "$ref": "#/$defs/identifier" },
+        "component_idempotency_key": { "$ref": "#/$defs/identifier" },
+        "coordination_transcript_epoch": { "$ref": "#/$defs/positiveSafeInteger" },
+        "environment_identity": { "$ref": "#/$defs/identifier" },
+        "fencing_token": { "$ref": "#/$defs/positiveSafeInteger" },
+        "item_identity": { "$ref": "#/$defs/identifier" },
+        "lease_expires_at": { "$ref": "#/$defs/time" },
+        "lease_holder_identity": { "$ref": "#/$defs/rawDigest" },
+        "lease_resource_identity": { "$ref": "#/$defs/rawDigest" },
+        "minimum_remaining_lease_millis": { "$ref": "#/$defs/positiveSafeInteger" },
+        "nonce_scope_digest": { "$ref": "#/$defs/rawDigest" },
+        "operation_scope": { "$ref": "#/$defs/identifierList" },
+        "operation_set_digest": { "$ref": "#/$defs/digest" },
+        "plan_digest": { "$ref": "#/$defs/digest" },
+        "plan_id": { "$ref": "#/$defs/identifier" },
+        "policy_commit": { "$ref": "#/$defs/commit" },
+        "postconditions": { "$ref": "#/$defs/identifierList" },
+        "precondition_snapshot_identity": { "$ref": "#/$defs/digest" },
+        "primitives_restore_epoch": { "$ref": "#/$defs/positiveSafeInteger" },
+        "project_identity": { "$ref": "#/$defs/identifier" },
+        "protected_workflow_identity": { "$ref": "#/$defs/identifier" },
+        "repository_identity": { "$ref": "#/$defs/identifier" },
+        "verifier_identity": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "effectABinding": {
+      "allOf": [
+        { "$ref": "#/$defs/bindingCommon" },
+        {
+          "type": "object",
+          "required": [
+            "mcp_capability_definition_digest",
+            "mcp_provider_implementation_digest",
+            "projects_producer_release"
+          ],
+          "properties": {
+            "mcp_capability_definition_digest": {
+              "const": "absent:rfc-0025:effect-a:mcp-capability-definition"
+            },
+            "mcp_provider_implementation_digest": {
+              "const": "absent:rfc-0025:effect-a:mcp-provider-implementation"
+            },
+            "projects_producer_release": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "effectBBinding": {
+      "allOf": [
+        { "$ref": "#/$defs/bindingCommon" },
+        {
+          "type": "object",
+          "required": [
+            "mcp_capability_definition_digest",
+            "mcp_producer_release",
+            "mcp_provider_implementation_digest",
+            "projects_producer_release"
+          ],
+          "properties": {
+            "mcp_capability_definition_digest": { "$ref": "#/$defs/digest" },
+            "mcp_producer_release": { "$ref": "#/$defs/digest" },
+            "mcp_provider_implementation_digest": { "$ref": "#/$defs/digest" },
+            "projects_producer_release": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}
