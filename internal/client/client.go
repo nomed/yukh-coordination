@@ -271,11 +271,11 @@ func (c *Client) page(ctx context.Context, after uint64) (ReplayResult, error) {
 	records := make([]Record, 0, len(page.Records))
 	expected := after + 1
 	for _, item := range page.Records {
-		sequence, err := c.validateRecord(item.Event, item.Receipt, expected)
+		record, err := c.ValidateRecord(item.Event, item.Receipt, expected)
 		if err != nil {
 			return ReplayResult{}, err
 		}
-		records = append(records, Record{Sequence: sequence, Event: append(json.RawMessage(nil), item.Event...), Receipt: append(json.RawMessage(nil), item.Receipt...)})
+		records = append(records, record)
 		expected++
 	}
 	if page.HighWaterSequence != expected-1 {
@@ -284,12 +284,13 @@ func (c *Client) page(ctx context.Context, after uint64) (ReplayResult, error) {
 	return ReplayResult{HighWaterSequence: page.HighWaterSequence, Completeness: page.Completeness, BoundarySequence: page.BoundarySequence, Records: records}, nil
 }
 
-func (c *Client) validateRecord(eventRaw, receiptRaw []byte, expected uint64) (uint64, error) {
+// ValidateRecord verifies canonical bytes, receipt bindings, sequence, scope, and signature.
+func (c *Client) ValidateRecord(eventRaw, receiptRaw []byte, expected uint64) (Record, error) {
 	if canonical, err := jsoncanonicalizer.Transform(eventRaw); err != nil || !bytes.Equal(canonical, eventRaw) {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
 	if canonical, err := jsoncanonicalizer.Transform(receiptRaw); err != nil || !bytes.Equal(canonical, receiptRaw) {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
 	var event struct {
 		SpecVersion string `json:"specversion"`
@@ -304,11 +305,11 @@ func (c *Client) validateRecord(eventRaw, receiptRaw []byte, expected uint64) (u
 		Sequence, TranscriptEpoch                                        uint64
 	}
 	if json.Unmarshal(eventRaw, &event) != nil {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
 	var wire map[string]json.RawMessage
 	if json.Unmarshal(receiptRaw, &wire) != nil {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
 	decodeString := func(name string, target *string) bool {
 		raw, ok := wire[name]
@@ -319,14 +320,14 @@ func (c *Client) validateRecord(eventRaw, receiptRaw []byte, expected uint64) (u
 		return ok && json.Unmarshal(raw, target) == nil
 	}
 	if !decodeString("specversion", &receipt.SpecVersion) || !decodeString("event_id", &receipt.EventID) || !decodeString("event_digest", &receipt.EventDigest) || !decodeString("channel_id", &receipt.ChannelID) || !decodeString("channel_uri", &receipt.ChannelURI) || !decodeString("cursor", &receipt.Cursor) || !decodeUint("sequence", &receipt.Sequence) || !decodeUint("transcript_epoch", &receipt.TranscriptEpoch) {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
 	digest := sha256.Sum256(eventRaw)
 	if event.SpecVersion != "0.1" || receipt.SpecVersion != "0.1" || event.ID == "" || event.Channel != c.config.ChannelURI || receipt.EventID != event.ID || receipt.EventDigest != fmt.Sprintf("sha-256:%x", digest) || receipt.ChannelID != c.config.ChannelID || receipt.ChannelURI != c.config.ChannelURI || receipt.Sequence != expected || receipt.Cursor != strconv.FormatUint(expected, 10) || receipt.TranscriptEpoch != c.config.TranscriptEpoch {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
 	if err := c.verifier.Verify(receiptRaw); err != nil {
-		return 0, ErrInvalidRecord
+		return Record{}, ErrInvalidRecord
 	}
-	return receipt.Sequence, nil
+	return Record{Sequence: receipt.Sequence, Event: append(json.RawMessage(nil), eventRaw...), Receipt: append(json.RawMessage(nil), receiptRaw...)}, nil
 }
