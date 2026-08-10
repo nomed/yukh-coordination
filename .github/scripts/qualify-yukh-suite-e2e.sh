@@ -96,6 +96,7 @@ component_commands=(
 component_statuses=("NOT_RUN" "NOT_RUN" "NOT_RUN" "NOT_RUN")
 component_durations_ms=(0 0 0 0)
 component_commits=("" "" "" "")
+component_worktrees=("UNKNOWN" "UNKNOWN" "UNKNOWN" "UNKNOWN")
 
 total_started_ms="$(python3 -c 'import time; print(time.monotonic_ns() // 1_000_000)' 2>/dev/null || echo 0)"
 current_component=-1
@@ -132,6 +133,7 @@ emit_summary() {
       "${component_statuses[$index]}"
       "${component_durations_ms[$index]}"
       "${component_commits[$index]}"
+      "${component_worktrees[$index]}"
     )
   done
 
@@ -146,13 +148,14 @@ failure_detail = sys.argv[3]
 summary_path = sys.argv[4]
 fields = sys.argv[5:]
 components = []
-for offset in range(0, len(fields), 6):
-    name, path, command, status, duration_ms, commit = fields[offset : offset + 6]
+for offset in range(0, len(fields), 7):
+    name, path, command, status, duration_ms, commit, worktree = fields[offset : offset + 7]
     components.append(
         {
             "name": name,
             "path": path,
             "commit": commit or None,
+            "worktree": worktree,
             "command": command,
             "status": status,
             "duration_ms": int(duration_ms),
@@ -171,33 +174,50 @@ summary = {
     "components": components,
 }
 
+write_failure = None
+if summary_path:
+    parent = os.path.dirname(os.path.abspath(summary_path))
+    temporary = f"{summary_path}.tmp.{os.getpid()}"
+    try:
+        if not os.path.isdir(parent):
+            raise OSError(f"parent directory does not exist: {parent}")
+        encoded = json.dumps(summary, separators=(",", ":"), sort_keys=True)
+        with open(temporary, "w", encoding="utf-8") as handle:
+            handle.write(encoded)
+            handle.write("\n")
+        os.replace(temporary, summary_path)
+    except OSError as error:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        write_failure = f"summary persistence failed for {summary_path}: {error}"
+        summary["status"] = "FAIL"
+        summary["failure"] = write_failure
+
 print()
 print("Yukh private E2E summary")
-print(f"{'Component':<14} {'Status':<9} {'Duration':>10}  Commit")
+print(f"{'Component':<14} {'Status':<9} {'Duration':>10}  {'Tree':<8} Commit")
 for component in components:
     commit = component["commit"][:12] if component["commit"] else "-"
     duration = component["duration_ms"] / 1000
-    print(f"{component['name']:<14} {component['status']:<9} {duration:>9.3f}s  {commit}")
+    print(
+        f"{component['name']:<14} {component['status']:<9} {duration:>9.3f}s  "
+        f"{component['worktree']:<8} {commit}"
+    )
 print(
     f"Result: {passed}/{len(components)} "
     f"{'PASS' if summary['status'] == 'PASS' else 'FAIL'} "
     f"in {total_duration_ms / 1000:.3f}s"
 )
-if failure_detail:
-    print(f"Failure: {failure_detail}", file=sys.stderr)
+if summary["failure"]:
+    print(f"Failure: {summary['failure']}", file=sys.stderr)
 
 encoded = json.dumps(summary, separators=(",", ":"), sort_keys=True)
 print(f"YUKH_E2E_SUMMARY_JSON={encoded}")
 
-if summary_path:
-    parent = os.path.dirname(os.path.abspath(summary_path))
-    if not os.path.isdir(parent):
-        raise SystemExit(f"summary parent directory does not exist: {parent}")
-    temporary = f"{summary_path}.tmp.{os.getpid()}"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        handle.write(encoded)
-        handle.write("\n")
-    os.replace(temporary, summary_path)
+if write_failure:
+    raise SystemExit(3)
 PY
 }
 
@@ -261,9 +281,42 @@ done
 [[ -x "${component_paths[3]}/.github/scripts/qualify-coordination-e2e.sh" ]] ||
   fail "Coordination qualification script is absent or not executable: ${component_paths[3]}"
 
+next_swc_package="$(
+  node - <<'NODE'
+const { arch, platform, report } = process;
+let suffix;
+if (platform === "darwin" && (arch === "arm64" || arch === "x64")) {
+  suffix = `darwin-${arch}`;
+} else if (platform === "linux" && (arch === "arm64" || arch === "x64")) {
+  const header = report?.getReport()?.header ?? {};
+  suffix = `linux-${arch}-${header.glibcVersionRuntime ? "gnu" : "musl"}`;
+} else {
+  process.exit(1);
+}
+process.stdout.write(`@next/swc-${suffix}`);
+NODE
+)" || fail "the Site E2E runner does not support Node.js platform $(node -p 'process.platform + \"/\" + process.arch')"
+
+(
+  cd "${component_paths[0]}" &&
+    node - "$next_swc_package" <<'NODE'
+const packageName = process.argv[2];
+require.resolve(packageName);
+require(packageName);
+NODE
+) >/dev/null 2>&1 ||
+  fail "Site requires installed native binding $next_swc_package; run npm ci once for this platform"
+
 for ((index = 0; index < component_count; index++)); do
   component_commits[$index]="$(git -C "${component_paths[$index]}" rev-parse HEAD 2>/dev/null)" ||
     fail "${component_names[$index]} checkout is not a Git worktree"
+  dirty="$(git -C "${component_paths[$index]}" status --porcelain --untracked-files=all)" ||
+    fail "could not inspect ${component_names[$index]} worktree state"
+  if [[ -n "$dirty" ]]; then
+    component_worktrees[$index]="DIRTY"
+    fail "${component_names[$index]} checkout is dirty; commit, remove, or Git-ignore generated files before qualification"
+  fi
+  component_worktrees[$index]="CLEAN"
 done
 
 # Commands may use only installed dependencies and local test-owned resources.
@@ -277,7 +330,7 @@ export npm_config_update_notifier=false
 
 run_component() {
   local index="$1"
-  local status
+  local dirty status
   current_component="$index"
   current_started_ms="$(now_ms)"
   component_statuses[$index]="RUNNING"
@@ -297,6 +350,19 @@ run_component() {
 
   component_durations_ms[$index]=$(($(now_ms) - current_started_ms))
   current_component=-1
+  if ! dirty="$(git -C "${component_paths[$index]}" status --porcelain --untracked-files=all)"; then
+    component_worktrees[$index]="UNKNOWN"
+    status=3
+    failure_detail="could not inspect ${component_names[$index]} worktree state after qualification"
+    echo "$failure_detail" >&2
+  elif [[ -n "$dirty" ]]; then
+    component_worktrees[$index]="DIRTY"
+    if ((status == 0)); then
+      status=3
+      failure_detail="${component_names[$index]} changed its worktree during qualification"
+      echo "$failure_detail" >&2
+    fi
+  fi
   if ((status == 0)); then
     component_statuses[$index]="PASS"
     printf '\n<== %s: PASS (%.3fs)\n' \
@@ -306,7 +372,7 @@ run_component() {
   fi
 
   component_statuses[$index]="FAIL"
-  failure_detail="${component_names[$index]} exited with status $status"
+  failure_detail="${failure_detail:-${component_names[$index]} exited with status $status}"
   printf '\n<== %s: FAIL (status=%d, %.3fs)\n' \
     "${component_names[$index]}" \
     "$status" \

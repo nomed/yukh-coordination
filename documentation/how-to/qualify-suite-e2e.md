@@ -30,6 +30,18 @@ offline mode, disables update checks and telemetry, sets `GOPROXY=off`, and
 sets `GOTOOLCHAIN=local`; a missing dependency or toolchain therefore fails
 preflight instead of reaching a public registry.
 
+The Site preflight also resolves and loads the installed platform-specific
+Next.js SWC native binding (`darwin-arm64`, `darwin-x64`, or the matching
+glibc/musl Linux binding). This prevents Next.js from entering its binding
+download fallback after execution starts. Native Windows is not supported by
+this Bash runner.
+
+Every checkout must be a clean Git worktree before execution and must remain
+clean after its component command. Staged, unstaged, and non-ignored untracked
+paths fail qualification. Generated paths are exempt only when the component
+repository explicitly lists them in `.gitignore`; the commit SHA and clean-tree
+state are recorded in the final summary.
+
 Place the repositories as siblings:
 
 ```text
@@ -73,13 +85,26 @@ ends with `Result: 4/4 PASS`.
 
 The final `YUKH_E2E_SUMMARY_JSON=...` line contains the same evidence in a
 machine-readable schema, including total duration, component paths, commits,
-commands, statuses, and durations. To also write the JSON atomically to a file,
-set `YUKH_E2E_SUMMARY_PATH` or pass `--summary`:
+clean-tree evidence, commands, statuses, and durations. To also write the JSON
+atomically to a file, set `YUKH_E2E_SUMMARY_PATH` or pass `--summary`:
 
 ```sh
 YUKH_E2E_SUMMARY_PATH=/tmp/yukh-e2e-summary.json \
 .github/scripts/qualify-yukh-suite-e2e.sh
 ```
+
+When a summary file is requested, the atomic write completes before the runner
+prints `PASS`. A write or rename error produces an overall `FAIL` and a matching
+failure JSON line on standard output.
+
+Run the targeted fail-closed runner tests with:
+
+```sh
+.github/scripts/test-qualify-yukh-suite-e2e.sh
+```
+
+They cover an absent SWC binding, a dirty component worktree, and requested
+summary persistence failure without contacting a registry or service.
 
 The component suites own their test processes, loopback listeners, ephemeral
 ports, fixtures, and cleanup. The runner does not launch background services.
