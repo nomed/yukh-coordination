@@ -295,7 +295,7 @@ func runReviewSession(t *testing.T, agents map[string]clientcli.SignalRunner, re
 	runSignal(t, agents["C"], "session", "join", map[string]any{"capabilities": []string{"publish", "replay"}, "status": "available", "session_label": "review-C"})
 	runSignal(t, agents["D"], "session", "join", map[string]any{"capabilities": []string{"publish", "replay"}, "status": "available", "session_label": "review-D"})
 	for sequence, participant := range []string{"agent:C", "agent:D"} {
-		record := readQualificationSSERecord(t, scanner)
+		record := readQualificationSSERecord(t, scanner, replayClient)
 		if record.Sequence != replay.HighWaterSequence+uint64(sequence)+1 || record.Type != "join" || record.Participant != participant {
 			t.Fatalf("unexpected SSE record: %+v", record)
 		}
@@ -344,16 +344,20 @@ func openQualificationStream(t *testing.T, client *http.Client, config processCo
 	return response.Body
 }
 
-func readQualificationSSERecord(t *testing.T, scanner *bufio.Scanner) sanitizedRecord {
+type qualificationRecordValidator interface {
+	ValidateRecord(eventRaw, receiptRaw []byte, expected uint64) (coordclient.Record, error)
+}
+
+func readQualificationSSERecord(t *testing.T, scanner *bufio.Scanner, validator qualificationRecordValidator) sanitizedRecord {
 	t.Helper()
-	record, err := parseQualificationSSERecord(scanner)
+	record, err := parseQualificationSSERecord(scanner, validator)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return record
 }
 
-func parseQualificationSSERecord(scanner *bufio.Scanner) (sanitizedRecord, error) {
+func parseQualificationSSERecord(scanner *bufio.Scanner, validator qualificationRecordValidator) (sanitizedRecord, error) {
 	var frame []string
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -385,17 +389,17 @@ func parseQualificationSSERecord(scanner *bufio.Scanner) (sanitizedRecord, error
 		if json.Unmarshal(data, &members) != nil || len(members) != 2 || len(members["event"]) == 0 || len(members["receipt"]) == 0 {
 			return sanitizedRecord{}, fmt.Errorf("invalid SSE record shape")
 		}
+		validated, err := validator.ValidateRecord(members["event"], members["receipt"], sequence)
+		if err != nil {
+			return sanitizedRecord{}, fmt.Errorf("invalid SSE record binding: %w", err)
+		}
 		var event struct {
 			Type        string `json:"type"`
 			Participant struct {
 				ID string `json:"id"`
 			} `json:"participant"`
 		}
-		var receipt struct {
-			Sequence uint64 `json:"sequence"`
-		}
-		if json.Unmarshal(members["event"], &event) != nil || json.Unmarshal(members["receipt"], &receipt) != nil ||
-			event.Type == "" || event.Participant.ID == "" || receipt.Sequence != sequence {
+		if json.Unmarshal(validated.Event, &event) != nil || event.Type == "" || event.Participant.ID == "" {
 			return sanitizedRecord{}, fmt.Errorf("invalid SSE record data")
 		}
 		return sanitizedRecord{Sequence: sequence, Type: event.Type, Participant: event.Participant.ID}, nil
@@ -410,21 +414,21 @@ func parseQualificationSSERecord(scanner *bufio.Scanner) (sanitizedRecord, error
 }
 
 func TestQualificationSSERecordParserRejectsMalformedFraming(t *testing.T) {
-	validData := `{"event":{"participant":{"id":"agent:C"},"type":"join"},"receipt":{"sequence":3}}`
+	client, event, receipt := qualificationRecordTestFixture(t)
+	validData := string(canonicalQualificationRecord(t, event, receipt))
 	tests := map[string]string{
 		"missing event":      "id: 3\ndata: " + validData + "\n\n",
 		"wrong event":        "id: 3\nevent: boundary-incomplete\ndata: " + validData + "\n\n",
 		"duplicate data":     "id: 3\nevent: record\ndata: " + validData + "\ndata: " + validData + "\n\n",
 		"noncanonical id":    "id: 03\nevent: record\ndata: " + validData + "\n\n",
 		"incomplete framing": "id: 3\nevent: record\ndata: " + validData + "\n",
-		"missing receipt":    "id: 3\nevent: record\ndata: {\"event\":{\"participant\":{\"id\":\"agent:C\"},\"type\":\"join\"}}\n\n",
-		"sequence mismatch":  "id: 3\nevent: record\ndata: {\"event\":{\"participant\":{\"id\":\"agent:C\"},\"type\":\"join\"},\"receipt\":{\"sequence\":4}}\n\n",
-		"noncanonical data":  "id: 3\nevent: record\ndata: {\"receipt\":{\"sequence\":3},\"event\":{\"type\":\"join\",\"participant\":{\"id\":\"agent:C\"}}}\n\n",
+		"missing receipt":    "id: 3\nevent: record\ndata: {\"event\":" + string(event) + "}\n\n",
+		"noncanonical data":  "id: 3\nevent: record\ndata: {\"receipt\":" + string(receipt) + ",\"event\":" + string(event) + "}\n\n",
 	}
 	for name, stream := range tests {
 		t.Run(name, func(t *testing.T) {
 			scanner := bufio.NewScanner(strings.NewReader(stream))
-			if record, err := parseQualificationSSERecord(scanner); err == nil {
+			if record, err := parseQualificationSSERecord(scanner, client); err == nil {
 				t.Fatalf("accepted malformed frame as %+v", record)
 			}
 		})
@@ -432,14 +436,141 @@ func TestQualificationSSERecordParserRejectsMalformedFraming(t *testing.T) {
 }
 
 func TestQualificationSSERecordParserRequiresCompleteRecordFrame(t *testing.T) {
-	stream := "retry: 3000\n\n: heartbeat\n\nid: 3\nevent: record\ndata: {\"event\":{\"participant\":{\"id\":\"agent:C\"},\"type\":\"join\"},\"receipt\":{\"sequence\":3}}\n\n"
-	record, err := parseQualificationSSERecord(bufio.NewScanner(strings.NewReader(stream)))
+	client, event, receipt := qualificationRecordTestFixture(t)
+	stream := "retry: 3000\n\n: heartbeat\n\nid: 3\nevent: record\ndata: " + string(canonicalQualificationRecord(t, event, receipt)) + "\n\n"
+	record, err := parseQualificationSSERecord(bufio.NewScanner(strings.NewReader(stream)), client)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if record != (sanitizedRecord{Sequence: 3, Type: "join", Participant: "agent:C"}) {
 		t.Fatalf("record = %+v", record)
 	}
+}
+
+func TestQualificationSSERecordParserRejectsInvalidRecordBindings(t *testing.T) {
+	client, event, _ := qualificationRecordTestFixture(t)
+	tests := map[string]map[string]any{
+		"event id":         {"event_id": "019c6f5b-7c00-7000-8000-000000009999"},
+		"event digest":     {"event_digest": "sha-256:" + strings.Repeat("0", 64)},
+		"channel id":       {"channel_id": "channel:other"},
+		"channel uri":      {"channel_uri": "https://coord.example/channels/other"},
+		"transcript epoch": {"transcript_epoch": uint64(2)},
+		"sequence":         {"sequence": uint64(4)},
+		"cursor":           {"cursor": "4"},
+	}
+	for name, overrides := range tests {
+		t.Run(name, func(t *testing.T) {
+			receipt := qualificationRecordReceipt(t, event, overrides, nil)
+			stream := "id: 3\nevent: record\ndata: " + string(canonicalQualificationRecord(t, event, receipt)) + "\n\n"
+			if record, err := parseQualificationSSERecord(bufio.NewScanner(strings.NewReader(stream)), client); err == nil {
+				t.Fatalf("accepted invalid %s binding as %+v", name, record)
+			}
+		})
+	}
+
+	_, _, validReceipt := qualificationRecordTestFixture(t)
+	var invalidSignature map[string]any
+	if err := json.Unmarshal(validReceipt, &invalidSignature); err != nil {
+		t.Fatal(err)
+	}
+	invalidSignature["signature"] = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	receipt := canonicalQualificationJSON(t, invalidSignature)
+	stream := "id: 3\nevent: record\ndata: " + string(canonicalQualificationRecord(t, event, receipt)) + "\n\n"
+	if record, err := parseQualificationSSERecord(bufio.NewScanner(strings.NewReader(stream)), client); err == nil {
+		t.Fatalf("accepted invalid receipt signature as %+v", record)
+	}
+}
+
+type qualificationRecordSignatureVerifier struct{ publicKey ed25519.PublicKey }
+
+func (v qualificationRecordSignatureVerifier) Verify(raw []byte) error {
+	var receipt map[string]any
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		return err
+	}
+	signatureText, ok := receipt["signature"].(string)
+	if !ok {
+		return fmt.Errorf("missing signature")
+	}
+	delete(receipt, "signature")
+	unsigned := canonicalQualificationJSONBytes(receipt)
+	signature, err := base64.RawURLEncoding.DecodeString(signatureText)
+	if err != nil || !ed25519.Verify(v.publicKey, unsigned, signature) {
+		return fmt.Errorf("invalid signature")
+	}
+	return nil
+}
+
+func qualificationRecordTestFixture(t *testing.T) (*coordclient.Client, []byte, []byte) {
+	t.Helper()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	event := canonicalQualificationJSON(t, map[string]any{
+		"channel":     "https://coord.example/channels/process-qualification",
+		"id":          "019c6f5b-7c00-7000-8000-000000000703",
+		"participant": map[string]any{"id": "agent:C", "kind": "agent"},
+		"specversion": "0.1",
+		"type":        "join",
+	})
+	receipt := qualificationRecordReceipt(t, event, nil, privateKey)
+	client, err := coordclient.New(coordclient.Config{
+		BaseURI: "https://coord.example", ChannelID: "channel:process-qualification",
+		ChannelURI:      "https://coord.example/channels/process-qualification",
+		TranscriptEpoch: 1, PageLimit: 1, MaxRecords: 1,
+	}, &http.Client{}, requestAuthorizer{token: "test"}, qualificationRecordSignatureVerifier{publicKey: privateKey.Public().(ed25519.PublicKey)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client, event, receipt
+}
+
+func qualificationRecordReceipt(t *testing.T, event []byte, overrides map[string]any, privateKey ed25519.PrivateKey) []byte {
+	t.Helper()
+	if privateKey == nil {
+		privateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	}
+	digest := sha256.Sum256(event)
+	receipt := map[string]any{
+		"channel_id":       "channel:process-qualification",
+		"channel_uri":      "https://coord.example/channels/process-qualification",
+		"cursor":           "3",
+		"event_digest":     "sha-256:" + hex.EncodeToString(digest[:]),
+		"event_id":         "019c6f5b-7c00-7000-8000-000000000703",
+		"sequence":         uint64(3),
+		"specversion":      "0.1",
+		"transcript_epoch": uint64(1),
+	}
+	for name, value := range overrides {
+		receipt[name] = value
+	}
+	unsigned := canonicalQualificationJSON(t, receipt)
+	receipt["signature"] = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, unsigned))
+	return canonicalQualificationJSON(t, receipt)
+}
+
+func canonicalQualificationRecord(t *testing.T, event, receipt []byte) []byte {
+	t.Helper()
+	return canonicalQualificationJSON(t, map[string]json.RawMessage{"event": event, "receipt": receipt})
+}
+
+func canonicalQualificationJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw := canonicalQualificationJSONBytes(value)
+	if raw == nil {
+		t.Fatal("canonical JSON failed")
+	}
+	return raw
+}
+
+func canonicalQualificationJSONBytes(value any) []byte {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	canonical, err := jsoncanonicalizer.Transform(raw)
+	if err != nil {
+		return nil
+	}
+	return canonical
 }
 
 type replayEvent struct {
