@@ -48,3 +48,7 @@ frozen in `test-vectors/transcript-lifecycle-0.1.json`.
 Issue #4 owns the core v0.1 protocol fixtures and their independent
 qualification evidence. Issue #135 owns the bounded RFC-0023 lifecycle vectors;
 later adapter and destructive-saga qualification remains separately gated.
+
+The three `preview-*-1.schema.json` contracts close the RFC-0025 hermetic run
+manifest, public evidence and teardown receipt. They define test-only data and
+do not authorize a coordinator process, Compose execution or published image.

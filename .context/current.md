@@ -1,7 +1,7 @@
 # Current context
 
 - Updated: 2026-08-13
-- Governing issues: #6, #167, #184 and #195
+- Governing issues: #6, #167, #184, #195 and #207
 - Last delivery pull request: #204
 - Active Coordination increment: #6 connects the client CLI to the accepted
   bootstrap exchange and then to concrete custody and receipt verification
@@ -82,13 +82,13 @@
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
   traffic, Matrix, MCP live use and production use remain separately gated
-- First usable preview gate: RFC-0025 is accepted in #195. Acceptance
-  authorizes only separately reviewed execution-forbidden implementation and
-  hermetic synthetic qualification; it authorizes no runtime code,
-  infrastructure, OCI publication, credentials outside test-owned ephemeral
-  processes, live traffic, provider execution, mutation, preview publication,
-  production use or readiness claims. A separate implementation issue remains
-  required before any implementation work.
+- First usable preview gate: RFC-0025 is accepted in #195 and the owner approved
+  the separately reviewed execution-forbidden implementation issue #207 on
+  2026-08-13. This authorizes closed schemas, component-local assembly and
+  hermetic synthetic qualification only; it authorizes no operator-facing
+  runtime, infrastructure, OCI publication, credentials outside test-owned
+  ephemeral processes, live traffic, provider execution, mutation, preview
+  publication, production use or readiness claims.
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.

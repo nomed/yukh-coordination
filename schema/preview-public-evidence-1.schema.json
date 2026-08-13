@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/preview-public-evidence-1.schema.json",
+  "title": "Yukh Coordination hermetic preview public evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "run_manifest_digest", "projection_digest", "outcome", "teardown_state"],
+  "properties": {
+    "profile": { "const": "yukh-coordination/preview-public-evidence-v1" },
+    "run_manifest_digest": { "$ref": "#/$defs/digest" },
+    "projection_digest": { "$ref": "#/$defs/digest" },
+    "outcome": { "type": "string", "enum": ["qualified", "failed", "ambiguous"] },
+    "teardown_state": { "type": "string", "enum": ["complete", "quarantined"] }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" }
+  }
+}

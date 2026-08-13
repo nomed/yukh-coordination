@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/preview-run-manifest-1.schema.json",
+  "title": "Yukh Coordination hermetic preview run manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "run_id", "maximum_lifetime_seconds", "artifacts", "domains"],
+  "properties": {
+    "profile": { "const": "yukh-coordination/first-usable-preview-v1" },
+    "run_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "maximum_lifetime_seconds": { "type": "integer", "minimum": 1, "maximum": 900 },
+    "artifacts": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["component", "image"],
+        "properties": {
+          "component": { "type": "string", "enum": ["relay", "primitives-effect-a", "primitives-effect-b", "preview-authority", "receipt-signer"] },
+          "image": { "type": "string", "pattern": "^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$", "maxLength": 256 }
+        }
+      }
+    },
+    "domains": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "account", "storage"],
+        "properties": {
+          "role": { "type": "string", "enum": ["relay", "effect-a", "effect-b"] },
+          "account": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+          "storage": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" }
+        }
+      }
+    }
+  }
+}
