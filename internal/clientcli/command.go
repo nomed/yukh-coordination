@@ -13,8 +13,9 @@ var Commands = []string{
 }
 
 type Command struct {
-	Read    Runner
-	Signals SignalRunner
+	Bootstrap BootstrapRunner
+	Read      Runner
+	Signals   SignalRunner
 }
 
 func (c Command) Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) int {
@@ -23,6 +24,9 @@ func (c Command) Run(ctx context.Context, args []string, stdin io.Reader, stdout
 	}
 	if len(args) == 1 && args[0] == "version" {
 		return c.Read.Run(ctx, args, stdout)
+	}
+	if len(args) == 2 && args[0]+" "+args[1] == "session bootstrap" {
+		return c.Bootstrap.Run(ctx, args, stdout)
 	}
 	if len(args) == 2 && signalCommand(args[0]+" "+args[1]) {
 		return c.Signals.Run(ctx, args, stdin, stdout)
