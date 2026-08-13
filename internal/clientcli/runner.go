@@ -11,7 +11,7 @@ import (
 	coordclient "github.com/nomed/yukh-coordination/internal/client"
 )
 
-const Version = "0.1.0-dev"
+var Version = "0.1.0-dev"
 
 type ReplayClient interface {
 	Replay(context.Context) (coordclient.ReplayResult, error)

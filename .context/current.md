@@ -2,7 +2,7 @@
 
 - Updated: 2026-08-13
 - Governing issues: #6, #167, #184 and #195
-- Last delivery pull request: #203
+- Last delivery pull request: #204
 - Active Coordination increment: #6 connects the client CLI to the accepted
   bootstrap exchange and then to concrete custody and receipt verification
 - Runtime decisions: RFC-0003 through RFC-0025 Accepted
@@ -75,8 +75,8 @@
   provider comparison, server-leaf rotation, and RFC-0022 Steps 5, 6 and 7
   remain gated and require separate explicit authorization. Separately, #6
   now has concrete descriptor-backed local root-key custody, pinned receipt
-  verification and a closed executable composition; SSE watch is under
-  qualification.
+  verification, a closed executable composition and verified SSE watch. Client
+  RC packaging and owner qualification are under review.
   RFC-0023 lifecycle-worker composition remains design-only in #177.
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
