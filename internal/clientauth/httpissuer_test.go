@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"github.com/google/uuid"
 )
 
@@ -35,7 +37,7 @@ func newTestIssuerSigner(t *testing.T) *testIssuerSigner {
 	return &testIssuerSigner{reference: "test-key", key: private, jwk: jwk}
 }
 
-func (s *testIssuerSigner) KeyReference() string { return s.reference }
+func (s *testIssuerSigner) KeyReference() string              { return s.reference }
 func (s *testIssuerSigner) PublicJWK() (PublicP256JWK, error) { return s.jwk, nil }
 func (s *testIssuerSigner) SignES256(_ context.Context, input []byte) ([64]byte, error) {
 	digest := sha256.Sum256(input)
@@ -69,7 +71,7 @@ func TestHTTPIssuerIssue(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/yukh-session+json;version=0.1")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(sessionDocument{
+		writeSession(t, w, sessionDocument{
 			ExpiresAt:             expiresAt.Format("2006-01-02T15:04:05.000Z"),
 			ParticipantInstanceID: participant.String(),
 			SessionEpoch:          42,
@@ -107,7 +109,7 @@ func TestHTTPIssuerNegative(t *testing.T) {
 		if strings.Contains(r.URL.Path, "bad-media-type") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(sessionDocument{
+			writeSession(t, w, sessionDocument{
 				ExpiresAt:             expiresAt.Format("2006-01-02T15:04:05.000Z"),
 				ParticipantInstanceID: uuid.Must(uuid.NewV7()).String(),
 				SessionEpoch:          42,
@@ -142,4 +144,50 @@ func TestHTTPIssuerNegative(t *testing.T) {
 	if _, err := issuer.Issue(context.Background(), external, signer); err == nil {
 		t.Error("expected error for bad media type")
 	}
+}
+
+func TestHTTPIssuerRejectsRedirectAndNonCanonicalResponse(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	external, _ := NewBoundAccessToken("external-token", now.Add(time.Minute))
+	signer := newTestIssuerSigner(t)
+	var redirected atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sink" {
+			redirected.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.URL.Path == "/noncanonical/coordination/v1/sessions" {
+			w.Header().Set("Content-Type", "application/yukh-session+json;version=0.1")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{ "specversion": "0.1" }`))
+			return
+		}
+		http.Redirect(w, r, "/sink", http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+
+	issuer, _ := NewHTTPIssuer(server.URL, server.Client())
+	issuer.now = func() time.Time { return now }
+	if _, err := issuer.Issue(context.Background(), external, signer); err == nil || redirected.Load() != 0 {
+		t.Fatalf("redirect followed or accepted: redirected=%d err=%v", redirected.Load(), err)
+	}
+	issuer, _ = NewHTTPIssuer(server.URL+"/noncanonical", server.Client())
+	issuer.now = func() time.Time { return now }
+	if _, err := issuer.Issue(context.Background(), external, signer); err == nil {
+		t.Fatal("non-canonical response accepted")
+	}
+}
+
+func writeSession(t *testing.T, w http.ResponseWriter, document sessionDocument) {
+	t.Helper()
+	raw, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := jsoncanonicalizer.Transform(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write(canonical)
 }

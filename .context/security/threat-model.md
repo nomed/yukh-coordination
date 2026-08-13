@@ -1008,6 +1008,17 @@ exchange. Once the exchange begins, ambiguity retains the signer and never
 claims a usable session. Tokens, revisions and private keys remain behind their
 closed adapter boundaries and are never formatted or returned.
 
+### RFC-0014 bootstrap HTTPS adapter review — 2026-08-13
+
+Issue #6 adds one exact HTTPS POST exchange for the accepted bootstrap saga.
+The client creates and locally verifies a fresh DPoP proof, follows no redirect
+and accepts only the bounded canonical session media type and closed response.
+Provider bodies, external tokens and proofs never enter errors or output.
+
+This adapter does not select an identity provider, discover credentials or add
+plaintext custody. Concrete custody, receipt verification and watch remain
+required before the CLI is a complete release candidate.
+
 ### Accepted RFC-0025 first usable preview profile — 2026-08-09
 
 Issue #195 records the Coordination component boundary required by accepted

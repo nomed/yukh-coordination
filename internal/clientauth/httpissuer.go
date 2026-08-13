@@ -1,6 +1,7 @@
 package clientauth
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
@@ -9,9 +10,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
+	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"github.com/google/uuid"
 )
 
@@ -26,18 +27,20 @@ type HTTPIssuer struct {
 // NewHTTPIssuer creates a new HTTPIssuer. It validates the base URI.
 func NewHTTPIssuer(baseURI string, httpClient *http.Client) (*HTTPIssuer, error) {
 	if httpClient == nil {
-		httpClient = &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-			Timeout: 10 * time.Second,
-		}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.Proxy = nil
+		httpClient = &http.Client{Transport: transport}
 	}
 	parsed, err := url.Parse(baseURI)
-	if err != nil || parsed.String() != baseURI || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Opaque != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if err != nil || parsed.String() != baseURI || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Opaque != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.RawPath != "" || parsed.Path == "/" || len(parsed.Path) > 0 && parsed.Path[len(parsed.Path)-1] == '/' || len(baseURI) > 2048 {
 		return nil, ErrInvalidCredential
 	}
-	return &HTTPIssuer{baseURI: strings.TrimSuffix(baseURI, "/"), httpClient: httpClient, now: time.Now, newJTI: uuid.NewV7}, nil
+	closedClient := *httpClient
+	closedClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	if closedClient.Timeout <= 0 || closedClient.Timeout > 10*time.Second {
+		closedClient.Timeout = 10 * time.Second
+	}
+	return &HTTPIssuer{baseURI: baseURI, httpClient: &closedClient, now: time.Now, newJTI: uuid.NewV7}, nil
 }
 
 type sessionDocument struct {
@@ -45,7 +48,7 @@ type sessionDocument struct {
 	ParticipantInstanceID string `json:"participant_instance_id"`
 	SessionEpoch          uint64 `json:"session_epoch"`
 	SessionToken          string `json:"session_token"`
-	SpecVersion           string `json:"spec_version"`
+	SpecVersion           string `json:"specversion"`
 	TokenType             string `json:"token_type"`
 }
 
@@ -68,7 +71,10 @@ func (h *HTTPIssuer) Issue(ctx context.Context, external *BoundAccessToken, sign
 		return nil, ErrProofSigner
 	}
 
-	now := h.now().UTC()
+	now := h.now().UTC().Truncate(time.Millisecond)
+	if !external.ExpiresAt().After(now) {
+		return nil, ErrExternalToken
+	}
 	proof, err := createBootstrapProof(ctx, external.Credential(), signer, jwk, publicKey, http.MethodPost, targetURI, now, h.newJTI)
 	if err != nil {
 		return nil, err
@@ -81,12 +87,16 @@ func (h *HTTPIssuer) Issue(ctx context.Context, external *BoundAccessToken, sign
 	request.Header.Set("Authorization", "DPoP "+external.Credential())
 	request.Header.Set("DPoP", proof)
 	request.Header.Set("Accept", "application/yukh-session+json;version=0.1")
+	originalTarget := request.URL.String()
 
 	response, err := h.httpClient.Do(request)
 	if err != nil {
 		return nil, ErrExternalToken
 	}
 	defer response.Body.Close()
+	if response.Request != nil && response.Request.URL.String() != originalTarget {
+		return nil, ErrExternalToken
+	}
 
 	if response.StatusCode != http.StatusCreated {
 		return nil, ErrExternalToken
@@ -97,13 +107,19 @@ func (h *HTTPIssuer) Issue(ctx context.Context, external *BoundAccessToken, sign
 		return nil, ErrExternalToken
 	}
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, 8192))
-	if err != nil || len(body) >= 8192 {
+	body, err := io.ReadAll(io.LimitReader(response.Body, 8193))
+	if err != nil || len(body) == 0 || len(body) > 8192 {
+		return nil, ErrExternalToken
+	}
+	canonical, err := jsoncanonicalizer.Transform(body)
+	if err != nil || !bytes.Equal(canonical, body) {
 		return nil, ErrExternalToken
 	}
 
 	var doc sessionDocument
-	if err := json.Unmarshal(body, &doc); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&doc); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
 		return nil, ErrExternalToken
 	}
 

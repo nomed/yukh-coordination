@@ -1,10 +1,10 @@
 # Current context
 
-- Updated: 2026-08-09
+- Updated: 2026-08-13
 - Governing issues: #6, #167, #184 and #195
 - Last delivery pull request: #193
-- Active Coordination increment: #185 connects the client CLI to the accepted
-  bootstrap exchange; #185 remains a draft and is not accepted delivery
+- Active Coordination increment: #6 connects the client CLI to the accepted
+  bootstrap exchange and then to concrete custody and receipt verification
 - Runtime decisions: RFC-0003 through RFC-0025 Accepted
 - Accepted decision: RFC-0025 defines the execution-forbidden Coordination
   profile for accepted `nomed.github.io` RFC-0005 on `main` at
@@ -73,10 +73,9 @@
   profile in #195
 - Next action: issue #184 preparation is complete. Private OCI publication and
   provider comparison, server-leaf rotation, and RFC-0022 Steps 5, 6 and 7
-  remain gated and require separate explicit authorization. Separately, #185
-  may connect the client executable to the
-  accepted bootstrap exchange, concrete custody and receipt-verification
-  adapters. RFC-0023 lifecycle-worker composition remains design-only in #177.
+  remain gated and require separate explicit authorization. Separately, #6
+  must connect the client executable to concrete custody and receipt-verification
+  adapters after the bootstrap exchange. RFC-0023 lifecycle-worker composition remains design-only in #177.
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
   traffic, Matrix, MCP live use and production use remain separately gated
