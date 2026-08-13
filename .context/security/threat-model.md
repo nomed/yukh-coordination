@@ -1092,3 +1092,19 @@ explicit immutable Ed25519 key set, exact key ID and algorithm, and the
 changed bytes and invalid encodings fail closed. Key discovery and lifecycle
 refresh remain outside this adapter and must be explicitly composed; there is
 no network fallback.
+
+## Issue #6 executable secret ingress — 2026-08-13
+
+The client executable performs public configuration validation before it opens
+custody or consumes a secret descriptor. The root key enters through one
+profile-bound inherited descriptor. Bootstrap token acquisition uses a distinct
+one-shot connected local socket: the client sends only its public P-256 JWK and
+the supervisor response must repeat the exact RFC 7638 thumbprint before the
+token is accepted. The exchange is size bounded, deadline bounded, canonical,
+single-use and rejects pipes, endpoint discovery, redirects and proxy defaults.
+
+The process command line contains descriptor numbers but no secret values.
+Unknown configuration fields, reused descriptors, shared root/token
+descriptors, wrong token bindings and non-socket token channels fail closed.
+The external supervisor remains responsible for authenticating its caller and
+issuing an RFC-9068 token whose `cnf.jkt` matches the requested thumbprint.

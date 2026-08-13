@@ -8,5 +8,5 @@ import (
 )
 
 func main() {
-	os.Exit(clientcli.Command{}.Run(context.Background(), os.Args[1:], os.Stdin, os.Stdout))
+	os.Exit(clientcli.Executable{}.Run(context.Background(), os.Args[1:], os.Stdin, os.Stdout))
 }
