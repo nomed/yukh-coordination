@@ -16,6 +16,10 @@ const Version = "0.1.0-dev"
 type ReplayClient interface {
 	Replay(context.Context) (coordclient.ReplayResult, error)
 }
+type WatchClient interface {
+	ReplayClient
+	Watch(context.Context, func(coordclient.Record) error) error
+}
 type OpenClient func(coordclient.Config) (ReplayClient, error)
 type Runner struct{ Open OpenClient }
 
@@ -42,6 +46,22 @@ func (r Runner) Run(ctx context.Context, args []string, stdout io.Writer) int {
 	if err != nil {
 		return write(stdout, output{Schema: 1, Status: "error", Command: command, Code: "YKC-INPUT-001"}, 2)
 	}
+	if command == "events watch" {
+		watcher, ok := client.(WatchClient)
+		if !ok {
+			return write(stdout, output{Schema: 1, Status: "error", Command: command, Code: "YKC-INPUT-001"}, 2)
+		}
+		err := watcher.Watch(ctx, func(record coordclient.Record) error {
+			if write(stdout, output{Schema: 1, Status: "ok", Command: command, Result: record}, 0) != 0 {
+				return coordclient.ErrUnavailable
+			}
+			return nil
+		})
+		if ctx.Err() != nil {
+			return 0
+		}
+		return write(stdout, output{Schema: 1, Status: "error", Command: command, Code: code(err)}, exit(err))
+	}
 	replay, err := client.Replay(ctx)
 	if err != nil && !errors.Is(err, coordclient.ErrIncomplete) {
 		return write(stdout, output{Schema: 1, Status: "error", Command: command, Code: code(err)}, exit(err))
@@ -67,7 +87,7 @@ func parse(args []string) (string, coordclient.Config, string, error) {
 		return "unknown", coordclient.Config{}, "", coordclient.ErrInvalidInput
 	}
 	command := args[0] + " " + args[1]
-	if command != "events replay" && command != "work inspect" {
+	if command != "events replay" && command != "events watch" && command != "work inspect" {
 		return command, coordclient.Config{}, "", coordclient.ErrInvalidInput
 	}
 	values := map[string]string{}
