@@ -2,7 +2,7 @@
 
 - Updated: 2026-08-13
 - Governing issues: #6, #167, #184, #195 and #207
-- Last delivery pull request: #204
+- Last delivery pull request: #208
 - Active Coordination increment: #6 connects the client CLI to the accepted
   bootstrap exchange and then to concrete custody and receipt verification
 - Runtime decisions: RFC-0003 through RFC-0025 Accepted
@@ -89,6 +89,9 @@
   runtime, infrastructure, OCI publication, credentials outside test-owned
   ephemeral processes, live traffic, provider execution, mutation, preview
   publication, production use or readiness claims.
+  The closed manifest/evidence contracts and fail-closed parser were delivered
+  in #208 at `387a556`; teardown-controller qualification is the active #207
+  increment.
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
