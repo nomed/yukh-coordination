@@ -76,7 +76,8 @@
   remain gated and require separate explicit authorization. Separately, #6
   now has concrete descriptor-backed local root-key custody, pinned receipt
   verification, a closed executable composition and verified SSE watch. Client
-  RC packaging and owner qualification are under review.
+  RC packaging is delivered; macOS artifacts and local JetStream owner
+  qualification are under review.
   RFC-0023 lifecycle-worker composition remains design-only in #177.
   Real backup providers, lifecycle workers, target pull, Kubernetes credentials
   and objects, Step 5, operational completion, physical-media sanitization,
