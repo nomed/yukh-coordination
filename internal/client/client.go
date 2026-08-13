@@ -161,12 +161,21 @@ func (c *Client) Publish(ctx context.Context, canonicalEvent []byte) (PublishRes
 }
 
 func New(config Config, httpClient HTTPDoer, authorizer RequestAuthorizer, verifier ReceiptVerifier) (*Client, error) {
-	base, err := url.Parse(config.BaseURI)
-	channel, channelErr := url.Parse(config.ChannelURI)
-	if err != nil || channelErr != nil || base.Scheme != "https" || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || base.RawPath != "" || strings.HasSuffix(base.Path, "/") || channel.Scheme != "https" || channel.Host == "" || channel.User != nil || channel.RawQuery != "" || channel.Fragment != "" || channel.RawPath != "" || len(config.ChannelURI) > 2048 || config.ChannelID == "" || len(config.ChannelID) > 256 || strings.ContainsAny(config.ChannelID, "/\x00") || config.TranscriptEpoch == 0 || config.TranscriptEpoch > maxSafeInteger || config.PageLimit < 1 || config.PageLimit > 1000 || config.MaxRecords < 1 || config.MaxRecords > 100_000 || httpClient == nil || authorizer == nil || verifier == nil {
+	if ValidateConfig(config) != nil || httpClient == nil || authorizer == nil || verifier == nil {
 		return nil, ErrInvalidInput
 	}
 	return &Client{config: config, http: httpClient, authorizer: authorizer, verifier: verifier}, nil
+}
+
+// ValidateConfig checks the closed public client configuration without opening
+// credentials, storage, or network resources.
+func ValidateConfig(config Config) error {
+	base, err := url.Parse(config.BaseURI)
+	channel, channelErr := url.Parse(config.ChannelURI)
+	if err != nil || channelErr != nil || base.Scheme != "https" || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || base.RawPath != "" || strings.HasSuffix(base.Path, "/") || channel.Scheme != "https" || channel.Host == "" || channel.User != nil || channel.RawQuery != "" || channel.Fragment != "" || channel.RawPath != "" || len(config.ChannelURI) > 2048 || config.ChannelID == "" || len(config.ChannelID) > 256 || strings.ContainsAny(config.ChannelID, "/\x00") || config.TranscriptEpoch == 0 || config.TranscriptEpoch > maxSafeInteger || config.PageLimit < 1 || config.PageLimit > 1000 || config.MaxRecords < 1 || config.MaxRecords > 100_000 {
+		return ErrInvalidInput
+	}
+	return nil
 }
 
 func (c *Client) Replay(ctx context.Context) (ReplayResult, error) {
