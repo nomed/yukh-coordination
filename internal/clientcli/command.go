@@ -31,7 +31,7 @@ func (c Command) Run(ctx context.Context, args []string, stdin io.Reader, stdout
 	if len(args) == 2 && signalCommand(args[0]+" "+args[1]) {
 		return c.Signals.Run(ctx, args, stdin, stdout)
 	}
-	if len(args) >= 2 && (args[0]+" "+args[1] == "events replay" || args[0]+" "+args[1] == "work inspect") {
+	if len(args) >= 2 && (args[0]+" "+args[1] == "events replay" || args[0]+" "+args[1] == "events watch" || args[0]+" "+args[1] == "work inspect") {
 		return c.Read.Run(ctx, args, stdout)
 	}
 	return write(stdout, output{Schema: 1, Status: "error", Command: "unknown", Code: "YKC-INPUT-001"}, 2)

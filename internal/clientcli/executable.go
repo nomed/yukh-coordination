@@ -30,6 +30,7 @@ type executableConfig struct {
 	TranscriptEpoch uint64                  `json:"transcript_epoch"`
 	PageLimit       int                     `json:"page_limit"`
 	MaxRecords      int                     `json:"max_records"`
+	WatchDeadlineMS int                     `json:"watch_deadline_ms"`
 	SourceURI       string                  `json:"source_uri"`
 	Participant     clientevent.Participant `json:"participant"`
 	CustodyDatabase string                  `json:"custody_database"`
@@ -99,6 +100,14 @@ func (e Executable) Run(ctx context.Context, args []string, stdin io.Reader, std
 		command.Bootstrap = BootstrapRunner{Bootstrapper: bootstrapper}
 	} else if tokenDescriptor != -1 {
 		return write(stdout, output{Schema: 1, Status: "error", Command: commandName(commandArgs), Code: "YKC-INPUT-001"}, 2)
+	}
+	if commandName(commandArgs) == "events watch" {
+		if config.WatchDeadlineMS < 1000 || config.WatchDeadlineMS > 900000 {
+			return write(stdout, output{Schema: 1, Status: "error", Command: "events watch", Code: "YKC-INPUT-001"}, 2)
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(config.WatchDeadlineMS)*time.Millisecond)
+		defer cancel()
 	}
 	return command.Run(ctx, executableCommandArgs(commandArgs, config), stdin, stdout)
 }
@@ -181,7 +190,7 @@ func closedHTTPClient(base *http.Client) *http.Client {
 }
 
 func executableCommandArgs(args []string, config executableConfig) []string {
-	if commandName(args) != "events replay" && commandName(args) != "work inspect" {
+	if commandName(args) != "events replay" && commandName(args) != "events watch" && commandName(args) != "work inspect" {
 		return args
 	}
 	result := append([]string(nil), args...)
