@@ -21,6 +21,7 @@ const Profile = "yukh-coordination/first-usable-preview-v1"
 var ErrInvalidManifest = errors.New("preview profile: invalid manifest")
 
 var imageReference = regexp.MustCompile(`^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$`)
+var digestValue = regexp.MustCompile(`^sha-256:[0-9a-f]{64}$`)
 
 type Artifact struct {
 	Component string `yaml:"component" json:"component"`

@@ -4,7 +4,7 @@
   "title": "Yukh Coordination hermetic preview teardown receipt v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["profile", "run_manifest_digest", "evidence_digest", "state", "steps"],
+  "required": ["profile", "run_manifest_digest", "state", "steps"],
   "properties": {
     "profile": { "const": "yukh-coordination/preview-teardown-receipt-v1" },
     "run_manifest_digest": { "$ref": "#/$defs/digest" },
@@ -16,12 +16,16 @@
         "type": "object", "additionalProperties": false,
         "required": ["name", "outcome"],
         "properties": {
-          "name": { "type": "string", "enum": ["freeze-evidence", "stop-clients", "stop-services", "revoke-credentials", "remove-storage", "remove-network", "verify-absence"] },
+          "name": { "type": "string", "enum": ["close-admission", "drain-inflight", "freeze-evidence", "stop-clients", "stop-services", "revoke-credentials", "remove-storage", "remove-network", "verify-absence"] },
           "outcome": { "type": "string", "enum": ["complete", "failed", "ambiguous"] }
         }
       }
     }
   },
+  "allOf": [{
+    "if": { "properties": { "state": { "const": "complete" } }, "required": ["state"] },
+    "then": { "required": ["evidence_digest"] }
+  }],
   "$defs": {
     "digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" }
   }

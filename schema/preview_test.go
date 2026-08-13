@@ -60,4 +60,15 @@ func TestPreviewPublicSchemasAreClosed(t *testing.T) {
 			delete(document, forbidden)
 		}
 	}
+	teardown, err := compiler.Compile("https://yukh.dev/coordination/schema/preview-teardown-receipt-1.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	incomplete := map[string]any{
+		"profile": "yukh-coordination/preview-teardown-receipt-v1", "run_manifest_digest": digest,
+		"state": "teardown_incomplete", "steps": []any{map[string]any{"name": "close-admission", "outcome": "failed"}},
+	}
+	if err := teardown.Validate(incomplete); err != nil {
+		t.Fatalf("pre-evidence incomplete receipt rejected: %v", err)
+	}
 }
