@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yukh.dev/coordination/schema/preview-teardown-receipt-1.schema.json",
+  "title": "Yukh Coordination hermetic preview teardown receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "run_manifest_digest", "evidence_digest", "state", "steps"],
+  "properties": {
+    "profile": { "const": "yukh-coordination/preview-teardown-receipt-v1" },
+    "run_manifest_digest": { "$ref": "#/$defs/digest" },
+    "evidence_digest": { "$ref": "#/$defs/digest" },
+    "state": { "type": "string", "enum": ["complete", "teardown_incomplete"] },
+    "steps": {
+      "type": "array", "minItems": 1, "maxItems": 16,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "outcome"],
+        "properties": {
+          "name": { "type": "string", "enum": ["freeze-evidence", "stop-clients", "stop-services", "revoke-credentials", "remove-storage", "remove-network", "verify-absence"] },
+          "outcome": { "type": "string", "enum": ["complete", "failed", "ambiguous"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha-256:[0-9a-f]{64}$" }
+  }
+}
