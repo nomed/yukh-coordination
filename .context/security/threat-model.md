@@ -2,7 +2,7 @@
 
 - Status: Draft
 - Governing issue: #3
-- Last updated: 2026-08-09
+- Last updated: 2026-08-13
 
 ## Decision requested
 
@@ -1077,3 +1077,18 @@ RFC-0002 freezes the following repository-only design decisions when accepted:
 The accepted record must also name the security owner, tenant/channel administrative authority, relay operator, relay security administrator, evidence verifier, and residual-risk acceptors. RFC-0002 acceptance satisfies the design-decision requirement only; exact implementation topology and qualification remain issue #5 gates and no relay deployment is authorized.
 
 Federation/offline replay requires a future decision and is excluded from the MVP.
+
+## Issue #6 local custody and receipt adapters — 2026-08-13
+
+The first usable client path accepts a local-custody root key only through one
+explicit inherited descriptor bound to one profile. The adapter consumes and
+closes the descriptor, rejects wrong-length keys and profile substitution, and
+zeroes its retained key when closed. It performs no provider, environment or
+plaintext-file discovery.
+
+Receipt acceptance uses the closed protocol schema and canonical bytes, an
+explicit immutable Ed25519 key set, exact key ID and algorithm, and the
+`yukh-coordination-receipt-v0.1` domain-separated signature input. Unknown keys,
+changed bytes and invalid encodings fail closed. Key discovery and lifecycle
+refresh remain outside this adapter and must be explicitly composed; there is
+no network fallback.
