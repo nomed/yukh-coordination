@@ -20,6 +20,7 @@ import (
 	"time"
 
 	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
+	coordclient "github.com/nomed/yukh-coordination/internal/client"
 	"github.com/nomed/yukh-coordination/internal/relay"
 	"github.com/nomed/yukh-coordination/internal/relay/httpapi"
 	"github.com/nomed/yukh-coordination/internal/relay/protocol"
@@ -51,10 +52,27 @@ func TestPreviewChannelAuthorizerAndSignerAreClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preimage := []byte("receipt-preimage")
+	preimage := []byte(`{"accepted_at":"2026-08-14T00:00:00.000Z","acl_decision_receipt_id":"decision-1","acl_policy_digest":"sha-256:1111111111111111111111111111111111111111111111111111111111111111","acl_policy_version":"acl-v1","append_outcome":"appended","channel_id":"local-preview","channel_metadata_digest":"sha-256:2222222222222222222222222222222222222222222222222222222222222222","channel_uri":"https://preview.local/channels/local-preview","cursor":"1","event_digest":"sha-256:3333333333333333333333333333333333333333333333333333333333333333","event_id":"019c6f5b-7c00-7000-8000-000000000701","key_id":"local-preview-receipt-1","participant_id":"agent-a","participant_instance_id":"019c6f5b-7c00-7000-8000-000000000701","principal_id":"principal:agent-a","receipt_id":"019c6f5b-7c00-7000-8000-000000000702","receipt_version":"0.1","sequence":1,"session_epoch":1,"signature_algorithm":"ed25519","specversion":"0.1","tenant_id":"tenant:local-preview","transcript_epoch":1}`)
 	signature, err := (previewSigner{privateKey: privateKey}).Sign(context.Background(), relay.AcceptedRecord{UnsignedReceiptPreimage: preimage})
-	if err != nil || !ed25519.Verify(privateKey.Public().(ed25519.PublicKey), preimage, signature) {
+	if err != nil {
 		t.Fatalf("signature invalid: %v", err)
+	}
+	var receipt map[string]any
+	if err := json.Unmarshal(preimage, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	receipt["signature"] = base64.RawURLEncoding.EncodeToString(signature)
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err = jsoncanonicalizer.Transform(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := coordclient.NewEd25519ReceiptVerifier(map[string]ed25519.PublicKey{"local-preview-receipt-1": privateKey.Public().(ed25519.PublicKey)})
+	if err != nil || verifier.Verify(raw) != nil {
+		t.Fatalf("client rejected preview receipt: %v", err)
 	}
 }
 

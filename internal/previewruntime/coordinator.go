@@ -121,7 +121,12 @@ func (s previewSigner) Sign(_ context.Context, record relay.AcceptedRecord) ([]b
 	if len(s.privateKey) != ed25519.PrivateKeySize || len(record.UnsignedReceiptPreimage) == 0 {
 		return nil, relay.ErrInvalidArgument
 	}
-	return ed25519.Sign(s.privateKey, record.UnsignedReceiptPreimage), nil
+	signingInput := make([]byte, 0, len("yukh-coordination-receipt-v0.1\x00")+len(record.UnsignedReceiptPreimage))
+	signingInput = append(signingInput, "yukh-coordination-receipt-v0.1\x00"...)
+	signingInput = append(signingInput, record.UnsignedReceiptPreimage...)
+	signature := ed25519.Sign(s.privateKey, signingInput)
+	clear(signingInput)
+	return signature, nil
 }
 
 type previewAuthorizer struct{}

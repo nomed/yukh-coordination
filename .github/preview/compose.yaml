@@ -1,0 +1,46 @@
+name: yukh-local-preview
+
+services:
+  nats:
+    image: nats:2.12.0-alpine@sha256:5ef5cab0ec8057c0b2017e0579f1de7ff01c9ef6d506b07cfef1e63037854776
+    command: ["--jetstream", "--store_dir", "/data", "--name", "yukh-local-preview"]
+    networks: [coordination]
+    volumes:
+      - jetstream:/data
+    healthcheck:
+      test: ["CMD", "/bin/sh", "-c", "kill -0 1"]
+      interval: 2s
+      timeout: 1s
+      retries: 15
+    restart: "no"
+
+  coordinator:
+    build:
+      context: ../..
+      dockerfile: .github/preview/Dockerfile.coordinator
+    command: ["/run/yukh/coordinator.json"]
+    user: "${YUKH_UID:?set YUKH_UID}:${YUKH_GID:?set YUKH_GID}"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks: [coordination, edge]
+    ports:
+      - "127.0.0.1:7443:7443"
+      - "127.0.0.1:7444:7444"
+    volumes:
+      - "${YUKH_PREVIEW_RUNTIME:?set YUKH_PREVIEW_RUNTIME}:/run/yukh:ro"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=0700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: "no"
+
+networks:
+  coordination:
+    internal: true
+  edge:
+
+volumes:
+  jetstream:
