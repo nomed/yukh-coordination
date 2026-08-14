@@ -23,7 +23,7 @@ import (
 )
 
 func TestExecutableComposesClosedLocalCustody(t *testing.T) {
-	directory := t.TempDir()
+	directory := physicalTempDir(t)
 	if err := os.Chmod(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestExecutableRejectsMissingProcessConfiguration(t *testing.T) {
 }
 
 func TestExecutableBootstrapsThroughSupervisorAndPersistsSession(t *testing.T) {
-	directory := t.TempDir()
+	directory := physicalTempDir(t)
 	_ = os.Chmod(directory, 0o700)
 	participant, _ := uuid.NewV7()
 	var called atomic.Bool
@@ -132,7 +132,7 @@ func TestExecutableBootstrapsThroughSupervisorAndPersistsSession(t *testing.T) {
 			t.Fatal(err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("token supervisor did not receive the bootstrap request")
+		t.Fatalf("token supervisor did not receive the bootstrap request: status=%d output=%s", status, stdout.Bytes())
 	}
 	if status != 0 || !bytes.Contains(stdout.Bytes(), []byte(`"status":"ok"`)) {
 		t.Fatalf("status=%d called=%v output=%s", status, called.Load(), stdout.Bytes())
@@ -160,4 +160,13 @@ func TestExecutableBootstrapsThroughSupervisorAndPersistsSession(t *testing.T) {
 	_ = store.Close()
 	_ = root.Close()
 	runtime.KeepAlive(verifyRead)
+}
+
+func physicalTempDir(t *testing.T) string {
+	t.Helper()
+	directory, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return directory
 }
