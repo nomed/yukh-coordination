@@ -52,6 +52,11 @@ for repository in nomed.github.io yukh-projects yukh-mcp; do
   (cd "$target_root/$repository" && npm ci --no-audit --no-fund)
 done
 
+# The suite runner deliberately disables module lookup. Populate and verify the
+# selected Go module cache while network access is still allowed.
+echo "Installing locked dependencies: yukh-coordination"
+(cd "$coordination_root" && go mod download && go mod verify)
+
 summary="$target_root/yukh-suite-summary.json"
 echo "Running the four-component suite"
 SITE="$target_root/nomed.github.io" \

@@ -3,6 +3,10 @@ set -uo pipefail
 
 readonly runner_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
+# Bash printf parses floating-point arguments using the process locale. Keep
+# human durations deterministic even when the host uses a decimal comma.
+export LC_NUMERIC=C
+
 site_path="${SITE:-}"
 projects_path="${PROJECTS:-}"
 mcp_path="${MCP:-}"
