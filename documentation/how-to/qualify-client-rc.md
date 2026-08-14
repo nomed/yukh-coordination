@@ -17,14 +17,14 @@ On macOS, install Go 1.26, Node.js 24, Python 3 and `nats-server` 2.12, then run
 .github/scripts/qualify-macos-local.sh
 ```
 
-This starts disposable local JetStream processes from the tests. The
-coordinator still runs as a hermetic test-owned process because its standalone
-server executable has not yet been assembled.
+This starts disposable local JetStream processes from the tests. To exercise
+the standalone coordinator with Docker Compose and native Mac clients, follow
+[Run the local preview](run-local-preview.md).
 
 Build only the binaries with:
 
 ```sh
-.github/scripts/package-client-rc.sh 0.1.0-rc.1 "$PWD/dist"
+.github/scripts/package-client-rc.sh 0.1.0-rc.2 "$PWD/dist"
 ```
 
 The package contains no configuration, secret or NATS endpoint.
