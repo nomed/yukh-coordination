@@ -2,7 +2,7 @@
 set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 revision="$(git rev-parse HEAD)"
-version="${1:-0.1.0-rc.1}"
+version="${1:-0.1.0-rc.2}"
 output="${2:-$root/dist}"
 case "$version" in *[!0-9A-Za-z.-]*|'') echo "invalid version" >&2; exit 2;; esac
 case "$output" in /*) ;; *) echo "output must be absolute" >&2; exit 2;; esac
