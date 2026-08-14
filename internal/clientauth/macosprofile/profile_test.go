@@ -429,6 +429,9 @@ type storeStub struct {
 }
 
 func (s *storeStub) Load(context.Context, string) (clientauth.StoredSession, error) {
+	if _, err := s.stored.Record(); err != nil {
+		return clientauth.StoredSession{}, clientauth.ErrCredentialMissing
+	}
 	return s.stored, nil
 }
 
