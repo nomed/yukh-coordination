@@ -8,7 +8,8 @@ go test ./internal/clientcli -run '^TestExecutableBootstrapsThroughSupervisorAnd
 go test ./internal/relay/runtime -run '^TestTwoIsolatedCLIProcessesShareOnlyTheRelayTranscript$' -count=1
 output="$(mktemp -d "$root/.qualification-client-package.XXXXXXXXXX")"
 trap 'rm -rf -- "$output"' EXIT
-"$root/.github/scripts/package-client-rc.sh" "$version" "$output"
+(cd "$output" && "$root/.github/scripts/package-client-rc.sh" "$version" "$output")
+grep -Fxq "revision=$(git rev-parse HEAD)" "$output/BUILD-INFO-$version"
 if command -v sha256sum >/dev/null 2>&1; then
   (cd "$output" && sha256sum --check "SHA256SUMS-$version")
 else

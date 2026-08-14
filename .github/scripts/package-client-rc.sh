@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(git rev-parse --show-toplevel)"
-revision="$(git rev-parse HEAD)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+revision="$(git -C "$root" rev-parse HEAD)"
 version="${1:-0.1.0-rc.2}"
 output="${2:-$root/dist}"
 case "$version" in *[!0-9A-Za-z.-]*|'') echo "invalid version" >&2; exit 2;; esac
 case "$output" in /*) ;; *) echo "output must be absolute" >&2; exit 2;; esac
 mkdir -p "$output"
+cd "$root"
 work="$(mktemp -d "$root/.package-client-rc.XXXXXXXXXX")"
 trap 'rm -rf -- "$work"' EXIT
 artifacts=()
