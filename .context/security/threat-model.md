@@ -959,6 +959,22 @@ exchange. Once the exchange begins, ambiguity retains the signer and never
 claims a usable session. Tokens, revisions and private keys remain behind their
 closed adapter boundaries and are never formatted or returned.
 
+### RFC-0026 macOS Keychain custody boundary review — 2026-08-05
+
+Issue #6 adds an independently injected `macos-keychain-v1` profile with one
+exact Keychain generic-password root item and the existing encrypted local
+SQLite custody store. Profile selection remains closed configuration; no
+executable path infers an operating system, discovers a provider, or falls
+back to Linux, files, plaintext, environment credentials, or another profile.
+
+The adapter uses only an exact class/service/account/(optional access-group)
+Keychain query with authentication UI disabled. It rejects ambiguous, malformed,
+locked, authorization, UI, accessibility, and provider outcomes. Missing root
+material cannot be created when a custody database already exists, preventing a
+replacement root from making encrypted state appear newly valid. The external
+token and direct HTTPS transport remain caller-injected. Native Keychain
+integration qualification against supported macOS releases remains outstanding.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

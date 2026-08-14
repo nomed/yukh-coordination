@@ -13,16 +13,20 @@ var Commands = []string{
 }
 
 type Command struct {
-	Read    Runner
-	Signals SignalRunner
+	Read      Runner
+	Signals   SignalRunner
+	Bootstrap BootstrapRunner
 }
 
 func (c Command) Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) int {
 	if len(args) == 1 && args[0] == "help" {
-		return write(stdout, output{Schema: 1, Status: "ok", Command: "help", Result: map[string]any{"commands": Commands, "input": "closed JSON on stdin for mutating commands"}}, 0)
+		return write(stdout, output{Schema: 1, Status: "ok", Command: "help", Result: map[string]any{"commands": Commands, "input": "closed command-specific input"}}, 0)
 	}
 	if len(args) == 1 && args[0] == "version" {
 		return c.Read.Run(ctx, args, stdout)
+	}
+	if len(args) >= 2 && args[0]+" "+args[1] == "session bootstrap" {
+		return c.Bootstrap.Run(ctx, args[2:], stdout)
 	}
 	if len(args) == 2 && signalCommand(args[0]+" "+args[1]) {
 		return c.Signals.Run(ctx, args, stdin, stdout)

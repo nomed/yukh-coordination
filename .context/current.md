@@ -51,9 +51,14 @@
   Cloud workload custody in #79; RFC-0021 contention-response clarification in
   #83; RFC-0022 private staging primitives service profile in #92,
   RFC-0023 transcript lifecycle and retention in #134, and RFC-0024 private
-  staging offline trust ceremony in #148
+  staging offline trust ceremony in #148; RFC-0025 explicit workstation
+  bootstrap composition in #6; RFC-0026 explicit runtime custody profiles in
+  #6; RFC-0027 isolated macOS Keychain reference in #6; RFC-0028 macOS legacy
+  Keychain query compatibility in #6
 - Next action: review and merge #182, reproduce/rebind its superseding OCI and
   reassess the server-leaf window before resuming Step 5. Separately
+  implement and qualify the RFC-0025 Linux and RFC-0026 macOS workstation
+  custody profiles;
   connect the client executable to the accepted bootstrap exchange, concrete
   custody and receipt verification adapters. Real backup providers, lifecycle workers,
   target pull, Kubernetes credentials and objects, Step 5, operational

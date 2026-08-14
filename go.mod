@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/kms v1.31.0
 	cloud.google.com/go/storage v1.62.1
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
 	github.com/googleapis/gax-go/v2 v2.21.0

@@ -14,3 +14,19 @@ func TestExecutableBoundary(t *testing.T) {
 		t.Fatalf("status=%d output=%s", status, output.Bytes())
 	}
 }
+
+func TestExecutableFailsClosedWithoutWorkstationDependencies(t *testing.T) {
+	var output bytes.Buffer
+	status := (clientcli.Command{}).Run(context.Background(), []string{"session", "bootstrap", "--config", "/private/bootstrap.json", "--token-fd", "4", "--bus-fd", "5"}, bytes.NewReader(nil), &output)
+	if status != 7 || !bytes.Contains(output.Bytes(), []byte("YKC-UNAVAILABLE-001")) {
+		t.Fatalf("status=%d output=%s", status, output.Bytes())
+	}
+}
+
+func TestExecutableBuildsOnlyExplicitWorkstationBootstrap(t *testing.T) {
+	var output bytes.Buffer
+	status := command().Run(context.Background(), []string{"session", "bootstrap", "--config", "relative.json", "--token-fd", "4", "--bus-fd", "5"}, bytes.NewReader(nil), &output)
+	if status != 2 || !bytes.Contains(output.Bytes(), []byte("YKC-INPUT-001")) {
+		t.Fatalf("status=%d output=%s", status, output.Bytes())
+	}
+}
