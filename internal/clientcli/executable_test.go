@@ -126,8 +126,13 @@ func TestExecutableBootstrapsThroughSupervisorAndPersistsSession(t *testing.T) {
 	var stdout bytes.Buffer
 	status := (Executable{httpClient: server.Client()}).Run(context.Background(), args, bytes.NewReader(nil), &stdout)
 	runtime.KeepAlive(rootRead)
-	if err := <-done; err != nil {
-		t.Fatal(err)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("token supervisor did not receive the bootstrap request")
 	}
 	if status != 0 || !bytes.Contains(stdout.Bytes(), []byte(`"status":"ok"`)) {
 		t.Fatalf("status=%d called=%v output=%s", status, called.Load(), stdout.Bytes())

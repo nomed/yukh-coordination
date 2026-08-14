@@ -45,11 +45,6 @@ func (s *DescriptorTokenSource) Acquire(ctx context.Context, public PublicP256JW
 	if file == nil {
 		return nil, ErrExternalToken
 	}
-	info, err := file.Stat()
-	if err != nil || info.Mode()&os.ModeSocket == 0 {
-		file.Close()
-		return nil, ErrExternalToken
-	}
 	connection, err := net.FileConn(file)
 	file.Close()
 	if err != nil {
