@@ -39,6 +39,14 @@ func TestNativeKeychainQualification(t *testing.T) {
 		_ = os.RemoveAll(directory)
 		t.Fatal(err)
 	}
+	// macOS commonly returns /var/folders/... while /var is a symlink to
+	// /private/var. Resolve the test-owned directory before exercising the
+	// production boundary, which intentionally rejects paths containing symlinks.
+	directory, err = filepath.EvalSymlinks(directory)
+	if err != nil {
+		_ = os.RemoveAll(directory)
+		t.Fatal(err)
+	}
 	profile := randomHex(t, 16)
 	password := randomHex(t, 32)
 	path := filepath.Join(directory, "qualification-"+randomHex(t, 16)+".keychain-db")
