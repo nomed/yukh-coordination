@@ -1064,6 +1064,22 @@ infrastructure, key, token, certificate, registration, credential, listener,
 network traffic, provider call, mutation, preview release or production
 authority.
 
+### RFC-0027/RFC-0028 macOS Keychain custody boundary review — 2026-08-05
+
+Issue #6 adds an independently injected `macos-keychain-v1` profile with one
+exact Keychain generic-password root item and the existing encrypted local
+SQLite custody store. Profile selection remains closed configuration; no
+executable path infers an operating system, discovers a provider, or falls
+back to Linux, files, plaintext, environment credentials, or another profile.
+
+The adapter uses only an exact class/service/account Keychain query scoped to
+the configured isolated Keychain reference, with authentication UI disabled.
+It rejects ambiguous, malformed, locked, authorization, UI, accessibility and
+provider outcomes. Missing root material cannot be created when a custody
+database already exists. The external token and direct HTTPS transport remain
+caller-injected. Native Keychain integration qualification against supported
+macOS releases remains mandatory.
+
 ## Formal design record
 
 RFC-0002 freezes the following repository-only design decisions when accepted:

@@ -94,6 +94,12 @@
   increment.
   On 2026-08-14 the owner explicitly authorized the bounded runnable macOS
   preview kit using local JetStream, disposable resources and synthetic traffic.
+  The accepted workstation decisions formerly numbered RFC-0025 through
+  RFC-0028 were recovered without content loss from owner branch
+  `wip/workstation-bootstrap-local` and renumbered RFC-0026 through RFC-0029 to
+  preserve the authoritative preview RFC-0025. Their implementation is being
+  reconciled with the newer executable delivered in #203 rather than replacing
+  it.
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
