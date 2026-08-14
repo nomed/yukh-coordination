@@ -1,17 +1,25 @@
 package previewruntime
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
+	jsoncanonicalizer "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"github.com/nomed/yukh-coordination/internal/relay"
 	"github.com/nomed/yukh-coordination/internal/relay/httpapi"
 	"github.com/nomed/yukh-coordination/internal/relay/protocol"
@@ -116,5 +124,56 @@ func TestCoordinatorStartsAgainstLocalJetStream(t *testing.T) {
 	stop()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestConfigAndSupervisorExposeOnlyBoundMaterial(t *testing.T) {
+	directory := t.TempDir()
+	certificate := filepath.Join(directory, "tls.crt")
+	privateKey := filepath.Join(directory, "tls.key")
+	tokenPath := filepath.Join(directory, "supervisor.token")
+	tokenBytes := make([]byte, 32)
+	tokenBytes[0] = 1
+	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	for path, value := range map[string]string{certificate: "certificate", privateKey: "private-key", tokenPath: token} {
+		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configPath := filepath.Join(directory, "coordinator.json")
+	configRaw, _ := json.Marshal(map[string]any{"profile": ConfigProfile, "public_base_uri": "https://127.0.0.1:7443", "public_bind": "0.0.0.0:7443", "supervisor_bind": "0.0.0.0:7444", "nats_url": "nats://nats:4222", "tls_certificate": certificate, "tls_private_key": privateKey, "supervisor_token": tokenPath})
+	if err := os.WriteFile(configPath, configRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(configPath); err != nil {
+		t.Fatal(err)
+	}
+	authority := NewAuthority()
+	receiptBytes := make([]byte, 32)
+	receiptBytes[0] = 2
+	receiptKey := base64.RawURLEncoding.EncodeToString(receiptBytes)
+	supervisor, err := NewSupervisor(authority, token, receiptKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	x, y := key.PublicKey.X.FillBytes(make([]byte, 32)), key.PublicKey.Y.FillBytes(make([]byte, 32))
+	thumbprint := mustThumbprint(t, key)
+	body, _ := json.Marshal(map[string]any{"crv": "P-256", "dpop_thumbprint": base64.RawURLEncoding.EncodeToString(thumbprint[:]), "kty": "EC", "schema": 1, "x": base64.RawURLEncoding.EncodeToString(x), "y": base64.RawURLEncoding.EncodeToString(y)})
+	body, _ = jsoncanonicalizer.Transform(body)
+	request := httptest.NewRequest(http.MethodPost, "https://127.0.0.1:7444/local-preview/v1/external-token/agent-a", bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	supervisor.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	metadata := httptest.NewRequest(http.MethodGet, "https://127.0.0.1:7444/local-preview/v1/config", nil)
+	metadata.Header.Set("Authorization", "Bearer "+token)
+	metadataResponse := httptest.NewRecorder()
+	supervisor.ServeHTTP(metadataResponse, metadata)
+	if metadataResponse.Code != http.StatusOK || !bytes.Contains(metadataResponse.Body.Bytes(), []byte(receiptKey)) {
+		t.Fatalf("metadata status=%d body=%s", metadataResponse.Code, metadataResponse.Body.String())
 	}
 }
