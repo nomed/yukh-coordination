@@ -92,6 +92,8 @@
   The closed manifest/evidence contracts and fail-closed parser were delivered
   in #208 at `387a556`; teardown-controller qualification is the active #207
   increment.
+  On 2026-08-14 the owner explicitly authorized the bounded runnable macOS
+  preview kit using local JetStream, disposable resources and synthetic traffic.
 
 This file is a navigation aid, not an authority record. GitHub issues and the
 Yukh Project own accepted delivery state.
