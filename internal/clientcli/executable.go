@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -34,6 +36,7 @@ type executableConfig struct {
 	SourceURI       string                  `json:"source_uri"`
 	Participant     clientevent.Participant `json:"participant"`
 	CustodyDatabase string                  `json:"custody_database"`
+	CACertificate   string                  `json:"ca_certificate,omitempty"`
 	ReceiptKeys     []executableReceiptKey  `json:"receipt_keys"`
 }
 
@@ -78,7 +81,10 @@ func (e Executable) Run(ctx context.Context, args []string, stdin io.Reader, std
 	if err != nil {
 		return write(stdout, output{Schema: 1, Status: "error", Command: commandName(commandArgs), Code: "YKC-INPUT-001"}, 2)
 	}
-	httpClient := closedHTTPClient(e.httpClient)
+	httpClient, transportErr := closedHTTPClient(e.httpClient, config.CACertificate)
+	if transportErr != nil {
+		return write(stdout, output{Schema: 1, Status: "error", Command: commandName(commandArgs), Code: "YKC-INPUT-001"}, 2)
+	}
 	client, err := coordclient.New(clientConfig, httpClient, authorizer, verifier)
 	if err != nil {
 		return write(stdout, output{Schema: 1, Status: "error", Command: commandName(commandArgs), Code: "YKC-INPUT-001"}, 2)
@@ -172,21 +178,57 @@ func executableVerifier(entries []executableReceiptKey) (*coordclient.Ed25519Rec
 	return coordclient.NewEd25519ReceiptVerifier(keys)
 }
 
-func closedHTTPClient(base *http.Client) *http.Client {
+func closedHTTPClient(base *http.Client, caCertificate string) (*http.Client, error) {
 	if base == nil {
 		base = &http.Client{Transport: http.DefaultTransport}
 	}
 	result := *base
-	if transport, ok := result.Transport.(*http.Transport); ok {
+	transport, ok := result.Transport.(*http.Transport)
+	if !ok {
+		if caCertificate != "" {
+			return nil, coordclient.ErrInvalidInput
+		}
+	} else {
 		closedTransport := transport.Clone()
 		closedTransport.Proxy = nil
+		if caCertificate != "" {
+			roots, err := certificatePool(caCertificate)
+			if err != nil {
+				return nil, err
+			}
+			if closedTransport.TLSClientConfig == nil {
+				closedTransport.TLSClientConfig = &tls.Config{}
+			} else {
+				closedTransport.TLSClientConfig = closedTransport.TLSClientConfig.Clone()
+			}
+			closedTransport.TLSClientConfig.RootCAs = roots
+		}
 		result.Transport = closedTransport
 	}
 	result.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	if result.Timeout <= 0 || result.Timeout > 10*time.Second {
 		result.Timeout = 10 * time.Second
 	}
-	return &result
+	return &result, nil
+}
+
+func certificatePool(path string) (*x509.CertPool, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, coordclient.ErrInvalidInput
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0 || info.Size() < 1 || info.Size() > 64<<10 {
+		return nil, coordclient.ErrInvalidInput
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, coordclient.ErrInvalidInput
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(raw) {
+		return nil, coordclient.ErrInvalidInput
+	}
+	return pool, nil
 }
 
 func executableCommandArgs(args []string, config executableConfig) []string {
