@@ -2,6 +2,7 @@ package clientauth
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -34,20 +35,37 @@ type Bootstrapper struct {
 	tokens      ExternalTokenSource
 	issuer      SessionIssuer
 	profile     string
+	now         func() time.Time
 }
 
 func NewBootstrapper(credentials CredentialStore, signers ProofSignerStore, tokens ExternalTokenSource, issuer SessionIssuer, profile string) (*Bootstrapper, error) {
 	if nilInterface(credentials) || nilInterface(signers) || nilInterface(tokens) || nilInterface(issuer) || validateProfile(profile) != nil {
 		return nil, ErrInvalidCredential
 	}
-	return &Bootstrapper{credentials: credentials, signers: signers, tokens: tokens, issuer: issuer, profile: profile}, nil
+	return &Bootstrapper{credentials: credentials, signers: signers, tokens: tokens, issuer: issuer, profile: profile, now: time.Now}, nil
 }
 
 // Bootstrap executes the accepted cross-provider saga and reports success only
 // after an exact custody reload and signer-binding verification.
 func (b *Bootstrapper) Bootstrap(ctx context.Context) error {
-	if b == nil || ctx == nil || ctx.Err() != nil {
+	if b == nil || ctx == nil || ctx.Err() != nil || b.now == nil {
 		return ErrInvalidCredential
+	}
+	expected := AbsentRevision()
+	stored, err := b.credentials.Load(ctx, b.profile)
+	switch {
+	case err == nil:
+		record, recordErr := stored.Record()
+		if recordErr != nil {
+			return ErrCredentialStore
+		}
+		if record.ExpiresAt().After(b.now().UTC()) {
+			return ErrCredentialConflict
+		}
+		expected = stored.Revision()
+	case errors.Is(err, ErrCredentialMissing):
+	case err != nil:
+		return sanitizeStoreError(err)
 	}
 	provisioned, err := b.signers.ProvisionP256(ctx, b.profile)
 	if err != nil {
@@ -81,10 +99,10 @@ func (b *Bootstrapper) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return ErrInvalidCredential
 	}
-	if _, err = b.credentials.Save(ctx, b.profile, AbsentRevision(), record); err != nil {
+	if _, err = b.credentials.Save(ctx, b.profile, expected, record); err != nil {
 		return sanitizeStoreError(err)
 	}
-	stored, err := b.credentials.Load(ctx, b.profile)
+	stored, err = b.credentials.Load(ctx, b.profile)
 	if err != nil {
 		return sanitizeStoreError(err)
 	}
