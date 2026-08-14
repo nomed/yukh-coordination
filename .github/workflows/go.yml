@@ -27,6 +27,20 @@ jobs:
         run: go install github.com/nats-io/nats-server/v2@v2.12.0
       - name: Run race and JetStream qualification tests
         run: YUKH_NATS_SERVER="$(go env GOPATH)/bin/nats-server" go test -race ./...
+      - name: Qualify local preview Compose and native clients
+        run: |
+          runtime="$(mktemp -d)"
+          export YUKH_PREVIEW_RUNTIME="$runtime"
+          export YUKH_ALLOW_LINUX_QUALIFICATION=1
+          trap '.github/scripts/yukh-local-preview-macos.sh down' EXIT
+          .github/scripts/yukh-local-preview-macos.sh up
+          .github/scripts/yukh-local-agent.py --home "$runtime" agent-a session bootstrap
+          .github/scripts/yukh-local-agent.py --home "$runtime" agent-b session bootstrap
+          printf '%s\n' '{"capabilities":["publish","replay"],"session_label":"local-a","status":"available"}' |
+            .github/scripts/yukh-local-agent.py --home "$runtime" agent-a session join
+          .github/scripts/yukh-local-agent.py --home "$runtime" agent-b events replay
+          .github/scripts/yukh-local-preview-macos.sh down
+          trap - EXIT
       - name: Build reproducible private primitives executables
         run: .github/scripts/qualify-primitives-executable.sh
       - name: Qualify checkout private primitives OCI layout
