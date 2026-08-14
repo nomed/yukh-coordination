@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -169,4 +170,34 @@ func physicalTempDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return directory
+}
+
+func TestClosedHTTPClientLoadsOnlyExplicitLocalCA(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	directory := physicalTempDir(t)
+	certificatePath := filepath.Join(directory, "preview-ca.pem")
+	certificate := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	if err := os.WriteFile(certificatePath, certificate, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client, err := closedHTTPClient(nil, certificatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+
+	linkedPath := filepath.Join(directory, "linked-ca.pem")
+	if err := os.Symlink(certificatePath, linkedPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := closedHTTPClient(nil, linkedPath); err == nil {
+		t.Fatal("symlinked CA accepted")
+	}
 }
