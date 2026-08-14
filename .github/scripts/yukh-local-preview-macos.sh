@@ -75,7 +75,11 @@ PY
       fi
       sleep 1
     done
-    [[ -n "$metadata" ]] || fail "coordinator supervisor did not become ready"
+    if [[ -z "$metadata" ]]; then
+      "${compose_command[@]}" ps >&2
+      "${compose_command[@]}" logs coordinator >&2
+      fail "coordinator supervisor did not become ready"
+    fi
     YUKH_METADATA="$metadata" python3 - "$runtime" <<'PY'
 import json, os, sys
 from pathlib import Path
