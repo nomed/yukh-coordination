@@ -1,5 +1,24 @@
 # Qualify the private Yukh suite E2E demo
 
+## Try it on a Mac
+
+From a clean Coordination checkout, run:
+
+```sh
+.github/scripts/try-yukh-suite-macos.sh
+```
+
+The script installs missing Go, Node.js 24 and `nats-server` packages through
+Homebrew, prepares the other three repositories under `~/yukh-preview-rc1`,
+runs the four-component suite, then qualifies the macOS clients against a
+test-owned local JetStream process. It leaves the JSON result in
+`~/yukh-preview-rc1/yukh-suite-summary.json`; JetStream stops when the test
+finishes.
+
+This is the first runnable local preview qualification. It exercises the four
+components and the real Coordination JetStream adapters with synthetic data.
+It is not yet an interactive long-running coordinator.
+
 Use the cross-suite runner to execute the four synthetic component
 qualifications from one Coordination checkout:
 
