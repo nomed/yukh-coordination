@@ -23,7 +23,7 @@ services:
     depends_on:
       nats:
         condition: service_healthy
-    networks: [coordination]
+    networks: [coordination, edge]
     ports:
       - "127.0.0.1:7443:7443"
       - "127.0.0.1:7444:7444"
@@ -40,6 +40,7 @@ services:
 networks:
   coordination:
     internal: true
+  edge:
 
 volumes:
   jetstream:
