@@ -61,7 +61,7 @@ func (s *Supervisor) ServeHTTP(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	slot := strings.TrimPrefix(request.URL.Path, "/local-preview/v1/external-token/")
-	if slot != "agent-a" && slot != "agent-b" {
+	if !validLocalAgent(slot) {
 		http.NotFound(writer, request)
 		return
 	}

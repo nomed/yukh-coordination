@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"regexp"
 	"sync"
 	"time"
 
@@ -19,6 +20,12 @@ import (
 )
 
 const tokenLifetime = 10 * time.Minute
+
+var localAgentName = regexp.MustCompile(`^agent-[a-z](?:[a-z0-9-]{0,40}[a-z0-9])?$`)
+
+func validLocalAgent(value string) bool {
+	return len(value) <= 48 && localAgentName.MatchString(value)
+}
 
 var ErrIdentityUnavailable = errors.New("preview runtime: identity unavailable")
 
@@ -70,7 +77,7 @@ func (a *Authority) Ready(context.Context) error {
 }
 
 func (a *Authority) Issue(slot string, thumbprint [sha256.Size]byte) (ExternalToken, error) {
-	if a == nil || (slot != "agent-a" && slot != "agent-b") || zero(thumbprint[:]) {
+	if a == nil || !validLocalAgent(slot) || zero(thumbprint[:]) {
 		return ExternalToken{}, ErrIdentityUnavailable
 	}
 	credential, digest, err := a.token()

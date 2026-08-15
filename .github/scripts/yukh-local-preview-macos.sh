@@ -117,6 +117,16 @@ PY
       "$runtime/agent-a.json" "$runtime/agent-b.json" "$runtime/agent-a.root" "$runtime/agent-b.root" \
       "$runtime/agent-a.db" "$runtime/agent-a.db-shm" "$runtime/agent-a.db-wal" \
       "$runtime/agent-b.db" "$runtime/agent-b.db-shm" "$runtime/agent-b.db-wal"
+    python3 - "$runtime" <<'PY'
+import re, sys
+from pathlib import Path
+home = Path(sys.argv[1]).resolve()
+pattern = re.compile(r"agent-[a-z](?:[a-z0-9-]{0,40}[a-z0-9])?\.(?:json|root|db|db-shm|db-wal)")
+for path in home.iterdir():
+    if pattern.fullmatch(path.name):
+        path.unlink(missing_ok=True)
+(home / "agents.lock").unlink(missing_ok=True)
+PY
     [[ -z "$("${compose_command[@]}" ps -aq)" ]] || fail "containers remain after teardown"
     [[ -z "$(docker network ls --filter label=com.docker.compose.project=yukh-local-preview -q)" ]] || fail "network remains after teardown"
     [[ -z "$(docker volume ls --filter label=com.docker.compose.project=yukh-local-preview -q)" ]] || fail "volume remains after teardown"

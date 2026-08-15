@@ -179,13 +179,21 @@ func TestConfigAndSupervisorExposeOnlyBoundMaterial(t *testing.T) {
 	thumbprint := mustThumbprint(t, key)
 	body, _ := json.Marshal(map[string]any{"crv": "P-256", "dpop_thumbprint": base64.RawURLEncoding.EncodeToString(thumbprint[:]), "kty": "EC", "schema": 1, "x": base64.RawURLEncoding.EncodeToString(x), "y": base64.RawURLEncoding.EncodeToString(y)})
 	body, _ = jsoncanonicalizer.Transform(body)
-	request := httptest.NewRequest(http.MethodPost, "https://127.0.0.1:7444/local-preview/v1/external-token/agent-a", bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "https://127.0.0.1:7444/local-preview/v1/external-token/agent-frontend-developer", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	supervisor.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	invalid := httptest.NewRequest(http.MethodPost, "https://127.0.0.1:7444/local-preview/v1/external-token/agent-A", bytes.NewReader(body))
+	invalid.Header.Set("Authorization", "Bearer "+token)
+	invalid.Header.Set("Content-Type", "application/json")
+	invalidResponse := httptest.NewRecorder()
+	supervisor.ServeHTTP(invalidResponse, invalid)
+	if invalidResponse.Code != http.StatusNotFound {
+		t.Fatalf("invalid agent status=%d", invalidResponse.Code)
 	}
 	metadata := httptest.NewRequest(http.MethodGet, "https://127.0.0.1:7444/local-preview/v1/config", nil)
 	metadata.Header.Set("Authorization", "Bearer "+token)

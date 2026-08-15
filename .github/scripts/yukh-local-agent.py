@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import fcntl
 import json
 import os
+import re
+import secrets
 import socket
 import ssl
 import subprocess
@@ -16,22 +19,70 @@ def fail(message):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("agent", choices=("agent-a", "agent-b"))
+parser.add_argument("agent")
 parser.add_argument("command", nargs=argparse.REMAINDER)
 parser.add_argument("--home", default=str(Path.home() / ".yukh" / "local-preview"))
 args = parser.parse_args()
 if not args.command:
     fail("a client command is required")
+if not re.fullmatch(r"agent-[a-z](?:[a-z0-9-]{0,40}[a-z0-9])?", args.agent) or len(args.agent) > 48:
+    fail("invalid agent name")
 
 home = Path(args.home).resolve()
 binary = home / "bin" / "yukh-coordination"
 config = home / f"{args.agent}.json"
 root_key = home / f"{args.agent}.root"
 ca = home / "server.crt"
-token = (home / "supervisor.token").read_text(encoding="ascii")
-for path in (binary, config, root_key, ca):
+token_path = home / "supervisor.token"
+for path in (binary, ca, token_path):
     if not path.is_file():
         fail(f"missing {path}")
+token = token_path.read_text(encoding="ascii")
+
+lock_path = home / "agents.lock"
+lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+with os.fdopen(lock_fd, "r+b") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    roots = [path for path in home.glob("agent-*.root") if path.is_file() and not path.is_symlink()]
+    if not root_key.exists():
+        if len(roots) >= 32:
+            fail("agent limit reached")
+        fd = os.open(root_key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(secrets.token_bytes(32))
+    if root_key.is_symlink() or not root_key.is_file():
+        fail("invalid root key")
+    if not config.exists():
+        request = urllib.request.Request(
+            "https://127.0.0.1:7444/local-preview/v1/config",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        try:
+            with urllib.request.urlopen(request, context=ssl.create_default_context(cafile=str(ca)), timeout=10) as response:
+                metadata = json.loads(response.read(65537))
+        except Exception:
+            fail("supervisor metadata unavailable")
+        value = {
+            "schema": 1,
+            "profile": args.agent,
+            "base_uri": "https://127.0.0.1:7443",
+            "channel_id": metadata["channel_id"],
+            "channel_uri": metadata["channel_uri"],
+            "transcript_epoch": metadata["transcript_epoch"],
+            "page_limit": 100,
+            "max_records": 1000,
+            "watch_deadline_ms": 900000,
+            "source_uri": f"https://client.local/{args.agent}",
+            "participant": {"id": f"agent:{args.agent.removeprefix('agent-')}", "kind": "agent"},
+            "custody_database": str(home / f"{args.agent}.db"),
+            "ca_certificate": str(ca),
+            "receipt_keys": [{"key_id": metadata["receipt_key_id"], "public_key": metadata["receipt_key"]}],
+        }
+        fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, separators=(",", ":"))
+    if config.is_symlink() or not config.is_file():
+        fail("invalid agent config")
 
 root = root_key.read_bytes()
 if len(root) != 32:
