@@ -1124,3 +1124,13 @@ Unknown configuration fields, reused descriptors, shared root/token
 descriptors, wrong token bindings and non-socket token channels fail closed.
 The external supervisor remains responsible for authenticating its caller and
 issuing an RFC-9068 token whose `cnf.jkt` matches the requested thumbprint.
+# Accepted dynamic local agent identities — 2026-08-15
+
+- Governing issue: #224
+- Accepted architecture: RFC-0030
+
+The local preview may provision bounded agent slugs on demand. Each identity has
+independent root custody, configuration, session and principal binding. Closed
+name grammar, a 32-identity runtime bound, authenticated supervisor metadata and
+server-owned claims prevent arbitrary principals and unbounded local storage.
+Team roles and parent-child relationships are data, never authorization.

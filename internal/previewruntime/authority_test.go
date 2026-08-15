@@ -20,6 +20,19 @@ import (
 
 const previewBaseURI = "https://preview.coord.example"
 
+func TestAuthorityAcceptsBoundedDynamicAgentNames(t *testing.T) {
+	authority := NewAuthority()
+	thumbprint := [sha256.Size]byte{1}
+	if _, err := authority.Issue("agent-frontend-developer", thumbprint); err != nil {
+		t.Fatalf("issue dynamic agent: %v", err)
+	}
+	for _, name := range []string{"agent-", "agent-A", "agent-a/../b", "worker-a", "agent-a_"} {
+		if _, err := authority.Issue(name, thumbprint); err == nil {
+			t.Fatalf("accepted invalid agent name %q", name)
+		}
+	}
+}
+
 func TestAuthorityBindsSingleUseBootstrapAndSessionProof(t *testing.T) {
 	authority := NewAuthority()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
