@@ -21,7 +21,10 @@ def fail(message):
 parser = argparse.ArgumentParser()
 parser.add_argument("agent")
 parser.add_argument("command", nargs=argparse.REMAINDER)
-parser.add_argument("--home", default=str(Path.home() / ".yukh" / "local-preview"))
+parser.add_argument(
+    "--home",
+    default=os.environ.get("YUKH_PREVIEW_RUNTIME", str(Path.home() / ".yukh" / "local-preview")),
+)
 args = parser.parse_args()
 if not args.command:
     fail("a client command is required")
