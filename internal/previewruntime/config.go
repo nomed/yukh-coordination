@@ -2,6 +2,7 @@ package previewruntime
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -16,14 +17,15 @@ const ConfigProfile = "yukh-coordination/local-preview-runtime-v1"
 var ErrInvalidConfiguration = errors.New("preview runtime: invalid configuration")
 
 type configDocument struct {
-	Profile         string `json:"profile"`
-	PublicBaseURI   string `json:"public_base_uri"`
-	PublicBind      string `json:"public_bind"`
-	SupervisorBind  string `json:"supervisor_bind"`
-	NATSURL         string `json:"nats_url"`
-	TLSCertificate  string `json:"tls_certificate"`
-	TLSPrivateKey   string `json:"tls_private_key"`
-	SupervisorToken string `json:"supervisor_token"`
+	Profile           string `json:"profile"`
+	PublicBaseURI     string `json:"public_base_uri"`
+	PublicBind        string `json:"public_bind"`
+	SupervisorBind    string `json:"supervisor_bind"`
+	NATSURL           string `json:"nats_url"`
+	TLSCertificate    string `json:"tls_certificate"`
+	TLSPrivateKey     string `json:"tls_private_key"`
+	SupervisorToken   string `json:"supervisor_token"`
+	ReceiptSigningKey string `json:"receipt_signing_key"`
 }
 
 type Config struct{ value configDocument }
@@ -53,7 +55,12 @@ func validConfig(value configDocument) bool {
 	if value.Profile != ConfigProfile || !httpsBase(value.PublicBaseURI) || !bind(value.PublicBind) || !bind(value.SupervisorBind) || value.PublicBind == value.SupervisorBind || !localNATSURL(value.NATSURL) {
 		return false
 	}
-	paths := []string{value.TLSCertificate, value.TLSPrivateKey, value.SupervisorToken}
+	paths := []string{
+		value.TLSCertificate,
+		value.TLSPrivateKey,
+		value.SupervisorToken,
+		value.ReceiptSigningKey,
+	}
 	seen := map[string]bool{}
 	for _, path := range paths {
 		if !exactPath(path) || seen[path] {
@@ -76,6 +83,12 @@ func validConfig(value configDocument) bool {
 	if !validToken {
 		return false
 	}
+	receiptSeed, err := os.ReadFile(value.ReceiptSigningKey)
+	validReceiptKey := err == nil && len(receiptSeed) == ed25519.SeedSize && !zero(receiptSeed)
+	clear(receiptSeed)
+	if !validReceiptKey {
+		return false
+	}
 	return true
 }
 
@@ -93,5 +106,8 @@ func (c *Config) NATSURL() string         { return c.value.NATSURL }
 func (c *Config) TLSCertificate() string  { return c.value.TLSCertificate }
 func (c *Config) TLSPrivateKey() string   { return c.value.TLSPrivateKey }
 func (c *Config) SupervisorToken() string { return c.value.SupervisorToken }
+func (c *Config) ReceiptSigningKey() string {
+	return c.value.ReceiptSigningKey
+}
 
 func relayInvalid() error { return ErrInvalidConfiguration }

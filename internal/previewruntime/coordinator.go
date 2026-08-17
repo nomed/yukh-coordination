@@ -34,6 +34,7 @@ type CoordinatorConfig struct {
 	PublicBaseURI string
 	Listener      net.Listener
 	Authority     *Authority
+	ReceiptKey    ed25519.PrivateKey
 }
 
 type Coordinator struct {
@@ -69,11 +70,16 @@ func NewCoordinator(ctx context.Context, config CoordinatorConfig) (*Coordinator
 		closeConnection()
 		return nil, err
 	}
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		closeConnection()
-		return nil, err
+	privateKey := config.ReceiptKey
+	if len(privateKey) != ed25519.PrivateKeySize {
+		var err error
+		_, privateKey, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			closeConnection()
+			return nil, err
+		}
 	}
+	publicKey := privateKey.Public().(ed25519.PublicKey)
 	runtime, err := relayruntime.New(relayruntime.Config{
 		Store: store, Subscriptions: store, Bootstrapper: config.Authority, Authenticator: config.Authority,
 		Authorizer: previewAuthorizer{}, Signer: previewSigner{privateKey: privateKey}, Validator: validator, Listener: config.Listener,
