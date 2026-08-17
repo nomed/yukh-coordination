@@ -150,16 +150,17 @@ func TestConfigAndSupervisorExposeOnlyBoundMaterial(t *testing.T) {
 	certificate := filepath.Join(directory, "tls.crt")
 	privateKey := filepath.Join(directory, "tls.key")
 	tokenPath := filepath.Join(directory, "supervisor.token")
+	receiptSigningKey := filepath.Join(directory, "receipt-signing.key")
 	tokenBytes := make([]byte, 32)
 	tokenBytes[0] = 1
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
-	for path, value := range map[string]string{certificate: "certificate", privateKey: "private-key", tokenPath: token} {
+	for path, value := range map[string]string{certificate: "certificate", privateKey: "private-key", tokenPath: token, receiptSigningKey: string(bytes.Repeat([]byte{3}, ed25519.SeedSize))} {
 		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	configPath := filepath.Join(directory, "coordinator.json")
-	configRaw, _ := json.Marshal(map[string]any{"profile": ConfigProfile, "public_base_uri": "https://127.0.0.1:7443", "public_bind": "0.0.0.0:7443", "supervisor_bind": "0.0.0.0:7444", "nats_url": "nats://nats:4222", "tls_certificate": certificate, "tls_private_key": privateKey, "supervisor_token": tokenPath})
+	configRaw, _ := json.Marshal(map[string]any{"profile": ConfigProfile, "public_base_uri": "https://127.0.0.1:7443", "public_bind": "0.0.0.0:7443", "supervisor_bind": "0.0.0.0:7444", "nats_url": "nats://nats:4222", "tls_certificate": certificate, "tls_private_key": privateKey, "supervisor_token": tokenPath, "receipt_signing_key": receiptSigningKey})
 	if err := os.WriteFile(configPath, configRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package previewruntime
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/tls"
 	"errors"
 	"io"
@@ -35,6 +36,13 @@ func OpenApplication(ctx context.Context, configPath string) (*Application, erro
 	}
 	token := string(tokenRaw)
 	clear(tokenRaw)
+	receiptSeed, err := os.ReadFile(config.ReceiptSigningKey())
+	if err != nil || len(receiptSeed) != ed25519.SeedSize {
+		clear(receiptSeed)
+		return nil, ErrIdentityUnavailable
+	}
+	receiptKey := ed25519.NewKeyFromSeed(receiptSeed)
+	clear(receiptSeed)
 	publicRaw, err := net.Listen("tcp", config.PublicBind())
 	if err != nil {
 		return nil, ErrIdentityUnavailable
@@ -57,7 +65,13 @@ func OpenApplication(ctx context.Context, configPath string) (*Application, erro
 	}()
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS13}
 	authority := NewAuthority()
-	coordinator, err := NewCoordinator(ctx, CoordinatorConfig{NATSURL: config.NATSURL(), PublicBaseURI: config.PublicBaseURI(), Listener: tls.NewListener(publicRaw, tlsConfig.Clone()), Authority: authority})
+	coordinator, err := NewCoordinator(ctx, CoordinatorConfig{
+		NATSURL:       config.NATSURL(),
+		PublicBaseURI: config.PublicBaseURI(),
+		Listener:      tls.NewListener(publicRaw, tlsConfig.Clone()),
+		Authority:     authority,
+		ReceiptKey:    receiptKey,
+	})
 	if err != nil {
 		return nil, err
 	}

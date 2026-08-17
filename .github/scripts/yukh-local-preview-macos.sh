@@ -34,6 +34,7 @@ from pathlib import Path
 home = Path(sys.argv[1])
 values = {
     "supervisor.token": secrets.token_urlsafe(32).encode("ascii"),
+    "receipt-signing.key": secrets.token_bytes(32),
     "agent-a.root": secrets.token_bytes(32),
     "agent-b.root": secrets.token_bytes(32),
 }
@@ -44,7 +45,8 @@ for name, value in values.items():
         with os.fdopen(fd, "wb") as stream:
             stream.write(value)
 PY
-    chmod 0600 "$runtime/server.key" "$runtime/server.crt" "$runtime/supervisor.token" "$runtime/agent-a.root" "$runtime/agent-b.root"
+    chmod 0600 "$runtime/server.key" "$runtime/server.crt" "$runtime/supervisor.token" \
+      "$runtime/receipt-signing.key" "$runtime/agent-a.root" "$runtime/agent-b.root"
     python3 - "$runtime" <<'PY'
 import json, os, sys
 from pathlib import Path
@@ -58,6 +60,7 @@ value = {
     "tls_certificate": "/run/yukh/server.crt",
     "tls_private_key": "/run/yukh/server.key",
     "supervisor_token": "/run/yukh/supervisor.token",
+    "receipt_signing_key": "/run/yukh/receipt-signing.key",
 }
 path = home / "coordinator.json"
 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -114,18 +117,21 @@ PY
   down)
     "${compose_command[@]}" down --volumes --remove-orphans
     rm -f -- "$runtime/coordinator.json" "$runtime/server.crt" "$runtime/server.key" "$runtime/supervisor.token" \
+      "$runtime/receipt-signing.key" \
       "$runtime/agent-a.json" "$runtime/agent-b.json" "$runtime/agent-a.root" "$runtime/agent-b.root" \
       "$runtime/agent-a.db" "$runtime/agent-a.db-shm" "$runtime/agent-a.db-wal" \
       "$runtime/agent-b.db" "$runtime/agent-b.db-shm" "$runtime/agent-b.db-wal"
     python3 - "$runtime" <<'PY'
 import re, sys
 from pathlib import Path
+import shutil
 home = Path(sys.argv[1]).resolve()
 pattern = re.compile(r"agent-[a-z](?:[a-z0-9-]{0,40}[a-z0-9])?\.(?:json|root|db|db-shm|db-wal)")
 for path in home.iterdir():
     if pattern.fullmatch(path.name):
         path.unlink(missing_ok=True)
 (home / "agents.lock").unlink(missing_ok=True)
+shutil.rmtree(home / "stale-agents", ignore_errors=True)
 PY
     [[ -z "$("${compose_command[@]}" ps -aq)" ]] || fail "containers remain after teardown"
     [[ -z "$(docker network ls --filter label=com.docker.compose.project=yukh-local-preview -q)" ]] || fail "network remains after teardown"

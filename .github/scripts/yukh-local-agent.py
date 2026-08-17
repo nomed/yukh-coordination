@@ -10,6 +10,7 @@ import ssl
 import subprocess
 import sys
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -42,6 +43,123 @@ for path in (binary, ca, token_path):
         fail(f"missing {path}")
 token = token_path.read_text(encoding="ascii")
 
+
+def supervisor_metadata():
+    request = urllib.request.Request(
+        "https://127.0.0.1:7444/local-preview/v1/config",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(
+            request,
+            context=ssl.create_default_context(cafile=str(ca)),
+            timeout=10,
+        ) as response:
+            metadata = json.loads(response.read(65537))
+    except Exception:
+        fail("supervisor metadata unavailable")
+    return metadata
+
+
+def profile_value(metadata):
+    return {
+        "schema": 1,
+        "profile": args.agent,
+        "base_uri": "https://127.0.0.1:7443",
+        "channel_id": metadata["channel_id"],
+        "channel_uri": metadata["channel_uri"],
+        "transcript_epoch": metadata["transcript_epoch"],
+        "page_limit": 100,
+        "max_records": 1000,
+        "watch_deadline_ms": 900000,
+        "source_uri": f"https://client.local/{args.agent}",
+        "participant": {
+            "id": f"agent:{args.agent.removeprefix('agent-')}",
+            "kind": "agent",
+        },
+        "custody_database": str(home / f"{args.agent}.db"),
+        "ca_certificate": str(ca),
+        "receipt_keys": [
+            {
+                "key_id": metadata["receipt_key_id"],
+                "public_key": metadata["receipt_key"],
+            },
+        ],
+    }
+
+
+def profile_matches(path, expected):
+    try:
+        current = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    for key in (
+        "schema",
+        "profile",
+        "base_uri",
+        "channel_id",
+        "channel_uri",
+        "transcript_epoch",
+        "source_uri",
+        "participant",
+        "custody_database",
+        "ca_certificate",
+        "receipt_keys",
+    ):
+        if current.get(key) != expected.get(key):
+            return False
+    return True
+
+
+def stale_backup_dir():
+    base = (
+        home
+        / "stale-agents"
+        / f"{args.agent}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    )
+    for index in range(100):
+        stale = base if index == 0 else Path(f"{base}-{index}")
+        try:
+            stale.mkdir(parents=True, mode=0o700, exist_ok=False)
+            break
+        except FileExistsError:
+            continue
+    else:
+        fail("stale profile backup unavailable")
+    return stale
+
+
+def preserve_stale_profile():
+    stale = stale_backup_dir()
+    for path in (
+        config,
+        home / f"{args.agent}.db",
+        home / f"{args.agent}.db-shm",
+        home / f"{args.agent}.db-wal",
+    ):
+        if path.exists():
+            os.replace(path, stale / path.name)
+
+
+def preserve_stale_session():
+    paths = (
+        home / f"{args.agent}.db",
+        home / f"{args.agent}.db-shm",
+        home / f"{args.agent}.db-wal",
+    )
+    if not any(path.exists() for path in paths):
+        return
+    stale = stale_backup_dir()
+    for path in paths:
+        if path.exists():
+            os.replace(path, stale / path.name)
+
+
+def write_profile(path, value):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(value, stream, separators=(",", ":"))
+
 lock_path = home / "agents.lock"
 lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
 with os.fdopen(lock_fd, "r+b") as lock:
@@ -55,37 +173,16 @@ with os.fdopen(lock_fd, "r+b") as lock:
             stream.write(secrets.token_bytes(32))
     if root_key.is_symlink() or not root_key.is_file():
         fail("invalid root key")
-    if not config.exists():
-        request = urllib.request.Request(
-            "https://127.0.0.1:7444/local-preview/v1/config",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        try:
-            with urllib.request.urlopen(request, context=ssl.create_default_context(cafile=str(ca)), timeout=10) as response:
-                metadata = json.loads(response.read(65537))
-        except Exception:
-            fail("supervisor metadata unavailable")
-        value = {
-            "schema": 1,
-            "profile": args.agent,
-            "base_uri": "https://127.0.0.1:7443",
-            "channel_id": metadata["channel_id"],
-            "channel_uri": metadata["channel_uri"],
-            "transcript_epoch": metadata["transcript_epoch"],
-            "page_limit": 100,
-            "max_records": 1000,
-            "watch_deadline_ms": 900000,
-            "source_uri": f"https://client.local/{args.agent}",
-            "participant": {"id": f"agent:{args.agent.removeprefix('agent-')}", "kind": "agent"},
-            "custody_database": str(home / f"{args.agent}.db"),
-            "ca_certificate": str(ca),
-            "receipt_keys": [{"key_id": metadata["receipt_key_id"], "public_key": metadata["receipt_key"]}],
-        }
-        fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(value, stream, separators=(",", ":"))
-    if config.is_symlink() or not config.is_file():
+    if config.exists() and (config.is_symlink() or not config.is_file()):
         fail("invalid agent config")
+    expected = profile_value(supervisor_metadata())
+    if not config.exists():
+        write_profile(config, expected)
+    elif not profile_matches(config, expected):
+        preserve_stale_profile()
+        write_profile(config, expected)
+    elif args.command == ["session", "bootstrap"]:
+        preserve_stale_session()
 
 root = root_key.read_bytes()
 if len(root) != 32:
