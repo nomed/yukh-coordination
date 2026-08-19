@@ -4,6 +4,7 @@ set -euo pipefail
 readonly root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 readonly compose="$root/.github/preview/compose.yaml"
 readonly runtime="${YUKH_PREVIEW_RUNTIME:-$HOME/.yukh/local-preview}"
+readonly activity_nats_url="nats://127.0.0.1:14222"
 
 fail() { echo "yukh-preview: $*" >&2; exit 2; }
 if [[ "$(uname -s)" != Darwin && "${YUKH_ALLOW_LINUX_QUALIFICATION:-0}" != 1 ]]; then
@@ -23,6 +24,13 @@ compose_command=(docker compose -f "$compose")
 case "${1:-}" in
   up)
     install -d -m 0700 "$runtime" "$runtime/bin"
+    if [[ -f "$runtime/server.crt" ]] && ! openssl x509 -checkend 21600 -noout -in "$runtime/server.crt" >/dev/null 2>&1; then
+      stale="$runtime/stale-tls-$(date -u +%Y%m%dT%H%M%SZ)"
+      install -d -m 0700 "$stale"
+      mv "$runtime/server.crt" "$stale/server.crt"
+      [[ ! -f "$runtime/server.key" ]] || mv "$runtime/server.key" "$stale/server.key"
+      echo "yukh-preview: renewed expired preview TLS certificate; preserved previous files in $stale"
+    fi
     if [[ ! -f "$runtime/server.key" || ! -f "$runtime/server.crt" ]]; then
       openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 2 \
         -keyout "$runtime/server.key" -out "$runtime/server.crt" \
@@ -113,6 +121,7 @@ PY
     echo "yukh-preview: READY"
     echo "$root/.github/scripts/yukh-local-agent.py agent-a session bootstrap"
     echo "$root/.github/scripts/yukh-local-agent.py agent-b session bootstrap"
+    echo "YUKH_NATS_URL=$activity_nats_url"
     ;;
   down)
     "${compose_command[@]}" down --volumes --remove-orphans

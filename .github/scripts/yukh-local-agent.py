@@ -9,6 +9,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,6 +57,16 @@ def supervisor_metadata():
             timeout=10,
         ) as response:
             metadata = json.loads(response.read(65537))
+    except urllib.error.URLError as error:
+        reason = getattr(error, "reason", None)
+        if isinstance(reason, ssl.SSLCertVerificationError):
+            detail = str(reason)
+            if "expired" in detail.lower():
+                fail("supervisor metadata unavailable: preview TLS certificate expired; run yukh-local-preview-macos.sh up")
+            fail("supervisor metadata unavailable: preview TLS certificate verification failed")
+        fail("supervisor metadata unavailable")
+    except ssl.SSLCertVerificationError:
+        fail("supervisor metadata unavailable: preview TLS certificate verification failed")
     except Exception:
         fail("supervisor metadata unavailable")
     return metadata
